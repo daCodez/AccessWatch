@@ -155,6 +155,33 @@ public sealed record PortRiskAssessment(
 public sealed record TrustConfidence(double Score, string Reason);
 
 /// <summary>
+/// Represents a user or system trust decision for an observed target.
+/// </summary>
+public sealed record TrustDecision
+{
+    /// <summary>Stable trust decision identifier.</summary>
+    public long TrustDecisionId { get; init; }
+
+    /// <summary>Target kind, such as Application, Port, or Device.</summary>
+    public string TargetType { get; init; } = string.Empty;
+
+    /// <summary>Target row identifier.</summary>
+    public long TargetId { get; init; }
+
+    /// <summary>Trust decision to apply.</summary>
+    public TrustStatus Decision { get; init; } = TrustStatus.Unknown;
+
+    /// <summary>Optional expiration time.</summary>
+    public DateTimeOffset? ExpiresUtc { get; init; }
+
+    /// <summary>Reason shown in future UI.</summary>
+    public string Reason { get; init; } = string.Empty;
+
+    /// <summary>Decision creation time.</summary>
+    public DateTimeOffset CreatedUtc { get; init; }
+}
+
+/// <summary>
 /// Represents AccessWatch behavior settings.
 /// </summary>
 public sealed record AccessWatchSettings

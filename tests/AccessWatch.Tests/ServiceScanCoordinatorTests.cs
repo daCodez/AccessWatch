@@ -106,6 +106,36 @@ public sealed class ServiceScanCoordinatorTests
         Assert.Contains("Unknown application", networkEvent.DetailsJson);
     }
 
+    /// <summary>
+    /// Verifies active application trust decisions are applied before scoring.
+    /// </summary>
+    [Fact]
+    public async Task RunListeningPortScanAsync_AppliesApplicationTrustDecisionBeforeScoring()
+    {
+        var repository = new FakeRepository { IsNewPort = true, TrustDecision = TrustStatus.Trusted };
+        var port = new ListeningPort
+        {
+            PortNumber = 32400,
+            Protocol = "TCP",
+            LocalAddress = "0.0.0.0",
+            Reachability = PortReachability.NetworkReachable,
+            Application = new ApplicationIdentity
+            {
+                DisplayName = "Plex Media Server",
+                ProcessName = "plex",
+                SignatureStatus = SignatureStatus.TrustedSigned
+            }
+        };
+        var coordinator = CreateCoordinator(repository, new FakeScanner([port]));
+
+        var count = await coordinator.RunListeningPortScanAsync(CancellationToken.None);
+
+        Assert.Equal(1, count);
+        var networkEvent = Assert.Single(repository.Events);
+        Assert.Equal(RiskLevel.Low, networkEvent.RiskLevel);
+        Assert.False(networkEvent.WasUserNotified);
+    }
+
     private static ServiceScanCoordinator CreateCoordinator(FakeRepository repository, FakeScanner scanner)
     {
         return new ServiceScanCoordinator(
@@ -138,6 +168,8 @@ public sealed class ServiceScanCoordinatorTests
 
         public bool IsNewPort { get; init; }
 
+        public TrustStatus? TrustDecision { get; init; }
+
         public List<NetworkEvent> Events { get; } = [];
 
         public Task InitializeAsync(CancellationToken cancellationToken)
@@ -160,6 +192,31 @@ public sealed class ServiceScanCoordinatorTests
         {
             Events.Add(networkEvent);
             return Task.CompletedTask;
+        }
+
+        public Task<long> AddTrustDecisionAsync(TrustDecision trustDecision, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(1L);
+        }
+
+        public Task<TrustStatus?> GetActiveTrustDecisionAsync(string targetType, long targetId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(TrustDecision);
+        }
+
+        public Task<IReadOnlyList<ApplicationIdentity>> ListRecentApplicationsAsync(int limit, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<ApplicationIdentity>>([]);
+        }
+
+        public Task<IReadOnlyList<ListeningPort>> ListRecentPortsAsync(int limit, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<ListeningPort>>([]);
+        }
+
+        public Task<IReadOnlyList<NetworkEvent>> ListRecentNetworkEventsAsync(int limit, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<NetworkEvent>>([]);
         }
     }
 }

@@ -151,6 +151,120 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task<long> AddTrustDecisionAsync(TrustDecision trustDecision, CancellationToken cancellationToken)
+    {
+        using var connection = await OpenConnectionAsync(cancellationToken);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO TrustDecisions
+            (TargetType, TargetId, Decision, ExpiresUtc, Reason, CreatedUtc)
+            VALUES
+            ($targetType, $targetId, $decision, $expiresUtc, $reason, $createdUtc);
+            SELECT last_insert_rowid();
+            """;
+        command.Parameters.AddWithValue("$targetType", trustDecision.TargetType);
+        command.Parameters.AddWithValue("$targetId", trustDecision.TargetId);
+        command.Parameters.AddWithValue("$decision", trustDecision.Decision.ToString());
+        command.Parameters.AddWithValue("$expiresUtc", DbValue(ToNullableDatabaseTime(trustDecision.ExpiresUtc)));
+        command.Parameters.AddWithValue("$reason", trustDecision.Reason);
+        command.Parameters.AddWithValue("$createdUtc", ToDatabaseTime(trustDecision.CreatedUtc, DateTimeOffset.UtcNow));
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    /// <inheritdoc />
+    public async Task<TrustStatus?> GetActiveTrustDecisionAsync(string targetType, long targetId, CancellationToken cancellationToken)
+    {
+        using var connection = await OpenConnectionAsync(cancellationToken);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT Decision
+            FROM TrustDecisions
+            WHERE TargetType = $targetType
+              AND TargetId = $targetId
+              AND (ExpiresUtc IS NULL OR ExpiresUtc > $nowUtc)
+            ORDER BY CreatedUtc DESC, TrustDecisionId DESC
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$targetType", targetType);
+        command.Parameters.AddWithValue("$targetId", targetId);
+        command.Parameters.AddWithValue("$nowUtc", DateTimeOffset.UtcNow.UtcDateTime.ToString("O"));
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        return value is string decision && Enum.TryParse<TrustStatus>(decision, out var trustStatus)
+            ? trustStatus
+            : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ApplicationIdentity>> ListRecentApplicationsAsync(int limit, CancellationToken cancellationToken)
+    {
+        using var connection = await OpenConnectionAsync(cancellationToken);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT ApplicationId, DisplayName, ProcessName, FilePath, Publisher, ProductName, FileDescription,
+                   SignatureStatus, HashSha256, InstallFolder, ParentProcessName, FirstSeenUtc, LastSeenUtc,
+                   TrustStatus, Notes
+            FROM Applications
+            ORDER BY LastSeenUtc DESC, ApplicationId DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$limit", NormalizeLimit(limit));
+        using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var applications = new List<ApplicationIdentity>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            applications.Add(ReadApplication(reader));
+        }
+
+        return applications;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ListeningPort>> ListRecentPortsAsync(int limit, CancellationToken cancellationToken)
+    {
+        using var connection = await OpenConnectionAsync(cancellationToken);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT PortId, PortNumber, Protocol, LocalAddress, Reachability, OwningProcessId, ApplicationId,
+                   FirstSeenUtc, LastSeenUtc, TrustStatus, RiskStatus
+            FROM Ports
+            ORDER BY LastSeenUtc DESC, PortId DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$limit", NormalizeLimit(limit));
+        using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var ports = new List<ListeningPort>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            ports.Add(ReadPort(reader));
+        }
+
+        return ports;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<NetworkEvent>> ListRecentNetworkEventsAsync(int limit, CancellationToken cancellationToken)
+    {
+        using var connection = await OpenConnectionAsync(cancellationToken);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT EventId, EventType, SourceIp, SourceDeviceId, DestinationIp, DestinationPort, Protocol, Direction,
+                   ApplicationId, RiskLevel, Summary, DetailsJson, WasUserNotified, CreatedUtc
+            FROM NetworkEvents
+            ORDER BY CreatedUtc DESC, EventId DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$limit", NormalizeLimit(limit));
+        using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var events = new List<NetworkEvent>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            events.Add(ReadNetworkEvent(reader));
+        }
+
+        return events;
+    }
+
     private static readonly string[] SchemaStatements =
     [
         """
@@ -343,6 +457,91 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
     private static string ToDatabaseTime(DateTimeOffset value, DateTimeOffset fallback)
     {
         return (value == default ? fallback : value).UtcDateTime.ToString("O");
+    }
+
+    private static string? ToNullableDatabaseTime(DateTimeOffset? value)
+    {
+        return value?.UtcDateTime.ToString("O");
+    }
+
+    private static int NormalizeLimit(int limit)
+    {
+        return Math.Clamp(limit, 1, 500);
+    }
+
+    private static ApplicationIdentity ReadApplication(SqliteDataReader reader)
+    {
+        return new ApplicationIdentity
+        {
+            ApplicationId = reader.GetInt64(0),
+            DisplayName = reader.GetString(1),
+            ProcessName = reader.GetString(2),
+            FilePath = ReadNullableString(reader, 3),
+            Publisher = ReadNullableString(reader, 4),
+            ProductName = ReadNullableString(reader, 5),
+            FileDescription = ReadNullableString(reader, 6),
+            SignatureStatus = Enum.Parse<SignatureStatus>(reader.GetString(7)),
+            HashSha256 = ReadNullableString(reader, 8),
+            InstallFolder = ReadNullableString(reader, 9),
+            ParentProcessName = ReadNullableString(reader, 10),
+            FirstSeenUtc = DateTimeOffset.Parse(reader.GetString(11)),
+            LastSeenUtc = DateTimeOffset.Parse(reader.GetString(12)),
+            TrustStatus = Enum.Parse<TrustStatus>(reader.GetString(13)),
+            Notes = ReadNullableString(reader, 14)
+        };
+    }
+
+    private static ListeningPort ReadPort(SqliteDataReader reader)
+    {
+        return new ListeningPort
+        {
+            PortId = reader.GetInt64(0),
+            PortNumber = reader.GetInt32(1),
+            Protocol = reader.GetString(2),
+            LocalAddress = reader.GetString(3),
+            Reachability = Enum.Parse<PortReachability>(reader.GetString(4)),
+            OwningProcessId = ReadNullableInt32(reader, 5),
+            FirstSeenUtc = DateTimeOffset.Parse(reader.GetString(7)),
+            LastSeenUtc = DateTimeOffset.Parse(reader.GetString(8)),
+            TrustStatus = Enum.Parse<TrustStatus>(reader.GetString(9)),
+            RiskStatus = Enum.Parse<RiskStatus>(reader.GetString(10))
+        };
+    }
+
+    private static NetworkEvent ReadNetworkEvent(SqliteDataReader reader)
+    {
+        return new NetworkEvent
+        {
+            EventId = reader.GetInt64(0),
+            EventType = reader.GetString(1),
+            SourceIp = ReadNullableString(reader, 2),
+            SourceDeviceId = ReadNullableInt64(reader, 3),
+            DestinationIp = ReadNullableString(reader, 4),
+            DestinationPort = ReadNullableInt32(reader, 5),
+            Protocol = reader.GetString(6),
+            Direction = reader.GetString(7),
+            ApplicationId = ReadNullableInt64(reader, 8),
+            RiskLevel = Enum.Parse<RiskLevel>(reader.GetString(9)),
+            Summary = reader.GetString(10),
+            DetailsJson = reader.GetString(11),
+            WasUserNotified = reader.GetInt32(12) == 1,
+            CreatedUtc = DateTimeOffset.Parse(reader.GetString(13))
+        };
+    }
+
+    private static string? ReadNullableString(SqliteDataReader reader, int ordinal)
+    {
+        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+    }
+
+    private static int? ReadNullableInt32(SqliteDataReader reader, int ordinal)
+    {
+        return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
+    }
+
+    private static long? ReadNullableInt64(SqliteDataReader reader, int ordinal)
+    {
+        return reader.IsDBNull(ordinal) ? null : reader.GetInt64(ordinal);
     }
 }
 

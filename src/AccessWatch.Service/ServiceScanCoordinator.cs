@@ -63,13 +63,23 @@ public sealed class ServiceScanCoordinator
         foreach (var scannedPort in ports)
         {
             long? applicationId = null;
+            var portForScoring = scannedPort;
             if (scannedPort.Application is not null)
             {
                 applicationId = await repository.UpsertApplicationAsync(scannedPort.Application, cancellationToken);
+                var trustStatus = await repository.GetActiveTrustDecisionAsync("Application", applicationId.Value, cancellationToken);
+                if (trustStatus is not null)
+                {
+                    portForScoring = scannedPort with
+                    {
+                        Application = scannedPort.Application with { ApplicationId = applicationId.Value, TrustStatus = trustStatus.Value },
+                        TrustStatus = trustStatus.Value
+                    };
+                }
             }
 
-            var assessment = riskScoringService.ScoreNewListeningPort(scannedPort, settings);
-            var port = scannedPort with { RiskStatus = assessment.RiskStatus };
+            var assessment = riskScoringService.ScoreNewListeningPort(portForScoring, settings);
+            var port = portForScoring with { RiskStatus = assessment.RiskStatus };
             var isNewPort = await repository.UpsertPortAsync(port, applicationId, cancellationToken);
             if (!isNewPort)
             {

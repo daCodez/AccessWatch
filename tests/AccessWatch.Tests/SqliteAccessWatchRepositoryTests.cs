@@ -133,6 +133,126 @@ public sealed class SqliteAccessWatchRepositoryTests
         Assert.Equal(1, await database.CountAsync("SELECT COUNT(*) FROM NetworkEvents WHERE WasUserNotified = 0"));
     }
 
+    /// <summary>
+    /// Verifies recent read models return saved apps, ports, and events.
+    /// </summary>
+    [Fact]
+    public async Task RecentReadModels_ReturnSavedRows()
+    {
+        using var database = TempDatabase.Create();
+        var repository = database.CreateRepository();
+        await repository.InitializeAsync(CancellationToken.None);
+
+        var applicationId = await repository.UpsertApplicationAsync(new ApplicationIdentity
+        {
+            DisplayName = "Plex Media Server",
+            ProcessName = "plex",
+            SignatureStatus = SignatureStatus.TrustedSigned,
+            FirstSeenUtc = DateTimeOffset.UnixEpoch,
+            LastSeenUtc = DateTimeOffset.UnixEpoch.AddMinutes(1)
+        }, CancellationToken.None);
+        await repository.UpsertPortAsync(new ListeningPort
+        {
+            PortNumber = 32400,
+            Protocol = "TCP",
+            LocalAddress = "0.0.0.0",
+            Reachability = PortReachability.NetworkReachable,
+            OwningProcessId = 123,
+            FirstSeenUtc = DateTimeOffset.UnixEpoch,
+            LastSeenUtc = DateTimeOffset.UnixEpoch.AddMinutes(1)
+        }, applicationId, CancellationToken.None);
+        await repository.AddNetworkEventAsync(new NetworkEvent
+        {
+            EventType = "NewListeningPort",
+            DestinationIp = "0.0.0.0",
+            DestinationPort = 32400,
+            Protocol = "TCP",
+            Direction = "Inbound",
+            ApplicationId = applicationId,
+            RiskLevel = RiskLevel.Medium,
+            Summary = "Plex opened a network-reachable port.",
+            DetailsJson = "{}",
+            CreatedUtc = DateTimeOffset.UnixEpoch.AddMinutes(1)
+        }, CancellationToken.None);
+
+        var applications = await repository.ListRecentApplicationsAsync(10, CancellationToken.None);
+        var ports = await repository.ListRecentPortsAsync(10, CancellationToken.None);
+        var events = await repository.ListRecentNetworkEventsAsync(10, CancellationToken.None);
+
+        Assert.Equal("Plex Media Server", Assert.Single(applications).DisplayName);
+        Assert.Equal(32400, Assert.Single(ports).PortNumber);
+        Assert.Equal("NewListeningPort", Assert.Single(events).EventType);
+    }
+
+    /// <summary>
+    /// Verifies recent read models handle nullable integer columns.
+    /// </summary>
+    [Fact]
+    public async Task RecentReadModels_HandleNullableIntegerColumns()
+    {
+        using var database = TempDatabase.Create();
+        var repository = database.CreateRepository();
+        await repository.InitializeAsync(CancellationToken.None);
+
+        await repository.UpsertPortAsync(new ListeningPort
+        {
+            PortNumber = 7000,
+            Protocol = "TCP",
+            LocalAddress = "127.0.0.1",
+            Reachability = PortReachability.LocalOnly
+        }, null, CancellationToken.None);
+        await repository.AddNetworkEventAsync(new NetworkEvent
+        {
+            EventType = "NewListeningPort",
+            Protocol = "TCP",
+            Direction = "Inbound",
+            RiskLevel = RiskLevel.Low,
+            Summary = "Local port opened.",
+            DetailsJson = "{}"
+        }, CancellationToken.None);
+
+        var port = Assert.Single(await repository.ListRecentPortsAsync(1, CancellationToken.None));
+        var networkEvent = Assert.Single(await repository.ListRecentNetworkEventsAsync(1, CancellationToken.None));
+
+        Assert.Null(port.OwningProcessId);
+        Assert.Null(networkEvent.DestinationPort);
+    }
+
+
+    /// <summary>
+    /// Verifies active trust decisions are returned while expired decisions are ignored.
+    /// </summary>
+    [Fact]
+    public async Task TrustDecisions_ReturnOnlyActiveLatestDecision()
+    {
+        using var database = TempDatabase.Create();
+        var repository = database.CreateRepository();
+        await repository.InitializeAsync(CancellationToken.None);
+
+        await repository.AddTrustDecisionAsync(new TrustDecision
+        {
+            TargetType = "Application",
+            TargetId = 42,
+            Decision = TrustStatus.Guest,
+            ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            Reason = "Expired",
+            CreatedUtc = DateTimeOffset.UnixEpoch
+        }, CancellationToken.None);
+        await repository.AddTrustDecisionAsync(new TrustDecision
+        {
+            TargetType = "Application",
+            TargetId = 42,
+            Decision = TrustStatus.Trusted,
+            Reason = "User trusted Plex",
+            CreatedUtc = DateTimeOffset.UnixEpoch.AddMinutes(1)
+        }, CancellationToken.None);
+
+        var decision = await repository.GetActiveTrustDecisionAsync("Application", 42, CancellationToken.None);
+
+        Assert.Equal(TrustStatus.Trusted, decision);
+        Assert.Null(await repository.GetActiveTrustDecisionAsync("Application", 99, CancellationToken.None));
+    }
+
     private sealed class TempDatabase : IDisposable
     {
         private readonly string path;

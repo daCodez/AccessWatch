@@ -91,6 +91,112 @@ public sealed class RiskScoringServiceTests
     }
 
     /// <summary>
+    /// Verifies Visual Studio-style local development ports stay low noise.
+    /// </summary>
+    [Fact]
+    public void ScoreNewListeningPort_SilentlyLogsVisualStudioLocalDevServer()
+    {
+        var service = new RiskScoringService();
+        var port = new ListeningPort
+        {
+            PortNumber = 5173,
+            LocalAddress = "127.0.0.1",
+            Reachability = PortReachability.LocalOnly,
+            Application = new ApplicationIdentity
+            {
+                DisplayName = "Visual Studio",
+                ProcessName = "devenv",
+                SignatureStatus = SignatureStatus.TrustedSigned,
+                Publisher = "Microsoft"
+            }
+        };
+
+        var assessment = service.ScoreNewListeningPort(port, new AccessWatchSettings());
+
+        Assert.Equal(RiskLevel.Low, assessment.RiskLevel);
+        Assert.Equal(NotificationAction.SilentLog, assessment.Action);
+    }
+
+    /// <summary>
+    /// Verifies an unknown unsigned public listener asks before future enforcement.
+    /// </summary>
+    [Fact]
+    public void ScoreNewListeningPort_AsksBeforeAllowForUnknownUnsignedPublicListener()
+    {
+        var service = new RiskScoringService();
+        var port = new ListeningPort
+        {
+            PortNumber = 4444,
+            LocalAddress = "0.0.0.0",
+            Reachability = PortReachability.NetworkReachable,
+            Application = new ApplicationIdentity
+            {
+                DisplayName = "Unknown app",
+                ProcessName = "unknown",
+                SignatureStatus = SignatureStatus.Unsigned
+            }
+        };
+
+        var assessment = service.ScoreNewListeningPort(port, new AccessWatchSettings());
+
+        Assert.Equal(RiskLevel.High, assessment.RiskLevel);
+        Assert.Equal(NotificationAction.AskBeforeAllow, assessment.Action);
+    }
+
+    /// <summary>
+    /// Verifies Plex receives a soft first-time notification before it is trusted.
+    /// </summary>
+    [Fact]
+    public void ScoreNewListeningPort_SoftNotifiesForPlexBeforeTrust()
+    {
+        var service = new RiskScoringService();
+        var port = new ListeningPort
+        {
+            PortNumber = 32400,
+            LocalAddress = "0.0.0.0",
+            Reachability = PortReachability.NetworkReachable,
+            Application = new ApplicationIdentity
+            {
+                DisplayName = "Plex Media Server",
+                ProcessName = "Plex Media Server",
+                SignatureStatus = SignatureStatus.TrustedSigned
+            }
+        };
+
+        var assessment = service.ScoreNewListeningPort(port, new AccessWatchSettings());
+
+        Assert.Equal(RiskLevel.Medium, assessment.RiskLevel);
+        Assert.Equal(NotificationAction.SoftNotify, assessment.Action);
+    }
+
+    /// <summary>
+    /// Verifies trusted Plex ports are silent after the app is trusted.
+    /// </summary>
+    [Fact]
+    public void ScoreNewListeningPort_SilentlyLogsTrustedPlexPort()
+    {
+        var service = new RiskScoringService();
+        var port = new ListeningPort
+        {
+            PortNumber = 32400,
+            LocalAddress = "0.0.0.0",
+            Reachability = PortReachability.NetworkReachable,
+            Application = new ApplicationIdentity
+            {
+                DisplayName = "Plex Media Server",
+                ProcessName = "Plex Media Server",
+                SignatureStatus = SignatureStatus.TrustedSigned,
+                TrustStatus = TrustStatus.Trusted
+            }
+        };
+
+        var assessment = service.ScoreNewListeningPort(port, new AccessWatchSettings());
+
+        Assert.Equal(RiskLevel.Low, assessment.RiskLevel);
+        Assert.Equal(NotificationAction.SilentLog, assessment.Action);
+    }
+
+    /// <summary>
     /// Verifies signed network-reachable non-sensitive ports are medium risk.
     /// </summary>
     [Fact]

@@ -60,6 +60,47 @@ public interface IAccessWatchRepository
     /// <param name="networkEvent">The event to save.</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     Task AddNetworkEventAsync(NetworkEvent networkEvent, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Saves a trust decision.
+    /// </summary>
+    /// <param name="trustDecision">The trust decision to save.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>The database trust decision identifier.</returns>
+    Task<long> AddTrustDecisionAsync(TrustDecision trustDecision, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets the effective trust status for a target.
+    /// </summary>
+    /// <param name="targetType">Target kind, such as Application, Port, or Device.</param>
+    /// <param name="targetId">Target row identifier.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>The effective trust status, or null when no active decision exists.</returns>
+    Task<TrustStatus?> GetActiveTrustDecisionAsync(string targetType, long targetId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists recent applications for future UI surfaces.
+    /// </summary>
+    /// <param name="limit">Maximum number of rows to return.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>Recent applications ordered newest first.</returns>
+    Task<IReadOnlyList<ApplicationIdentity>> ListRecentApplicationsAsync(int limit, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists recent listening ports for future UI surfaces.
+    /// </summary>
+    /// <param name="limit">Maximum number of rows to return.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>Recent ports ordered newest first.</returns>
+    Task<IReadOnlyList<ListeningPort>> ListRecentPortsAsync(int limit, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists recent network events for future UI surfaces.
+    /// </summary>
+    /// <param name="limit">Maximum number of rows to return.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>Recent events ordered newest first.</returns>
+    Task<IReadOnlyList<NetworkEvent>> ListRecentNetworkEventsAsync(int limit, CancellationToken cancellationToken);
 }
 
 /// <summary>
