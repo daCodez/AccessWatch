@@ -1,14 +1,14 @@
 using AccessWatch.Core;
 using AccessWatch.Data;
-using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 using ApplicationIdentity = AccessWatch.Core.ApplicationIdentity;
 
 namespace AccessWatch.Tests;
 
 /// <summary>
-/// Tests SQLite repository persistence behavior.
+/// Tests SQL Server repository persistence behavior.
 /// </summary>
-public sealed class SqliteAccessWatchRepositoryTests
+public sealed class SqlServerAccessWatchRepositoryTests
 {
     /// <summary>
     /// Verifies schema initialization creates required tables.
@@ -21,7 +21,21 @@ public sealed class SqliteAccessWatchRepositoryTests
 
         await repository.InitializeAsync(CancellationToken.None);
 
-        Assert.Equal(7, await database.CountAsync("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('Devices','Applications','Ports','NetworkEvents','Incidents','Rules','TrustDecisions')"));
+        Assert.Equal(7, await database.CountAsync("SELECT COUNT(*) FROM sys.tables WHERE name IN ('Devices','Applications','Ports','NetworkEvents','Incidents','Rules','TrustDecisions')"));
+    }
+
+    /// <summary>
+    /// Verifies schema initialization works when the active connection string has no database catalog.
+    /// </summary>
+    [Fact]
+    public async Task InitializeAsync_WithServerOnlyConnectionString_SkipsDatabaseCreation()
+    {
+        using var database = TempDatabase.CreateWithoutCatalog();
+        var repository = database.CreateRepository();
+
+        await repository.InitializeAsync(CancellationToken.None);
+
+        Assert.Equal(7, await database.CountAsync("SELECT COUNT(*) FROM sys.tables WHERE name IN ('Devices','Applications','Ports','NetworkEvents','Incidents','Rules','TrustDecisions')"));
     }
 
     /// <summary>
@@ -50,7 +64,7 @@ public sealed class SqliteAccessWatchRepositoryTests
         var secondId = await repository.UpsertApplicationAsync(application with { DisplayName = "Updated" }, CancellationToken.None);
 
         Assert.Equal(firstId, secondId);
-        Assert.Equal("Updated", await database.ScalarStringAsync("SELECT DisplayName FROM Applications WHERE ApplicationId = $id", firstId));
+        Assert.Equal("Updated", await database.ScalarStringAsync("SELECT DisplayName FROM dbo.Applications WHERE ApplicationId = @id", firstId));
     }
 
     /// <summary>
@@ -79,7 +93,7 @@ public sealed class SqliteAccessWatchRepositoryTests
 
         Assert.True(first);
         Assert.False(second);
-        Assert.Equal("Watched", await database.ScalarStringAsync("SELECT RiskStatus FROM Ports WHERE PortNumber = 3389", null));
+        Assert.Equal("Watched", await database.ScalarStringAsync("SELECT RiskStatus FROM dbo.Ports WHERE PortNumber = 3389", null));
     }
 
     /// <summary>
@@ -106,7 +120,7 @@ public sealed class SqliteAccessWatchRepositoryTests
             CreatedUtc = DateTimeOffset.UnixEpoch
         }, CancellationToken.None);
 
-        Assert.Equal(1, await database.CountAsync("SELECT COUNT(*) FROM NetworkEvents WHERE WasUserNotified = 1"));
+        Assert.Equal(1, await database.CountAsync("SELECT COUNT(*) FROM dbo.NetworkEvents WHERE WasUserNotified = 1"));
     }
 
     /// <summary>
@@ -130,7 +144,7 @@ public sealed class SqliteAccessWatchRepositoryTests
             WasUserNotified = false
         }, CancellationToken.None);
 
-        Assert.Equal(1, await database.CountAsync("SELECT COUNT(*) FROM NetworkEvents WHERE WasUserNotified = 0"));
+        Assert.Equal(1, await database.CountAsync("SELECT COUNT(*) FROM dbo.NetworkEvents WHERE WasUserNotified = 0"));
     }
 
     /// <summary>
@@ -218,7 +232,6 @@ public sealed class SqliteAccessWatchRepositoryTests
         Assert.Null(networkEvent.DestinationPort);
     }
 
-
     /// <summary>
     /// Verifies active trust decisions are returned while expired decisions are ignored.
     /// </summary>
@@ -255,26 +268,36 @@ public sealed class SqliteAccessWatchRepositoryTests
 
     private sealed class TempDatabase : IDisposable
     {
-        private readonly string path;
+        private const string MasterConnectionString = "Server=(localdb)\\MSSQLLocalDB;Database=master;Trusted_Connection=True;TrustServerCertificate=True;";
+        private const string ServerOnlyConnectionString = "Server=(localdb)\\MSSQLLocalDB;Trusted_Connection=True;TrustServerCertificate=True;";
+        private readonly string connectionString;
+        private readonly string? databaseName;
 
-        private TempDatabase(string path)
+        private TempDatabase(string connectionString, string? databaseName)
         {
-            this.path = path;
+            this.connectionString = connectionString;
+            this.databaseName = databaseName;
         }
 
         public static TempDatabase Create()
         {
-            return new TempDatabase(Path.Combine(Path.GetTempPath(), $"AccessWatch.Tests.{Guid.NewGuid():N}.db"));
+            var databaseName = $"AccessWatchTests_{Guid.NewGuid():N}";
+            return new TempDatabase($"Server=(localdb)\\MSSQLLocalDB;Database={databaseName};Trusted_Connection=True;TrustServerCertificate=True;", databaseName);
         }
 
-        public SqliteAccessWatchRepository CreateRepository()
+        public static TempDatabase CreateWithoutCatalog()
         {
-            return new SqliteAccessWatchRepository(new AccessWatchDatabaseOptions { DatabasePath = path });
+            return new TempDatabase(ServerOnlyConnectionString, null);
+        }
+
+        public SqlServerAccessWatchRepository CreateRepository()
+        {
+            return new SqlServerAccessWatchRepository(new AccessWatchDatabaseOptions { SqlServerConnectionString = connectionString });
         }
 
         public async Task<int> CountAsync(string sql)
         {
-            await using var connection = new SqliteConnection($"Data Source={path}");
+            await using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = sql;
@@ -283,13 +306,13 @@ public sealed class SqliteAccessWatchRepositoryTests
 
         public async Task<string?> ScalarStringAsync(string sql, long? id)
         {
-            await using var connection = new SqliteConnection($"Data Source={path}");
+            await using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = sql;
             if (id is not null)
             {
-                command.Parameters.AddWithValue("$id", id.Value);
+                command.Parameters.AddWithValue("@id", id.Value);
             }
 
             return Convert.ToString(await command.ExecuteScalarAsync());
@@ -297,11 +320,29 @@ public sealed class SqliteAccessWatchRepositoryTests
 
         public void Dispose()
         {
-            SqliteConnection.ClearAllPools();
-            if (File.Exists(path))
+            SqlConnection.ClearAllPools();
+            if (databaseName is null)
             {
-                File.Delete(path);
+                return;
             }
+
+            using var connection = new SqlConnection(MasterConnectionString);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                IF DB_ID(@databaseName) IS NOT NULL
+                BEGIN
+                    ALTER DATABASE {QuoteSqlIdentifier(databaseName)} SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                    DROP DATABASE {QuoteSqlIdentifier(databaseName)};
+                END;
+                """;
+            command.Parameters.AddWithValue("@databaseName", databaseName);
+            command.ExecuteNonQuery();
+        }
+
+        private static string QuoteSqlIdentifier(string identifier)
+        {
+            return $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]";
         }
     }
 }

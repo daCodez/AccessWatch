@@ -1,25 +1,30 @@
 namespace AccessWatch.Data;
 
 /// <summary>
-/// Configures the AccessWatch SQLite database location.
+/// Configures the AccessWatch database provider and local connection details.
 /// </summary>
 public sealed class AccessWatchDatabaseOptions
 {
-    /// <summary>Default database path under ProgramData.</summary>
-    public static readonly string DefaultDatabasePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "AccessWatch",
-        "AccessWatch.db");
+    /// <summary>Default SQL Server LocalDB connection string for development and first-run local use.</summary>
+    public const string DefaultSqlServerConnectionString = "Server=(localdb)\\MSSQLLocalDB;Database=AccessWatch;Trusted_Connection=True;TrustServerCertificate=True;";
 
-    /// <summary>SQLite database file path.</summary>
-    public string DatabasePath { get; init; } = DefaultDatabasePath;
+    /// <summary>Selected database provider.</summary>
+    public DatabaseProvider Provider { get; init; } = DatabaseProvider.SqlServer;
+
+    /// <summary>SQL Server connection string for LocalDB or SQL Server Express.</summary>
+    public string SqlServerConnectionString { get; init; } = DefaultSqlServerConnectionString;
 
     /// <summary>
-    /// Builds a SQLite connection string for the configured database path.
+    /// Builds the active provider connection string.
     /// </summary>
-    /// <returns>A SQLite connection string.</returns>
+    /// <returns>The connection string for the selected provider.</returns>
+    /// <exception cref="NotSupportedException">Thrown when the selected provider is not implemented.</exception>
     public string ToConnectionString()
     {
-        return $"Data Source={DatabasePath}";
+        return Provider switch
+        {
+            DatabaseProvider.SqlServer => SqlServerConnectionString,
+            _ => throw new NotSupportedException($"Database provider '{Provider}' is not supported.")
+        };
     }
 }

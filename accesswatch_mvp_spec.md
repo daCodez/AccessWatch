@@ -1,6 +1,6 @@
 # AccessWatch MVP Spec
 
-AccessWatch is a Windows security helper focused on learning a user's home network, detecting remote-access risk, watching for new listening ports, resolving the real application behind network activity, storing history in SQLite, and presenting low-noise user guidance.
+AccessWatch is a Windows security helper focused on learning a user's home network, detecting remote-access risk, watching for new listening ports, resolving the real application behind network activity, storing history in SQL Server LocalDB or SQL Server Express, and presenting low-noise user guidance.
 
 Core product rule:
 
@@ -26,7 +26,7 @@ Do not attempt the whole product at once.
 
 - Solution structure.
 - Shared models and enums.
-- SQLite schema.
+- SQL Server schema.
 - Repository layer.
 - Windows Service shell that can also run safely as a debug console worker.
 - First listening-port scan.
@@ -37,7 +37,7 @@ Do not attempt the whole product at once.
 
 - Detect current listening TCP ports.
 - Resolve local address, port number, reachability, and owning process when possible.
-- Save detected applications and ports to SQLite.
+- Save detected applications and ports to SQL Server.
 - Create a `NewListeningPort` event the first time a listening port is seen.
 
 ### Phase 3 Smart App Identity
@@ -52,7 +52,7 @@ Do not attempt the whole product at once.
 ### Phase 4 Network Familiarization
 
 - Learn current local-network devices.
-- Store devices in SQLite.
+- Store devices in SQL Server.
 - Guess device type from hostname, MAC vendor when available, and open-port hints.
 - Default new devices to `Unknown`.
 
@@ -84,13 +84,13 @@ Build only Phase 1 foundation and the first part of New Port Watch:
 
 1. Create the AccessWatch solution structure.
 2. Add shared models and enums.
-3. Add SQLite database initialization.
+3. Add SQL Server database initialization.
 4. Add repository interfaces and basic implementations.
 5. Add a Windows Service worker that can also run safely in debug/console mode.
 6. Add a listening port scanner service.
 7. Resolve owning process ID when possible.
 8. Add an `AppIdentityResolver` stub that collects process name, file path, product name, file description, publisher when possible, signature status when possible, and SHA256 hash.
-9. Save detected apps and ports to SQLite.
+9. Save detected apps and ports to SQL Server.
 10. Create a `NewListeningPort` event when a new port is first seen.
 11. Add simple rule scoring:
     - Local-only trusted/signed app: `Low`.
@@ -105,7 +105,7 @@ The first version is successful when:
 
 - The solution builds.
 - Tests pass.
-- SQLite database initializes.
+- SQL Server database initializes.
 - The service can run as a console/debug worker.
 - Current listening ports are detected.
 - Owning process is resolved when possible.
@@ -172,6 +172,6 @@ Before making changes:
 - Run the solution build after code changes.
 - Run tests when code behavior changes.
 - Keep rule scoring covered by tests.
-- Keep SQLite initialization and first-write paths covered by tests.
+- Keep SQL Server initialization and first-write paths covered by tests.
 - Keep the service loop runnable in debug/console mode.
 

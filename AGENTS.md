@@ -47,7 +47,7 @@ The current MVP foundation should continue to satisfy:
 
 - Solution builds.
 - Tests pass.
-- SQLite database initializes.
+- SQL Server database initializes.
 - Service runs as a console/debug worker.
 - Current listening ports are detected.
 - Owning process is resolved when possible.

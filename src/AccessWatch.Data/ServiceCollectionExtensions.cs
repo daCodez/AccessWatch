@@ -9,18 +9,38 @@ namespace AccessWatch.Data;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds SQLite persistence for AccessWatch.
+    /// Adds the default local persistence provider for AccessWatch.
     /// </summary>
     /// <param name="services">The service collection to update.</param>
-    /// <param name="databasePath">Optional database path override.</param>
+    /// <param name="connectionString">Optional SQL Server connection string override.</param>
     /// <returns>The updated service collection.</returns>
-    public static IServiceCollection AddAccessWatchData(this IServiceCollection services, string? databasePath = null)
+    public static IServiceCollection AddAccessWatchData(this IServiceCollection services, string? connectionString = null)
     {
-        services.AddSingleton(new AccessWatchDatabaseOptions
+        return services.AddAccessWatchData(new AccessWatchDatabaseOptions
         {
-            DatabasePath = databasePath ?? AccessWatchDatabaseOptions.DefaultDatabasePath
+            SqlServerConnectionString = connectionString ?? AccessWatchDatabaseOptions.DefaultSqlServerConnectionString
         });
-        services.AddSingleton<IAccessWatchRepository, SqliteAccessWatchRepository>();
+    }
+
+    /// <summary>
+    /// Adds AccessWatch persistence for the selected database provider.
+    /// </summary>
+    /// <param name="services">The service collection to update.</param>
+    /// <param name="options">Database provider options.</param>
+    /// <returns>The updated service collection.</returns>
+    /// <exception cref="NotSupportedException">Thrown when the selected provider has no implementation yet.</exception>
+    public static IServiceCollection AddAccessWatchData(this IServiceCollection services, AccessWatchDatabaseOptions options)
+    {
+        services.AddSingleton(options);
+        switch (options.Provider)
+        {
+            case DatabaseProvider.SqlServer:
+                services.AddSingleton<IAccessWatchRepository, SqlServerAccessWatchRepository>();
+                break;
+            default:
+                throw new NotSupportedException($"Database provider '{options.Provider}' is not supported.");
+        }
+
         return services;
     }
 }

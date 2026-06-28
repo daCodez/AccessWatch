@@ -25,26 +25,98 @@ public sealed class ServiceRegistrationTests
     }
 
     /// <summary>
-    /// Verifies data registration uses the configured database path.
+    /// Verifies data registration uses the configured SQL Server connection string.
     /// </summary>
     [Fact]
     public void AddAccessWatchData_RegistersRepository()
     {
-        using var provider = new ServiceCollection().AddAccessWatchData("C:\\Temp\\AccessWatch.db").BuildServiceProvider();
+        const string connectionString = "Server=.\\SQLEXPRESS;Database=AccessWatch;Trusted_Connection=True;";
+        using var provider = new ServiceCollection().AddAccessWatchData(connectionString).BuildServiceProvider();
 
-        Assert.Equal("C:\\Temp\\AccessWatch.db", provider.GetRequiredService<AccessWatchDatabaseOptions>().DatabasePath);
-        Assert.IsType<SqliteAccessWatchRepository>(provider.GetRequiredService<IAccessWatchRepository>());
+        Assert.Equal(DatabaseProvider.SqlServer, provider.GetRequiredService<AccessWatchDatabaseOptions>().Provider);
+        Assert.Equal(connectionString, provider.GetRequiredService<AccessWatchDatabaseOptions>().SqlServerConnectionString);
+        Assert.IsType<SqlServerAccessWatchRepository>(provider.GetRequiredService<IAccessWatchRepository>());
     }
 
     /// <summary>
-    /// Verifies data registration defaults to ProgramData when no path is supplied.
+    /// Verifies data registration defaults to SQL Server LocalDB when no connection string is supplied.
     /// </summary>
     [Fact]
-    public void AddAccessWatchData_UsesDefaultDatabasePath()
+    public void AddAccessWatchData_UsesDefaultConnectionString()
     {
         using var provider = new ServiceCollection().AddAccessWatchData().BuildServiceProvider();
 
-        Assert.Equal(AccessWatchDatabaseOptions.DefaultDatabasePath, provider.GetRequiredService<AccessWatchDatabaseOptions>().DatabasePath);
+        Assert.Equal(AccessWatchDatabaseOptions.DefaultSqlServerConnectionString, provider.GetRequiredService<AccessWatchDatabaseOptions>().SqlServerConnectionString);
+    }
+
+    /// <summary>
+    /// Verifies explicit SQL Server options register the SQL Server repository.
+    /// </summary>
+    [Fact]
+    public void AddAccessWatchData_WithSqlServerOptions_RegistersRepository()
+    {
+        const string connectionString = "Server=(localdb)\\MSSQLLocalDB;Database=AccessWatch;Trusted_Connection=True;";
+        using var provider = new ServiceCollection()
+            .AddAccessWatchData(new AccessWatchDatabaseOptions { SqlServerConnectionString = connectionString })
+            .BuildServiceProvider();
+
+        Assert.Equal(connectionString, provider.GetRequiredService<AccessWatchDatabaseOptions>().ToConnectionString());
+        Assert.IsType<SqlServerAccessWatchRepository>(provider.GetRequiredService<IAccessWatchRepository>());
+    }
+
+    /// <summary>
+    /// Verifies SQL Server connection strings are retained.
+    /// </summary>
+    [Fact]
+    public void AccessWatchDatabaseOptions_WithSqlServerConnectionString_ReturnsConfiguredValue()
+    {
+        var options = new AccessWatchDatabaseOptions
+        {
+            Provider = DatabaseProvider.SqlServer,
+            SqlServerConnectionString = "Server=.\\SQLEXPRESS;Database=AccessWatch;Trusted_Connection=True;"
+        };
+
+        Assert.Equal("Server=.\\SQLEXPRESS;Database=AccessWatch;Trusted_Connection=True;", options.ToConnectionString());
+    }
+
+    /// <summary>
+    /// Verifies SQL Server options provide a LocalDB default connection string.
+    /// </summary>
+    [Fact]
+    public void AccessWatchDatabaseOptions_WithDefaultConnectionString_ReturnsLocalDb()
+    {
+        var options = new AccessWatchDatabaseOptions { Provider = DatabaseProvider.SqlServer };
+
+        Assert.Equal(AccessWatchDatabaseOptions.DefaultSqlServerConnectionString, options.ToConnectionString());
+    }
+
+    /// <summary>
+    /// Verifies unknown provider values are rejected by options.
+    /// </summary>
+    [Fact]
+    public void AccessWatchDatabaseOptions_WithUnknownProvider_Throws()
+    {
+        var options = new AccessWatchDatabaseOptions { Provider = (DatabaseProvider)999 };
+
+        var exception = Assert.Throws<NotSupportedException>(options.ToConnectionString);
+
+        Assert.Contains("999", exception.Message);
+    }
+
+    /// <summary>
+    /// Verifies unknown provider values are rejected by service registration.
+    /// </summary>
+    [Fact]
+    public void AddAccessWatchData_WithUnknownProvider_Throws()
+    {
+        var services = new ServiceCollection();
+
+        var exception = Assert.Throws<NotSupportedException>(() => services.AddAccessWatchData(new AccessWatchDatabaseOptions
+        {
+            Provider = (DatabaseProvider)999
+        }));
+
+        Assert.Contains("999", exception.Message);
     }
 
     /// <summary>
