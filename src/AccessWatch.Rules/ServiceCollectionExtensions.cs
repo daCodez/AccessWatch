@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
     /// <returns>The updated service collection.</returns>
     public static IServiceCollection AddAccessWatchRules(this IServiceCollection services)
     {
+        services.AddSingleton<NotificationActionPolicy>();
         services.AddSingleton<IRiskScoringService, RiskScoringService>();
         return services;
     }

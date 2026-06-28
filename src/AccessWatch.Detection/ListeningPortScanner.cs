@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text.RegularExpressions;
 using AccessWatch.Core;
@@ -8,23 +9,30 @@ namespace AccessWatch.Detection;
 /// <summary>
 /// Scans Windows listening TCP ports using netstat ownership data.
 /// </summary>
-public sealed partial class ListeningPortScanner : IListeningPortScanner
+public sealed class ListeningPortScanner : IListeningPortScanner
 {
+    private static readonly Regex NetstatTcpLine = new(
+        @"^\s*TCP\s+(?<local>\S+)\s+\S+\s+(?<state>LISTENING)\s+(?<pid>\d+)\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private readonly IAppIdentityResolver identityResolver;
+    private readonly INetstatRunner netstatRunner;
 
     /// <summary>
     /// Initializes a new listening port scanner.
     /// </summary>
     /// <param name="identityResolver">Resolver used for owning process metadata.</param>
-    public ListeningPortScanner(IAppIdentityResolver identityResolver)
+    /// <param name="netstatRunner">Runner used to collect netstat output.</param>
+    public ListeningPortScanner(IAppIdentityResolver identityResolver, INetstatRunner? netstatRunner = null)
     {
         this.identityResolver = identityResolver;
+        this.netstatRunner = netstatRunner ?? new NetstatRunner();
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<ListeningPort>> ScanAsync(CancellationToken cancellationToken)
     {
-        var output = await RunNetstatAsync(cancellationToken);
+        var output = await netstatRunner.RunAsync(cancellationToken);
         var now = DateTimeOffset.UtcNow;
         return ParseNetstatOutput(output, now)
             .OrderBy(port => port.PortNumber)
@@ -44,7 +52,7 @@ public sealed partial class ListeningPortScanner : IListeningPortScanner
 
         foreach (var line in output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            var match = NetstatTcpLine().Match(line);
+            var match = NetstatTcpLine.Match(line);
             if (!match.Success || !line.Contains("LISTENING", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -55,7 +63,7 @@ public sealed partial class ListeningPortScanner : IListeningPortScanner
                 continue;
             }
 
-            var processId = int.TryParse(match.Groups["pid"].Value, out var pid) ? pid : (int?)null;
+            var processId = int.Parse(match.Groups["pid"].Value);
             ports.Add(new ListeningPort
             {
                 PortNumber = portNumber,
@@ -63,38 +71,13 @@ public sealed partial class ListeningPortScanner : IListeningPortScanner
                 LocalAddress = localAddress,
                 Reachability = ClassifyReachability(localAddress),
                 OwningProcessId = processId,
-                Application = processId is null ? null : identityResolver.Resolve(processId.Value),
+                Application = identityResolver.Resolve(processId),
                 FirstSeenUtc = observedAtUtc,
                 LastSeenUtc = observedAtUtc
             });
         }
 
         return ports;
-    }
-
-    private static async Task<string> RunNetstatAsync(CancellationToken cancellationToken)
-    {
-        using var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = "netstat.exe",
-            Arguments = "-ano -p tcp",
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        }) ?? throw new InvalidOperationException("Unable to start netstat.exe.");
-
-        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-
-        if (process.ExitCode != 0)
-        {
-            var error = await errorTask;
-            throw new InvalidOperationException($"netstat.exe failed with exit code {process.ExitCode}: {error}");
-        }
-
-        return await outputTask;
     }
 
     private static bool TrySplitEndpoint(string endpoint, out string address, out int port)
@@ -126,7 +109,50 @@ public sealed partial class ListeningPortScanner : IListeningPortScanner
 
         return PortReachability.Unknown;
     }
+}
 
-    [GeneratedRegex(@"^\s*TCP\s+(?<local>\S+)\s+\S+\s+(?<state>LISTENING)\s+(?<pid>\d+)\s*$", RegexOptions.IgnoreCase)]
-    private static partial Regex NetstatTcpLine();
+/// <summary>
+/// Runs netstat and returns its output.
+/// </summary>
+public interface INetstatRunner
+{
+    /// <summary>
+    /// Runs netstat for listening TCP port ownership data.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Raw netstat output.</returns>
+    Task<string> RunAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Windows process-backed netstat runner.
+/// </summary>
+[ExcludeFromCodeCoverage(Justification = "Thin Windows process boundary; parser and scanner orchestration are covered with deterministic runner fakes.")]
+public sealed class NetstatRunner : INetstatRunner
+{
+    /// <inheritdoc />
+    public async Task<string> RunAsync(CancellationToken cancellationToken)
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "netstat.exe",
+            Arguments = "-ano -p tcp",
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        }) ?? throw new InvalidOperationException("Unable to start netstat.exe.");
+
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+
+        if (process.ExitCode != 0)
+        {
+            var error = await errorTask;
+            throw new InvalidOperationException($"netstat.exe failed with exit code {process.ExitCode}: {error}");
+        }
+
+        return await outputTask;
+    }
 }

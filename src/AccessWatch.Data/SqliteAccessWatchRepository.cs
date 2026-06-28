@@ -23,11 +23,11 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(options.DatabasePath)!);
-        await using var connection = await OpenConnectionAsync(cancellationToken);
+        using var connection = await OpenConnectionAsync(cancellationToken);
 
         foreach (var statement in SchemaStatements)
         {
-            await using var command = connection.CreateCommand();
+            using var command = connection.CreateCommand();
             command.CommandText = statement;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -36,13 +36,13 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
     /// <inheritdoc />
     public async Task<long> UpsertApplicationAsync(ApplicationIdentity application, CancellationToken cancellationToken)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken);
+        using var connection = await OpenConnectionAsync(cancellationToken);
         var existingId = await FindApplicationIdAsync(connection, application, cancellationToken);
         var now = DateTimeOffset.UtcNow;
 
         if (existingId is not null)
         {
-            await using var update = connection.CreateCommand();
+            using var update = connection.CreateCommand();
             update.CommandText = """
                 UPDATE Applications
                 SET DisplayName = $displayName,
@@ -64,7 +64,7 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
             return existingId.Value;
         }
 
-        await using var insert = connection.CreateCommand();
+        using var insert = connection.CreateCommand();
         insert.CommandText = """
             INSERT INTO Applications
             (DisplayName, ProcessName, FilePath, Publisher, ProductName, FileDescription, SignatureStatus,
@@ -78,19 +78,19 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
         insert.Parameters.AddWithValue("$firstSeenUtc", ToDatabaseTime(application.FirstSeenUtc, now));
         insert.Parameters.AddWithValue("$trustStatus", application.TrustStatus.ToString());
         insert.Parameters.AddWithValue("$notes", DbValue(application.Notes));
-        return (long)(await insert.ExecuteScalarAsync(cancellationToken) ?? 0L);
+        return Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken));
     }
 
     /// <inheritdoc />
     public async Task<bool> UpsertPortAsync(ListeningPort port, long? applicationId, CancellationToken cancellationToken)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken);
+        using var connection = await OpenConnectionAsync(cancellationToken);
         var existingId = await FindPortIdAsync(connection, port, cancellationToken);
         var now = DateTimeOffset.UtcNow;
 
         if (existingId is not null)
         {
-            await using var update = connection.CreateCommand();
+            using var update = connection.CreateCommand();
             update.CommandText = """
                 UPDATE Ports
                 SET Reachability = $reachability,
@@ -107,7 +107,7 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
             return false;
         }
 
-        await using var insert = connection.CreateCommand();
+        using var insert = connection.CreateCommand();
         insert.CommandText = """
             INSERT INTO Ports
             (PortNumber, Protocol, LocalAddress, Reachability, OwningProcessId, ApplicationId,
@@ -125,8 +125,8 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
     /// <inheritdoc />
     public async Task AddNetworkEventAsync(NetworkEvent networkEvent, CancellationToken cancellationToken)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
+        using var connection = await OpenConnectionAsync(cancellationToken);
+        using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO NetworkEvents
             (EventType, SourceIp, SourceDeviceId, DestinationIp, DestinationPort, Protocol, Direction,
@@ -277,7 +277,7 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
 
     private static async Task<long?> FindApplicationIdAsync(SqliteConnection connection, ApplicationIdentity application, CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
+        using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT ApplicationId
             FROM Applications
@@ -294,7 +294,7 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
 
     private static async Task<long?> FindPortIdAsync(SqliteConnection connection, ListeningPort port, CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
+        using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT PortId
             FROM Ports
@@ -345,3 +345,4 @@ public sealed class SqliteAccessWatchRepository : IAccessWatchRepository
         return (value == default ? fallback : value).UtcDateTime.ToString("O");
     }
 }
+
