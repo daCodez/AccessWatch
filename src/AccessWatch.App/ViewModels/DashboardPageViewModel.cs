@@ -61,6 +61,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 {
     private readonly IAccessWatchRepository? repository;
     private readonly Func<CancellationToken, Task<int>>? scanAsync;
+    private DashboardPageViewModel selectedPage;
     private string statusMessage = "Connect the service or run a scan to load AccessWatch activity.";
     private bool isLoading;
 
@@ -69,6 +70,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public DashboardShellViewModel()
     {
+        selectedPage = Pages[0];
     }
 
     /// <summary>
@@ -82,6 +84,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         this.repository = repository;
         this.scanAsync = scanAsync;
+        selectedPage = Pages[0];
     }
 
     /// <summary>
@@ -101,6 +104,60 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         new("Incidents", "Grouped low-noise security events."),
         new("Settings", "Protection mode and AI handoff settings.")
     ];
+
+    /// <summary>
+    /// Gets or sets the page selected by the sidebar.
+    /// </summary>
+    public DashboardPageViewModel? SelectedPage
+    {
+        get => selectedPage;
+        set
+        {
+            if (Equals(selectedPage, value))
+            {
+                return;
+            }
+
+            selectedPage = value ?? Pages[0];
+            OnPropertyChanged(nameof(SelectedPage));
+            OnPropertyChanged(nameof(SelectedPageTitle));
+            OnPropertyChanged(nameof(SelectedPageSummary));
+            OnPropertyChanged(nameof(IsOverviewSelected));
+            OnPropertyChanged(nameof(IsDevicesSelected));
+            OnPropertyChanged(nameof(IsApplicationsSelected));
+            OnPropertyChanged(nameof(IsPlaceholderSelected));
+        }
+    }
+
+    /// <summary>
+    /// Gets the selected page title.
+    /// </summary>
+    public string SelectedPageTitle => selectedPage.Name;
+
+    /// <summary>
+    /// Gets the selected page summary.
+    /// </summary>
+    public string SelectedPageSummary => selectedPage.Summary;
+
+    /// <summary>
+    /// Gets whether the overview page is selected.
+    /// </summary>
+    public bool IsOverviewSelected => SelectedPageTitle == "Overview";
+
+    /// <summary>
+    /// Gets whether the devices page is selected.
+    /// </summary>
+    public bool IsDevicesSelected => SelectedPageTitle == "Devices";
+
+    /// <summary>
+    /// Gets whether the applications page is selected.
+    /// </summary>
+    public bool IsApplicationsSelected => SelectedPageTitle == "Applications";
+
+    /// <summary>
+    /// Gets whether the selected page is not yet implemented.
+    /// </summary>
+    public bool IsPlaceholderSelected => !IsOverviewSelected && !IsDevicesSelected && !IsApplicationsSelected;
 
     /// <summary>
     /// Gets overview metrics loaded from storage.

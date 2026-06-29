@@ -65,6 +65,59 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies sidebar selection drives the main dashboard content.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_SelectedPage_UpdatesVisibleSection()
+    {
+        var model = new DashboardShellViewModel();
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        Assert.Equal("Overview", model.SelectedPageTitle);
+        Assert.Equal("Recent risk posture and service status.", model.SelectedPageSummary);
+        Assert.True(model.IsOverviewSelected);
+        Assert.False(model.IsDevicesSelected);
+        Assert.False(model.IsApplicationsSelected);
+        Assert.False(model.IsPlaceholderSelected);
+
+        model.SelectedPage = model.Pages.Single(page => page.Name == "Devices");
+
+        Assert.Equal("Devices", model.SelectedPageTitle);
+        Assert.False(model.IsOverviewSelected);
+        Assert.True(model.IsDevicesSelected);
+        Assert.False(model.IsApplicationsSelected);
+        Assert.False(model.IsPlaceholderSelected);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedPage), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedPageTitle), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.IsDevicesSelected), changed);
+
+        changed.Clear();
+        model.SelectedPage = model.SelectedPage;
+        Assert.Empty(changed);
+
+        model.SelectedPage = model.Pages.Single(page => page.Name == "Applications");
+
+        Assert.Equal("Applications", model.SelectedPageTitle);
+        Assert.False(model.IsOverviewSelected);
+        Assert.False(model.IsDevicesSelected);
+        Assert.True(model.IsApplicationsSelected);
+        Assert.False(model.IsPlaceholderSelected);
+
+        model.SelectedPage = model.Pages.Single(page => page.Name == "Ports");
+
+        Assert.Equal("Ports", model.SelectedPageTitle);
+        Assert.False(model.IsOverviewSelected);
+        Assert.False(model.IsDevicesSelected);
+        Assert.False(model.IsApplicationsSelected);
+        Assert.True(model.IsPlaceholderSelected);
+
+        model.SelectedPage = null;
+
+        Assert.Equal("Overview", model.SelectedPageTitle);
+        Assert.True(model.IsOverviewSelected);
+    }
+    /// <summary>
     /// Verifies the dashboard reports when no repository is connected.
     /// </summary>
     [Fact]
