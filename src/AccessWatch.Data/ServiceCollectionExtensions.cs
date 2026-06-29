@@ -1,4 +1,5 @@
 using AccessWatch.Core;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AccessWatch.Data;
@@ -23,6 +24,18 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Adds AccessWatch persistence using the configured AccessWatch database section.
+    /// </summary>
+    /// <param name="services">The service collection to update.</param>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The updated service collection.</returns>
+    public static IServiceCollection AddAccessWatchData(this IServiceCollection services, IConfiguration configuration)
+    {
+        var options = new AccessWatchDatabaseOptions();
+        configuration.GetSection(AccessWatchDatabaseOptions.ConfigurationSectionName).Bind(options);
+        return services.AddAccessWatchData(options);
+    }
+    /// <summary>
     /// Adds AccessWatch persistence for the selected database provider.
     /// </summary>
     /// <param name="services">The service collection to update.</param>
@@ -44,3 +57,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 }
+
+
+

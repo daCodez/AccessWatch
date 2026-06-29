@@ -57,10 +57,60 @@ public sealed class AppIdentityResolverTests
 
         var identity = resolver.Resolve(4);
 
-        Assert.Equal("System", identity.DisplayName);
+        Assert.Equal("System (identity limited; executable path unavailable)", identity.DisplayName);
         Assert.Null(identity.FilePath);
         Assert.Null(identity.InstallFolder);
         Assert.Equal(SignatureStatus.Unknown, identity.SignatureStatus);
+    }
+
+    /// <summary>
+    /// Verifies missing friendly metadata falls back to path and signature context.
+    /// </summary>
+    [Fact]
+    public void Resolve_AddsPathAndSignatureContext_WhenFriendlyMetadataIsMissing()
+    {
+        var process = new ProcessMetadata("tool", "C:\\Tools\\tool.exe", null);
+        var file = new FileIdentityMetadata(null, null, null, SignatureStatus.Unsigned, "ABC123");
+        var resolver = new AppIdentityResolver(new FakeProcessReader(process), new FakeFileReader(file));
+
+        var identity = resolver.Resolve(88);
+
+        Assert.Equal("tool (unsigned, C:\\Tools\\tool.exe)", identity.DisplayName);
+    }
+
+    /// <summary>
+    /// Verifies publisher context is preferred over signature labels when friendly metadata is missing.
+    /// </summary>
+    [Fact]
+    public void Resolve_AddsPublisherContext_WhenFriendlyMetadataIsMissing()
+    {
+        var process = new ProcessMetadata("agent", "C:\\Vendor\\agent.exe", null);
+        var file = new FileIdentityMetadata(null, null, "Vendor LLC", SignatureStatus.TrustedSigned, "ABC123");
+        var resolver = new AppIdentityResolver(new FakeProcessReader(process), new FakeFileReader(file));
+
+        var identity = resolver.Resolve(89);
+
+        Assert.Equal("agent (Vendor LLC, C:\\Vendor\\agent.exe)", identity.DisplayName);
+    }
+
+    /// <summary>
+    /// Verifies signature labels provide context when publisher metadata is missing.
+    /// </summary>
+    /// <param name="signatureStatus">Signature status to label.</param>
+    /// <param name="expectedLabel">Expected label in the display name.</param>
+    [Theory]
+    [InlineData(SignatureStatus.TrustedSigned, "trusted signed")]
+    [InlineData(SignatureStatus.SignedUnknown, "signed, trust unknown")]
+    [InlineData(SignatureStatus.InvalidSignature, "invalid signature")]
+    [InlineData(SignatureStatus.Unknown, "signature unknown")]
+    [InlineData((SignatureStatus)999, "signature unknown")]
+    public void ChooseDisplayName_AddsSignatureContext_WhenPublisherIsMissing(SignatureStatus signatureStatus, string expectedLabel)
+    {
+        var resolver = new AppIdentityResolver(new FakeProcessReader(null), new FakeFileReader(FileIdentityMetadata.Unknown));
+
+        var displayName = resolver.ChooseDisplayName("agent", null, null, "C:\\Tools\\agent.exe", null, signatureStatus);
+
+        Assert.Equal($"agent ({expectedLabel}, C:\\Tools\\agent.exe)", displayName);
     }
 
     /// <summary>
@@ -86,7 +136,7 @@ public sealed class AppIdentityResolverTests
 
         var displayName = resolver.ChooseDisplayName("raw", null, "");
 
-        Assert.Equal("raw", displayName);
+        Assert.Equal("raw (identity limited; executable path unavailable)", displayName);
     }
 
     private sealed class FakeProcessReader : IProcessMetadataReader

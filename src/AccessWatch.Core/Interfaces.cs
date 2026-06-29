@@ -27,6 +27,18 @@ public interface IAppIdentityResolver
 }
 
 /// <summary>
+/// Discovers devices visible on the local network without packet sniffing.
+/// </summary>
+public interface INetworkDeviceDiscoveryService
+{
+    /// <summary>
+    /// Gets devices visible from the current local network snapshot.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token for the scan.</param>
+    /// <returns>The devices currently visible to AccessWatch.</returns>
+    Task<IReadOnlyList<NetworkDevice>> DiscoverAsync(CancellationToken cancellationToken);
+}
+/// <summary>
 /// Stores AccessWatch observations and events.
 /// </summary>
 public interface IAccessWatchRepository
@@ -38,6 +50,21 @@ public interface IAccessWatchRepository
     Task InitializeAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// Saves or updates a local-network device observation.
+    /// </summary>
+    /// <param name="device">The device to save.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>The database device identifier.</returns>
+    Task<long> UpsertDeviceAsync(NetworkDevice device, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists recent local-network devices for future UI surfaces.
+    /// </summary>
+    /// <param name="limit">Maximum number of rows to return.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>Recent devices ordered newest first.</returns>
+    Task<IReadOnlyList<NetworkDevice>> ListRecentDevicesAsync(int limit, CancellationToken cancellationToken);
+    /// <summary>
     /// Saves or updates an application identity.
     /// </summary>
     /// <param name="application">The application to save.</param>
@@ -45,6 +72,14 @@ public interface IAccessWatchRepository
     /// <returns>The database application identifier.</returns>
     Task<long> UpsertApplicationAsync(ApplicationIdentity application, CancellationToken cancellationToken);
 
+
+    /// <summary>
+    /// Gets the application currently associated with a known listening port.
+    /// </summary>
+    /// <param name="port">The listening port identity to look up.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>The associated application identifier, or null when the port is unknown or has no application.</returns>
+    Task<long?> GetListeningPortApplicationIdAsync(ListeningPort port, CancellationToken cancellationToken);
     /// <summary>
     /// Saves or updates a listening port.
     /// </summary>
@@ -131,3 +166,6 @@ public interface IAiHandoffService
     /// <returns>Redacted JSON suitable for manual copy.</returns>
     string CreateRedactedIncidentSummary(NetworkEvent networkEvent, int eventCount, TimeSpan timeWindow);
 }
+
+
+

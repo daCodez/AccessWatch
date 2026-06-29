@@ -136,6 +136,37 @@ public sealed class ServiceScanCoordinatorTests
         Assert.False(networkEvent.WasUserNotified);
     }
 
+
+    /// <summary>
+    /// Verifies an existing port creates an event when a different application owns it.
+    /// </summary>
+    [Fact]
+    public async Task RunListeningPortScanAsync_CreatesEventWhenExistingPortChangesApplication()
+    {
+        var repository = new FakeRepository { IsNewPort = false, ExistingPortApplicationId = 41 };
+        var port = new ListeningPort
+        {
+            PortNumber = 8080,
+            Protocol = "TCP",
+            LocalAddress = "0.0.0.0",
+            Reachability = PortReachability.NetworkReachable,
+            Application = new ApplicationIdentity
+            {
+                DisplayName = "New owner",
+                ProcessName = "new-owner",
+                SignatureStatus = SignatureStatus.TrustedSigned
+            }
+        };
+        var coordinator = CreateCoordinator(repository, new FakeScanner([port]));
+
+        var count = await coordinator.RunListeningPortScanAsync(CancellationToken.None);
+
+        Assert.Equal(1, count);
+        var networkEvent = Assert.Single(repository.Events);
+        Assert.Equal("ListeningPortApplicationChanged", networkEvent.EventType);
+        Assert.Equal(99, networkEvent.ApplicationId);
+        Assert.Contains("different application", networkEvent.DetailsJson);
+    }
     private static ServiceScanCoordinator CreateCoordinator(FakeRepository repository, FakeScanner scanner)
     {
         return new ServiceScanCoordinator(
@@ -170,6 +201,8 @@ public sealed class ServiceScanCoordinatorTests
 
         public TrustStatus? TrustDecision { get; init; }
 
+        public long? ExistingPortApplicationId { get; init; }
+
         public List<NetworkEvent> Events { get; } = [];
 
         public Task InitializeAsync(CancellationToken cancellationToken)
@@ -178,11 +211,26 @@ public sealed class ServiceScanCoordinatorTests
             return Task.CompletedTask;
         }
 
+
+        public Task<long> UpsertDeviceAsync(NetworkDevice device, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(1L);
+        }
+
+        public Task<IReadOnlyList<NetworkDevice>> ListRecentDevicesAsync(int limit, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<NetworkDevice>>([]);
+        }
         public Task<long> UpsertApplicationAsync(AppIdentity application, CancellationToken cancellationToken)
         {
             return Task.FromResult(99L);
         }
 
+
+        public Task<long?> GetListeningPortApplicationIdAsync(ListeningPort port, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(ExistingPortApplicationId);
+        }
         public Task<bool> UpsertPortAsync(ListeningPort port, long? applicationId, CancellationToken cancellationToken)
         {
             return Task.FromResult(IsNewPort);
@@ -204,6 +252,26 @@ public sealed class ServiceScanCoordinatorTests
             return Task.FromResult(TrustDecision);
         }
 
+
+        public Task<long> UpsertIncidentAsync(Incident incident, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(1L);
+        }
+
+        public Task<long> UpsertRuleAsync(AccessWatchRule rule, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(1L);
+        }
+
+        public Task<IReadOnlyList<Incident>> ListRecentIncidentsAsync(int limit, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<Incident>>([]);
+        }
+
+        public Task<IReadOnlyList<AccessWatchRule>> ListRulesAsync(bool includeDisabled, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<AccessWatchRule>>([]);
+        }
         public Task<IReadOnlyList<ApplicationIdentity>> ListRecentApplicationsAsync(int limit, CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<ApplicationIdentity>>([]);
@@ -220,3 +288,8 @@ public sealed class ServiceScanCoordinatorTests
         }
     }
 }
+
+
+
+
+

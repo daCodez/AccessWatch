@@ -15,6 +15,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAccessWatchNotifications(this IServiceCollection services)
     {
         services.AddSingleton<NotificationMessageFactory>();
+        services.AddSingleton<ITrayNotificationService, InMemoryTrayNotificationService>();
         return services;
     }
 }
+

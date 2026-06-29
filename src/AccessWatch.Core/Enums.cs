@@ -123,3 +123,16 @@ public enum AiMode
     /// <summary>Future OpenAI API support.</summary>
     OpenAiApi
 }
+
+/// <summary>
+/// Describes incident lifecycle state.
+/// </summary>
+public enum IncidentStatus
+{
+    /// <summary>The incident is open for review.</summary>
+    Open,
+    /// <summary>The incident is being watched without immediate action.</summary>
+    Watching,
+    /// <summary>The incident has been resolved.</summary>
+    Resolved
+}

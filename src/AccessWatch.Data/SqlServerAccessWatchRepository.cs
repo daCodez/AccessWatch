@@ -34,6 +34,77 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
     }
 
     /// <inheritdoc />
+    public async Task<long> UpsertDeviceAsync(NetworkDevice device, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var existingId = await FindDeviceIdAsync(connection, device.IpAddress, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        long deviceId;
+
+        if (existingId is not null)
+        {
+            await using var update = connection.CreateCommand();
+            update.CommandText = """
+                UPDATE dbo.Devices
+                SET MacAddress = @macAddress,
+                    Hostname = @hostname,
+                    Vendor = @vendor,
+                    DeviceTypeGuess = @deviceTypeGuess,
+                    TrustStatus = @trustStatus,
+                    RiskStatus = @riskStatus,
+                    LastSeenUtc = @lastSeenUtc,
+                    LastConfirmedUtc = @lastConfirmedUtc,
+                    Notes = @notes
+                WHERE DeviceId = @deviceId;
+                """;
+            AddDeviceParameters(update, device, now);
+            update.Parameters.AddWithValue("@deviceId", existingId.Value);
+            await update.ExecuteNonQueryAsync(cancellationToken);
+            deviceId = existingId.Value;
+        }
+        else
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO dbo.Devices
+                (IpAddress, MacAddress, Hostname, Vendor, DeviceTypeGuess, TrustStatus, RiskStatus,
+                 FirstSeenUtc, LastSeenUtc, LastConfirmedUtc, Notes)
+                VALUES
+                (@ipAddress, @macAddress, @hostname, @vendor, @deviceTypeGuess, @trustStatus, @riskStatus,
+                 @firstSeenUtc, @lastSeenUtc, @lastConfirmedUtc, @notes);
+                SELECT CONVERT(bigint, SCOPE_IDENTITY());
+                """;
+            AddDeviceParameters(insert, device, now);
+            insert.Parameters.AddWithValue("@firstSeenUtc", ToDatabaseTime(device.FirstSeenUtc, now));
+            deviceId = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken));
+        }
+
+        return deviceId;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<NetworkDevice>> ListRecentDevicesAsync(int limit, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT TOP (@limit) DeviceId, IpAddress, MacAddress, Hostname, Vendor, DeviceTypeGuess,
+                   TrustStatus, RiskStatus, FirstSeenUtc, LastSeenUtc, LastConfirmedUtc, Notes
+            FROM dbo.Devices
+            ORDER BY LastSeenUtc DESC, DeviceId DESC;
+            """;
+        command.Parameters.AddWithValue("@limit", NormalizeLimit(limit));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var devices = new List<NetworkDevice>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            devices.Add(ReadDevice(reader));
+        }
+
+        return devices;
+    }
+
+    /// <inheritdoc />
     public async Task<long> UpsertApplicationAsync(ApplicationIdentity application, CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
@@ -84,6 +155,23 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         return existingId.Value;
     }
 
+
+    /// <inheritdoc />
+    public async Task<long?> GetListeningPortApplicationIdAsync(ListeningPort port, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT TOP (1) ApplicationId
+            FROM dbo.Ports
+            WHERE PortNumber = @portNumber AND Protocol = @protocol AND LocalAddress = @localAddress
+            ORDER BY PortId;
+            """;
+        command.Parameters.AddWithValue("@portNumber", port.PortNumber);
+        command.Parameters.AddWithValue("@protocol", port.Protocol);
+        command.Parameters.AddWithValue("@localAddress", port.LocalAddress);
+        return ToNullableInt64(await command.ExecuteScalarAsync(cancellationToken));
+    }
     /// <inheritdoc />
     public async Task<bool> UpsertPortAsync(ListeningPort port, long? applicationId, CancellationToken cancellationToken)
     {
@@ -201,6 +289,128 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
     }
 
     /// <inheritdoc />
+    public async Task<long> UpsertIncidentAsync(Incident incident, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        long incidentId;
+
+        if (incident.IncidentId > 0)
+        {
+            await using var update = connection.CreateCommand();
+            update.CommandText = """
+                UPDATE dbo.Incidents
+                SET Title = @title, Summary = @summary, MainDeviceId = @mainDeviceId, MainApplicationId = @mainApplicationId,
+                    RiskLevel = @riskLevel, Status = @status, EventCount = @eventCount, StartedUtc = @startedUtc,
+                    LastUpdatedUtc = @lastUpdatedUtc, ResolvedUtc = @resolvedUtc, UserNotes = @userNotes
+                WHERE IncidentId = @incidentId;
+                """;
+            AddIncidentParameters(update, incident, now);
+            update.Parameters.AddWithValue("@incidentId", incident.IncidentId);
+            await update.ExecuteNonQueryAsync(cancellationToken);
+            incidentId = incident.IncidentId;
+        }
+        else
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO dbo.Incidents
+                (Title, Summary, MainDeviceId, MainApplicationId, RiskLevel, Status, EventCount, StartedUtc, LastUpdatedUtc, ResolvedUtc, UserNotes)
+                VALUES
+                (@title, @summary, @mainDeviceId, @mainApplicationId, @riskLevel, @status, @eventCount, @startedUtc, @lastUpdatedUtc, @resolvedUtc, @userNotes);
+                SELECT CONVERT(bigint, SCOPE_IDENTITY());
+                """;
+            AddIncidentParameters(insert, incident, now);
+            incidentId = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken));
+        }
+
+        return incidentId;
+    }
+
+    /// <inheritdoc />
+    public async Task<long> UpsertRuleAsync(AccessWatchRule rule, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        long ruleId;
+
+        if (rule.RuleId > 0)
+        {
+            await using var update = connection.CreateCommand();
+            update.CommandText = """
+                UPDATE dbo.Rules
+                SET Name = @name, Description = @description, ConditionJson = @conditionJson, RiskLevel = @riskLevel,
+                    Action = @action, Enabled = @enabled, UpdatedUtc = @updatedUtc
+                WHERE RuleId = @ruleId;
+                """;
+            AddRuleParameters(update, rule, now);
+            update.Parameters.AddWithValue("@ruleId", rule.RuleId);
+            await update.ExecuteNonQueryAsync(cancellationToken);
+            ruleId = rule.RuleId;
+        }
+        else
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO dbo.Rules
+                (Name, Description, ConditionJson, RiskLevel, Action, Enabled, CreatedUtc, UpdatedUtc)
+                VALUES
+                (@name, @description, @conditionJson, @riskLevel, @action, @enabled, @createdUtc, @updatedUtc);
+                SELECT CONVERT(bigint, SCOPE_IDENTITY());
+                """;
+            AddRuleParameters(insert, rule, now);
+            insert.Parameters.AddWithValue("@createdUtc", ToDatabaseTime(rule.CreatedUtc, now));
+            ruleId = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken));
+        }
+
+        return ruleId;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Incident>> ListRecentIncidentsAsync(int limit, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT TOP (@limit) IncidentId, Title, Summary, MainDeviceId, MainApplicationId, RiskLevel, Status, EventCount,
+                   StartedUtc, LastUpdatedUtc, ResolvedUtc, UserNotes
+            FROM dbo.Incidents
+            ORDER BY LastUpdatedUtc DESC, IncidentId DESC;
+            """;
+        command.Parameters.AddWithValue("@limit", NormalizeLimit(limit));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var incidents = new List<Incident>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            incidents.Add(ReadIncident(reader));
+        }
+
+        return incidents;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<AccessWatchRule>> ListRulesAsync(bool includeDisabled, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT RuleId, Name, Description, ConditionJson, RiskLevel, Action, Enabled, CreatedUtc, UpdatedUtc
+            FROM dbo.Rules
+            WHERE @includeDisabled = 1 OR Enabled = 1
+            ORDER BY Name, RuleId;
+            """;
+        command.Parameters.AddWithValue("@includeDisabled", includeDisabled);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var rules = new List<AccessWatchRule>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rules.Add(ReadRule(reader));
+        }
+
+        return rules;
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<ApplicationIdentity>> ListRecentApplicationsAsync(int limit, CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
@@ -285,6 +495,10 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             LastConfirmedUtc datetimeoffset NULL,
             Notes nvarchar(max) NULL
         );
+        """,
+        """
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Devices_IpAddress' AND object_id = OBJECT_ID(N'dbo.Devices'))
+        CREATE UNIQUE INDEX IX_Devices_IpAddress ON dbo.Devices (IpAddress);
         """,
         """
         IF OBJECT_ID(N'dbo.Applications', N'U') IS NULL
@@ -427,6 +641,19 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         return connection;
     }
 
+
+    private static async Task<long?> FindDeviceIdAsync(SqlConnection connection, string ipAddress, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT TOP (1) DeviceId
+            FROM dbo.Devices
+            WHERE IpAddress = @ipAddress
+            ORDER BY DeviceId;
+            """;
+        command.Parameters.AddWithValue("@ipAddress", ipAddress);
+        return ToNullableInt64(await command.ExecuteScalarAsync(cancellationToken));
+    }
     private static async Task<long?> FindApplicationIdAsync(SqlConnection connection, ApplicationIdentity application, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -459,6 +686,46 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         return ToNullableInt64(await command.ExecuteScalarAsync(cancellationToken));
     }
 
+
+    private static void AddIncidentParameters(SqlCommand command, Incident incident, DateTimeOffset now)
+    {
+        command.Parameters.AddWithValue("@title", incident.Title);
+        command.Parameters.AddWithValue("@summary", incident.Summary);
+        command.Parameters.AddWithValue("@mainDeviceId", DbValue(incident.MainDeviceId));
+        command.Parameters.AddWithValue("@mainApplicationId", DbValue(incident.MainApplicationId));
+        command.Parameters.AddWithValue("@riskLevel", incident.RiskLevel.ToString());
+        command.Parameters.AddWithValue("@status", incident.Status.ToString());
+        command.Parameters.AddWithValue("@eventCount", incident.EventCount);
+        command.Parameters.AddWithValue("@startedUtc", ToDatabaseTime(incident.StartedUtc, now));
+        command.Parameters.AddWithValue("@lastUpdatedUtc", ToDatabaseTime(incident.LastUpdatedUtc, now));
+        command.Parameters.AddWithValue("@resolvedUtc", DbValue(incident.ResolvedUtc));
+        command.Parameters.AddWithValue("@userNotes", DbValue(incident.UserNotes));
+    }
+
+    private static void AddRuleParameters(SqlCommand command, AccessWatchRule rule, DateTimeOffset now)
+    {
+        command.Parameters.AddWithValue("@name", rule.Name);
+        command.Parameters.AddWithValue("@description", rule.Description);
+        command.Parameters.AddWithValue("@conditionJson", rule.ConditionJson);
+        command.Parameters.AddWithValue("@riskLevel", rule.RiskLevel.ToString());
+        command.Parameters.AddWithValue("@action", rule.Action.ToString());
+        command.Parameters.AddWithValue("@enabled", rule.Enabled);
+        command.Parameters.AddWithValue("@updatedUtc", ToDatabaseTime(rule.UpdatedUtc, now));
+    }
+
+    private static void AddDeviceParameters(SqlCommand command, NetworkDevice device, DateTimeOffset now)
+    {
+        command.Parameters.AddWithValue("@ipAddress", device.IpAddress);
+        command.Parameters.AddWithValue("@macAddress", DbValue(device.MacAddress));
+        command.Parameters.AddWithValue("@hostname", DbValue(device.Hostname));
+        command.Parameters.AddWithValue("@vendor", DbValue(device.Vendor));
+        command.Parameters.AddWithValue("@deviceTypeGuess", DbValue(device.DeviceTypeGuess));
+        command.Parameters.AddWithValue("@trustStatus", device.TrustStatus.ToString());
+        command.Parameters.AddWithValue("@riskStatus", device.RiskStatus.ToString());
+        command.Parameters.AddWithValue("@lastSeenUtc", ToDatabaseTime(device.LastSeenUtc, now));
+        command.Parameters.AddWithValue("@lastConfirmedUtc", DbValue(device.LastConfirmedUtc));
+        command.Parameters.AddWithValue("@notes", DbValue(device.Notes));
+    }
     private static void AddApplicationParameters(SqlCommand command, ApplicationIdentity application, DateTimeOffset now)
     {
         command.Parameters.AddWithValue("@displayName", application.DisplayName);
@@ -507,6 +774,60 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         return Math.Clamp(limit, 1, 500);
     }
 
+
+    private static Incident ReadIncident(SqlDataReader reader)
+    {
+        return new Incident
+        {
+            IncidentId = reader.GetInt64(0),
+            Title = reader.GetString(1),
+            Summary = reader.GetString(2),
+            MainDeviceId = ReadNullableInt64(reader, 3),
+            MainApplicationId = ReadNullableInt64(reader, 4),
+            RiskLevel = Enum.Parse<RiskLevel>(reader.GetString(5)),
+            Status = Enum.Parse<IncidentStatus>(reader.GetString(6)),
+            EventCount = reader.GetInt32(7),
+            StartedUtc = reader.GetFieldValue<DateTimeOffset>(8),
+            LastUpdatedUtc = reader.GetFieldValue<DateTimeOffset>(9),
+            ResolvedUtc = ReadNullableDateTimeOffset(reader, 10),
+            UserNotes = ReadNullableString(reader, 11)
+        };
+    }
+
+    private static AccessWatchRule ReadRule(SqlDataReader reader)
+    {
+        return new AccessWatchRule
+        {
+            RuleId = reader.GetInt64(0),
+            Name = reader.GetString(1),
+            Description = reader.GetString(2),
+            ConditionJson = reader.GetString(3),
+            RiskLevel = Enum.Parse<RiskLevel>(reader.GetString(4)),
+            Action = Enum.Parse<NotificationAction>(reader.GetString(5)),
+            Enabled = reader.GetBoolean(6),
+            CreatedUtc = reader.GetFieldValue<DateTimeOffset>(7),
+            UpdatedUtc = reader.GetFieldValue<DateTimeOffset>(8)
+        };
+    }
+
+    private static NetworkDevice ReadDevice(SqlDataReader reader)
+    {
+        return new NetworkDevice
+        {
+            DeviceId = reader.GetInt64(0),
+            IpAddress = reader.GetString(1),
+            MacAddress = ReadNullableString(reader, 2),
+            Hostname = ReadNullableString(reader, 3),
+            Vendor = ReadNullableString(reader, 4),
+            DeviceTypeGuess = ReadNullableString(reader, 5),
+            TrustStatus = Enum.Parse<TrustStatus>(reader.GetString(6)),
+            RiskStatus = Enum.Parse<RiskStatus>(reader.GetString(7)),
+            FirstSeenUtc = reader.GetFieldValue<DateTimeOffset>(8),
+            LastSeenUtc = reader.GetFieldValue<DateTimeOffset>(9),
+            LastConfirmedUtc = ReadNullableDateTimeOffset(reader, 10),
+            Notes = ReadNullableString(reader, 11)
+        };
+    }
     private static ApplicationIdentity ReadApplication(SqlDataReader reader)
     {
         return new ApplicationIdentity
@@ -577,6 +898,11 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
     }
 
+
+    private static DateTimeOffset? ReadNullableDateTimeOffset(SqlDataReader reader, int ordinal)
+    {
+        return reader.IsDBNull(ordinal) ? null : reader.GetFieldValue<DateTimeOffset>(ordinal);
+    }
     private static long? ReadNullableInt64(SqlDataReader reader, int ordinal)
     {
         return reader.IsDBNull(ordinal) ? null : reader.GetInt64(ordinal);
@@ -587,3 +913,10 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         return $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]";
     }
 }
+
+
+
+
+
+
+

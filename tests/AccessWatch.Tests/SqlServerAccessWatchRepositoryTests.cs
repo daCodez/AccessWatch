@@ -39,6 +39,123 @@ public sealed class SqlServerAccessWatchRepositoryTests
     }
 
     /// <summary>
+    /// Verifies device upsert inserts once, updates the same row, and lists recent devices.
+    /// </summary>
+    [Fact]
+    public async Task UpsertDeviceAsync_InsertsUpdatesAndListsDevice()
+    {
+        using var database = TempDatabase.Create();
+        var repository = database.CreateRepository();
+        await repository.InitializeAsync(CancellationToken.None);
+
+        var device = new NetworkDevice
+        {
+            IpAddress = "192.168.1.25",
+            MacAddress = "AA:BB:CC:DD:EE:FF",
+            Hostname = "living-room",
+            DeviceTypeGuess = "Unknown",
+            TrustStatus = TrustStatus.Unknown,
+            RiskStatus = RiskStatus.Normal,
+            FirstSeenUtc = DateTimeOffset.UnixEpoch,
+            LastSeenUtc = DateTimeOffset.UnixEpoch
+        };
+
+        var firstId = await repository.UpsertDeviceAsync(device, CancellationToken.None);
+        var secondId = await repository.UpsertDeviceAsync(device with { Hostname = "living-room-tv", Vendor = "Example Vendor", LastConfirmedUtc = DateTimeOffset.UnixEpoch.AddMinutes(2) }, CancellationToken.None);
+        await repository.UpsertDeviceAsync(device with { IpAddress = "192.168.1.26", LastConfirmedUtc = null }, CancellationToken.None);
+        var devices = await repository.ListRecentDevicesAsync(10, CancellationToken.None);
+
+        Assert.Equal(2, devices.Count);
+        var saved = Assert.Single(devices, device => device.IpAddress == "192.168.1.25");
+        var unconfirmed = Assert.Single(devices, device => device.IpAddress == "192.168.1.26");
+        Assert.Equal(firstId, secondId);
+        Assert.Equal("living-room-tv", saved.Hostname);
+        Assert.Equal("Example Vendor", saved.Vendor);
+        Assert.Equal(DateTimeOffset.UnixEpoch.AddMinutes(2), saved.LastConfirmedUtc);
+        Assert.Null(unconfirmed.LastConfirmedUtc);
+    }
+
+    /// <summary>
+    /// Verifies incident and rule persistence round trips rows for future dashboard and editor surfaces.
+    /// </summary>
+    [Fact]
+    public async Task IncidentAndRulePersistence_RoundTripsRows()
+    {
+        using var database = TempDatabase.Create();
+        var repository = database.CreateRepository();
+        await repository.InitializeAsync(CancellationToken.None);
+
+        var incidentId = await repository.UpsertIncidentAsync(new Incident
+        {
+            Title = "Remote access review",
+            Summary = "Remote Desktop opened on the network.",
+            RiskLevel = RiskLevel.High,
+            Status = IncidentStatus.Open,
+            EventCount = 1,
+            StartedUtc = DateTimeOffset.UnixEpoch,
+            LastUpdatedUtc = DateTimeOffset.UnixEpoch.AddMinutes(1)
+        }, CancellationToken.None);
+        await repository.UpsertIncidentAsync(new Incident
+        {
+            IncidentId = incidentId,
+            Title = "Remote access review",
+            Summary = "Two related events.",
+            RiskLevel = RiskLevel.High,
+            Status = IncidentStatus.Watching,
+            EventCount = 2,
+            StartedUtc = DateTimeOffset.UnixEpoch,
+            LastUpdatedUtc = DateTimeOffset.UnixEpoch.AddMinutes(2),
+            ResolvedUtc = DateTimeOffset.UnixEpoch.AddMinutes(3),
+            UserNotes = "Reviewed"
+        }, CancellationToken.None);
+
+        var disabledRuleId = await repository.UpsertRuleAsync(new AccessWatchRule
+        {
+            Name = "Disabled remote admin rule",
+            Description = "Disabled test rule.",
+            ConditionJson = "{\"port\":3389}",
+            RiskLevel = RiskLevel.High,
+            Action = NotificationAction.AskBeforeAllow,
+            Enabled = false,
+            CreatedUtc = DateTimeOffset.UnixEpoch,
+            UpdatedUtc = DateTimeOffset.UnixEpoch
+        }, CancellationToken.None);
+        await repository.UpsertRuleAsync(new AccessWatchRule
+        {
+            RuleId = disabledRuleId,
+            Name = "Disabled remote admin rule",
+            Description = "Still disabled.",
+            ConditionJson = "{\"port\":3389}",
+            RiskLevel = RiskLevel.High,
+            Action = NotificationAction.AskBeforeAllow,
+            Enabled = false,
+            CreatedUtc = DateTimeOffset.UnixEpoch,
+            UpdatedUtc = DateTimeOffset.UnixEpoch.AddMinutes(1)
+        }, CancellationToken.None);
+        await repository.UpsertRuleAsync(new AccessWatchRule
+        {
+            Name = "Active SSH rule",
+            Description = "Review SSH listeners.",
+            ConditionJson = "{\"port\":22}",
+            RiskLevel = RiskLevel.High,
+            Action = NotificationAction.AskBeforeAllow,
+            Enabled = true,
+            CreatedUtc = DateTimeOffset.UnixEpoch,
+            UpdatedUtc = DateTimeOffset.UnixEpoch
+        }, CancellationToken.None);
+
+        var incident = Assert.Single(await repository.ListRecentIncidentsAsync(10, CancellationToken.None));
+        var activeRule = Assert.Single(await repository.ListRulesAsync(false, CancellationToken.None));
+        var allRules = await repository.ListRulesAsync(true, CancellationToken.None);
+
+        Assert.Equal(IncidentStatus.Watching, incident.Status);
+        Assert.Equal(2, incident.EventCount);
+        Assert.Equal(DateTimeOffset.UnixEpoch.AddMinutes(3), incident.ResolvedUtc);
+        Assert.Equal("Active SSH rule", activeRule.Name);
+        Assert.Equal(2, allRules.Count);
+    }
+
+    /// <summary>
     /// Verifies application upsert inserts once and then updates the same row.
     /// </summary>
     [Fact]
@@ -96,6 +213,38 @@ public sealed class SqlServerAccessWatchRepositoryTests
         Assert.Equal("Watched", await database.ScalarStringAsync("SELECT RiskStatus FROM dbo.Ports WHERE PortNumber = 3389", null));
     }
 
+
+    /// <summary>
+    /// Verifies the current application attached to a known port can be read before an update.
+    /// </summary>
+    [Fact]
+    public async Task GetListeningPortApplicationIdAsync_ReturnsCurrentApplication()
+    {
+        using var database = TempDatabase.Create();
+        var repository = database.CreateRepository();
+        await repository.InitializeAsync(CancellationToken.None);
+
+        var applicationId = await repository.UpsertApplicationAsync(new ApplicationIdentity
+        {
+            DisplayName = "Owner",
+            ProcessName = "owner",
+            SignatureStatus = SignatureStatus.TrustedSigned
+        }, CancellationToken.None);
+        var port = new ListeningPort
+        {
+            PortNumber = 8080,
+            Protocol = "TCP",
+            LocalAddress = "0.0.0.0",
+            Reachability = PortReachability.NetworkReachable
+        };
+        await repository.UpsertPortAsync(port, applicationId, CancellationToken.None);
+
+        var storedApplicationId = await repository.GetListeningPortApplicationIdAsync(port, CancellationToken.None);
+        var missingApplicationId = await repository.GetListeningPortApplicationIdAsync(port with { PortNumber = 8081 }, CancellationToken.None);
+
+        Assert.Equal(applicationId, storedApplicationId);
+        Assert.Null(missingApplicationId);
+    }
     /// <summary>
     /// Verifies network events are persisted with notification state.
     /// </summary>
@@ -346,3 +495,8 @@ public sealed class SqlServerAccessWatchRepositoryTests
         }
     }
 }
+
+
+
+
+

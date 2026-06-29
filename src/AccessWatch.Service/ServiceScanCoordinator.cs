@@ -80,20 +80,24 @@ public sealed class ServiceScanCoordinator
 
             var assessment = riskScoringService.ScoreNewListeningPort(portForScoring, settings);
             var port = portForScoring with { RiskStatus = assessment.RiskStatus };
+            var previousApplicationId = await repository.GetListeningPortApplicationIdAsync(port, cancellationToken);
             var isNewPort = await repository.UpsertPortAsync(port, applicationId, cancellationToken);
-            if (!isNewPort)
+            var applicationChanged = !isNewPort && previousApplicationId != applicationId;
+            if (!isNewPort && !applicationChanged)
             {
                 continue;
             }
 
             var notification = notificationFactory.Create(assessment);
-            var networkEvent = CreateNewListeningPortEvent(port, applicationId, assessment, notification.Action != NotificationAction.SilentLog);
+            var eventType = isNewPort ? "NewListeningPort" : "ListeningPortApplicationChanged";
+            var networkEvent = CreateListeningPortEvent(port, applicationId, assessment, eventType, notification.Action != NotificationAction.SilentLog);
             await repository.AddNetworkEventAsync(networkEvent, cancellationToken);
             createdEvents++;
 
             logger.LogInformation(
-                "New listening port detected: {Summary} Action={Action} Risk={RiskLevel}",
+                "Listening port event detected: {Summary} EventType={EventType} Action={Action} Risk={RiskLevel}",
                 notification.Body,
+                eventType,
                 notification.Action,
                 notification.RiskLevel);
         }
@@ -101,15 +105,18 @@ public sealed class ServiceScanCoordinator
         return createdEvents;
     }
 
-    private static NetworkEvent CreateNewListeningPortEvent(
+    private static NetworkEvent CreateListeningPortEvent(
         ListeningPort port,
         long? applicationId,
         PortRiskAssessment assessment,
+        string eventType,
         bool wasUserNotified)
     {
         var details = new
         {
-            whatHappened = "A new listening TCP port appeared.",
+            whatHappened = eventType == "NewListeningPort"
+                ? "A new listening TCP port appeared."
+                : "A known listening TCP port is now owned by a different application.",
             app = port.Application?.DisplayName ?? "Unknown application",
             processName = port.Application?.ProcessName,
             port.PortNumber,
@@ -121,7 +128,7 @@ public sealed class ServiceScanCoordinator
 
         return new NetworkEvent
         {
-            EventType = "NewListeningPort",
+            EventType = eventType,
             DestinationIp = port.LocalAddress,
             DestinationPort = port.PortNumber,
             Protocol = port.Protocol,

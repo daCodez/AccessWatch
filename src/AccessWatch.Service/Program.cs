@@ -9,7 +9,7 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Services
     .AddWindowsService(options => options.ServiceName = "AccessWatch")
     .AddAccessWatchCore()
-    .AddAccessWatchData()
+    .AddAccessWatchData(builder.Configuration)
     .AddAccessWatchDetection()
     .AddAccessWatchRules()
     .AddAccessWatchNotifications()
@@ -18,3 +18,4 @@ builder.Services
 
 var host = builder.Build();
 host.Run();
+

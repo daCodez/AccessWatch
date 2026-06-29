@@ -1,6 +1,47 @@
 namespace AccessWatch.Core;
 
 /// <summary>
+/// Represents a device observed on the local network.
+/// </summary>
+public sealed record NetworkDevice
+{
+    /// <summary>Stable device identifier in the AccessWatch database.</summary>
+    public long DeviceId { get; init; }
+
+    /// <summary>Observed IP address.</summary>
+    public string IpAddress { get; init; } = string.Empty;
+
+    /// <summary>Observed MAC address when available.</summary>
+    public string? MacAddress { get; init; }
+
+    /// <summary>Resolved hostname when available.</summary>
+    public string? Hostname { get; init; }
+
+    /// <summary>MAC vendor when available.</summary>
+    public string? Vendor { get; init; }
+
+    /// <summary>Best-effort device type guess.</summary>
+    public string? DeviceTypeGuess { get; init; }
+
+    /// <summary>First observation time.</summary>
+    public DateTimeOffset FirstSeenUtc { get; init; }
+
+    /// <summary>Most recent observation time.</summary>
+    public DateTimeOffset LastSeenUtc { get; init; }
+
+    /// <summary>Most recent confirmation time.</summary>
+    public DateTimeOffset? LastConfirmedUtc { get; init; }
+
+    /// <summary>User or system trust status.</summary>
+    public TrustStatus TrustStatus { get; init; } = TrustStatus.Unknown;
+
+    /// <summary>Current risk status.</summary>
+    public RiskStatus RiskStatus { get; init; } = RiskStatus.Normal;
+
+    /// <summary>Operator notes.</summary>
+    public string? Notes { get; init; }
+}
+/// <summary>
 /// Represents an application observed by AccessWatch.
 /// </summary>
 public sealed record ApplicationIdentity
@@ -191,4 +232,80 @@ public sealed record AccessWatchSettings
 
     /// <summary>AI assistance mode.</summary>
     public AiMode AiMode { get; init; } = AiMode.ManualChatGptCopy;
+}
+
+
+/// <summary>
+/// Represents grouped related security events.
+/// </summary>
+public sealed record Incident
+{
+    /// <summary>Stable incident identifier.</summary>
+    public long IncidentId { get; init; }
+
+    /// <summary>User-facing incident title.</summary>
+    public string Title { get; init; } = string.Empty;
+
+    /// <summary>Incident summary.</summary>
+    public string Summary { get; init; } = string.Empty;
+
+    /// <summary>Main related device identifier.</summary>
+    public long? MainDeviceId { get; init; }
+
+    /// <summary>Main related application identifier.</summary>
+    public long? MainApplicationId { get; init; }
+
+    /// <summary>Incident risk level.</summary>
+    public RiskLevel RiskLevel { get; init; }
+
+    /// <summary>Incident lifecycle status.</summary>
+    public IncidentStatus Status { get; init; } = IncidentStatus.Open;
+
+    /// <summary>Number of related events.</summary>
+    public int EventCount { get; init; }
+
+    /// <summary>Incident start time.</summary>
+    public DateTimeOffset StartedUtc { get; init; }
+
+    /// <summary>Most recent incident update time.</summary>
+    public DateTimeOffset LastUpdatedUtc { get; init; }
+
+    /// <summary>Incident resolution time.</summary>
+    public DateTimeOffset? ResolvedUtc { get; init; }
+
+    /// <summary>User notes.</summary>
+    public string? UserNotes { get; init; }
+}
+
+/// <summary>
+/// Represents a stored AccessWatch rule.
+/// </summary>
+public sealed record AccessWatchRule
+{
+    /// <summary>Stable rule identifier.</summary>
+    public long RuleId { get; init; }
+
+    /// <summary>Rule name.</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Rule description.</summary>
+    public string Description { get; init; } = string.Empty;
+
+    /// <summary>Structured rule condition JSON.</summary>
+    public string ConditionJson { get; init; } = "{}";
+
+    /// <summary>Risk level assigned when the rule matches.</summary>
+    public RiskLevel RiskLevel { get; init; }
+
+    /// <summary>Notification or future enforcement action.</summary>
+    public NotificationAction Action { get; init; } = NotificationAction.SilentLog;
+
+    /// <summary>Whether the rule is active.</summary>
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>Rule creation time.</summary>
+    public DateTimeOffset CreatedUtc { get; init; }
+
+    /// <summary>Rule update time.</summary>
+    public DateTimeOffset UpdatedUtc { get; init; }
 }

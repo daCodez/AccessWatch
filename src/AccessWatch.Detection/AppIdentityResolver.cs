@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using AccessWatch.Core;
@@ -54,7 +55,7 @@ public sealed class AppIdentityResolver : IAppIdentityResolver
         var file = process.FilePath is null ? FileIdentityMetadata.Unknown : fileIdentityReader.Read(process.FilePath);
         return new ApplicationIdentity
         {
-            DisplayName = ChooseDisplayName(process.ProcessName, file.ProductName, file.FileDescription),
+            DisplayName = ChooseDisplayName(process.ProcessName, file.ProductName, file.FileDescription, process.FilePath, file.Publisher, file.SignatureStatus),
             ProcessName = process.ProcessName,
             FilePath = process.FilePath,
             Publisher = file.Publisher,
@@ -79,9 +80,55 @@ public sealed class AppIdentityResolver : IAppIdentityResolver
     /// <returns>A display name suitable for user-facing alerts.</returns>
     public string ChooseDisplayName(string processName, string? productName, string? fileDescription)
     {
+        return ChooseDisplayName(processName, productName, fileDescription, null, null, SignatureStatus.Unknown);
+    }
+
+    /// <summary>
+    /// Creates a friendly display name from process, version, path, publisher, and signature metadata.
+    /// </summary>
+    /// <param name="processName">The process name.</param>
+    /// <param name="productName">Product name from file metadata.</param>
+    /// <param name="fileDescription">File description from file metadata.</param>
+    /// <param name="filePath">Executable path when available.</param>
+    /// <param name="publisher">Publisher or signing subject when available.</param>
+    /// <param name="signatureStatus">Digital signature status.</param>
+    /// <returns>A display name suitable for user-facing alerts.</returns>
+    public string ChooseDisplayName(
+        string processName,
+        string? productName,
+        string? fileDescription,
+        string? filePath,
+        string? publisher,
+        SignatureStatus signatureStatus)
+    {
         return EmptyToNull(productName)
             ?? EmptyToNull(fileDescription)
-            ?? processName;
+            ?? BuildContextualFallback(processName, filePath, publisher, signatureStatus);
+    }
+
+    private static string BuildContextualFallback(string processName, string? filePath, string? publisher, SignatureStatus signatureStatus)
+    {
+        var trustedPublisher = EmptyToNull(publisher);
+        if (EmptyToNull(filePath) is { } path)
+        {
+            var context = trustedPublisher ?? SignatureLabel(signatureStatus);
+            return $"{processName.Trim()} ({context}, {path})";
+        }
+
+        return $"{processName.Trim()} (identity limited; executable path unavailable)";
+    }
+
+    private static string SignatureLabel(SignatureStatus signatureStatus)
+    {
+        return signatureStatus switch
+        {
+            SignatureStatus.TrustedSigned => "trusted signed",
+            SignatureStatus.SignedUnknown => "signed, trust unknown",
+            SignatureStatus.Unsigned => "unsigned",
+            SignatureStatus.InvalidSignature => "invalid signature",
+            SignatureStatus.Unknown => "signature unknown",
+            _ => "signature unknown"
+        };
     }
 
     private static string? EmptyToNull(string? value)
@@ -157,11 +204,70 @@ public sealed class WindowsProcessMetadataReader : IProcessMetadataReader
             using var process = Process.GetProcessById(processId);
             var processName = Safe(() => process.ProcessName) ?? $"pid-{processId}";
             var filePath = Safe(() => process.MainModule?.FileName);
-            return new ProcessMetadata(processName, filePath, null);
+            var parentProcessName = ResolveParentProcessName(processId);
+            return new ProcessMetadata(processName, filePath, parentProcessName);
         }
         catch
         {
             return null;
+        }
+    }
+
+    private static string? ResolveParentProcessName(int processId)
+    {
+        var parentProcessId = FindParentProcessId(processId);
+        if (parentProcessId is null)
+        {
+            return null;
+        }
+
+        return Safe(() =>
+        {
+            using var parent = Process.GetProcessById(parentProcessId.Value);
+            return parent.ProcessName;
+        });
+    }
+
+    private static int? FindParentProcessId(int processId)
+    {
+        if (processId < 0)
+        {
+            return null;
+        }
+
+        // Use a live process snapshot so the MVP does not depend on Windows Event Logs for identity context.
+        var snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (snapshot == InvalidHandleValue)
+        {
+            return null;
+        }
+
+        try
+        {
+            var entry = new ProcessEntry32
+            {
+                Size = (uint)Marshal.SizeOf<ProcessEntry32>()
+            };
+
+            if (!Process32First(snapshot, ref entry))
+            {
+                return null;
+            }
+
+            do
+            {
+                if (entry.ProcessId == processId)
+                {
+                    return entry.ParentProcessId == 0 ? null : (int)entry.ParentProcessId;
+                }
+            }
+            while (Process32Next(snapshot, ref entry));
+
+            return null;
+        }
+        finally
+        {
+            _ = CloseHandle(snapshot);
         }
     }
 
@@ -175,6 +281,38 @@ public sealed class WindowsProcessMetadataReader : IProcessMetadataReader
         {
             return default;
         }
+    }
+
+    private const uint TH32CS_SNAPPROCESS = 0x00000002;
+    private static readonly nint InvalidHandleValue = new(-1);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern nint CreateToolhelp32Snapshot(uint flags, uint processId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool Process32First(nint snapshot, ref ProcessEntry32 entry);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool Process32Next(nint snapshot, ref ProcessEntry32 entry);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(nint handle);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct ProcessEntry32
+    {
+        public uint Size;
+        public uint UsageCount;
+        public uint ProcessId;
+        public nint DefaultHeapId;
+        public uint ModuleId;
+        public uint ThreadCount;
+        public uint ParentProcessId;
+        public int PriClassBase;
+        public uint Flags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string ExeFile;
     }
 }
 

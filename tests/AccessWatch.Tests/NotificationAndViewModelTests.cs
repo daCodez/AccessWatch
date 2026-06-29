@@ -35,6 +35,22 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Review it.", message.SuggestedAction);
     }
 
+
+    /// <summary>
+    /// Verifies the MVP tray sink records only messages that should be visible to the user.
+    /// </summary>
+    [Fact]
+    public async Task TrayNotificationService_RecordsOnlyVisibleMessages()
+    {
+        var service = new InMemoryTrayNotificationService();
+        var visible = new NotificationMessage("AccessWatch", "Review this port.", RiskLevel.High, NotificationAction.AskBeforeAllow, "Review it.");
+        var silent = new NotificationMessage("AccessWatch", "Local-only port.", RiskLevel.Low, NotificationAction.SilentLog, "No action needed.");
+
+        await service.ShowAsync(visible, CancellationToken.None);
+        await service.ShowAsync(silent, CancellationToken.None);
+
+        Assert.Equal(visible, Assert.Single(service.DeliveredNotifications));
+    }
     /// <summary>
     /// Verifies dashboard shell pages include the MVP areas.
     /// </summary>
@@ -58,3 +74,4 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains(model.Actions, action => action.Command == "OpenDashboard" && action.Name == "Open dashboard");
     }
 }
+

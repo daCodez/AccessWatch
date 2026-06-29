@@ -4,6 +4,7 @@ using AccessWatch.Data;
 using AccessWatch.Detection;
 using AccessWatch.Notifications;
 using AccessWatch.Rules;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AccessWatch.Tests;
@@ -49,6 +50,25 @@ public sealed class ServiceRegistrationTests
         Assert.Equal(AccessWatchDatabaseOptions.DefaultSqlServerConnectionString, provider.GetRequiredService<AccessWatchDatabaseOptions>().SqlServerConnectionString);
     }
 
+    /// <summary>
+    /// Verifies data registration binds SQL Server options from configuration.
+    /// </summary>
+    [Fact]
+    public void AddAccessWatchData_WithConfiguration_BindsDatabaseOptions()
+    {
+        const string connectionString = "Server=.\\SQLEXPRESS;Database=AccessWatch;Trusted_Connection=True;";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AccessWatch:Database:Provider"] = "SqlServer",
+                ["AccessWatch:Database:SqlServerConnectionString"] = connectionString
+            })
+            .Build();
+
+        using var provider = new ServiceCollection().AddAccessWatchData(configuration).BuildServiceProvider();
+
+        Assert.Equal(connectionString, provider.GetRequiredService<AccessWatchDatabaseOptions>().SqlServerConnectionString);
+    }
     /// <summary>
     /// Verifies explicit SQL Server options register the SQL Server repository.
     /// </summary>
@@ -130,6 +150,7 @@ public sealed class ServiceRegistrationTests
         Assert.IsType<AppIdentityResolver>(provider.GetRequiredService<IAppIdentityResolver>());
         Assert.IsType<ListeningPortScanner>(provider.GetRequiredService<IListeningPortScanner>());
         Assert.IsType<ConnectionTrustHelper>(provider.GetRequiredService<ConnectionTrustHelper>());
+        Assert.IsType<NetworkDeviceDiscoveryService>(provider.GetRequiredService<INetworkDeviceDiscoveryService>());
     }
 
     /// <summary>
@@ -153,6 +174,7 @@ public sealed class ServiceRegistrationTests
         using var provider = new ServiceCollection().AddAccessWatchNotifications().BuildServiceProvider();
 
         Assert.IsType<NotificationMessageFactory>(provider.GetRequiredService<NotificationMessageFactory>());
+        Assert.IsType<InMemoryTrayNotificationService>(provider.GetRequiredService<ITrayNotificationService>());
     }
 
     /// <summary>
@@ -166,3 +188,7 @@ public sealed class ServiceRegistrationTests
         Assert.IsType<ManualAiHandoffService>(provider.GetRequiredService<IAiHandoffService>());
     }
 }
+
+
+
+

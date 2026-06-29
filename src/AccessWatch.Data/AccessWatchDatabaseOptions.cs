@@ -8,6 +8,9 @@ public sealed class AccessWatchDatabaseOptions
     /// <summary>Default SQL Server LocalDB connection string for development and first-run local use.</summary>
     public const string DefaultSqlServerConnectionString = "Server=(localdb)\\MSSQLLocalDB;Database=AccessWatch;Trusted_Connection=True;TrustServerCertificate=True;";
 
+    /// <summary>Configuration section used by the service host.</summary>
+    public const string ConfigurationSectionName = "AccessWatch:Database";
+
     /// <summary>Selected database provider.</summary>
     public DatabaseProvider Provider { get; init; } = DatabaseProvider.SqlServer;
 
@@ -28,3 +31,5 @@ public sealed class AccessWatchDatabaseOptions
         };
     }
 }
+
+
