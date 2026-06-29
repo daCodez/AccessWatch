@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         var coordinator = new ServiceScanCoordinator(
             repository,
             new ListeningPortScanner(new AppIdentityResolver()),
+            new NetworkDeviceDiscoveryService(),
             new RiskScoringService(),
             new AccessWatchSettings(),
             new NotificationMessageFactory(),

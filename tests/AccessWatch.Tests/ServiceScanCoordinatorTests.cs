@@ -28,6 +28,29 @@ public sealed class ServiceScanCoordinatorTests
     }
 
     /// <summary>
+    /// Verifies each scan saves devices discovered on the local network.
+    /// </summary>
+    [Fact]
+    public async Task RunListeningPortScanAsync_SavesDiscoveredDevices()
+    {
+        var repository = new FakeRepository();
+        var device = new NetworkDevice
+        {
+            IpAddress = "192.168.1.25",
+            MacAddress = "AA:BB:CC:DD:EE:25",
+            DeviceTypeGuess = "Unknown"
+        };
+        var coordinator = CreateCoordinator(repository, new FakeScanner([]), [device]);
+
+        var count = await coordinator.RunListeningPortScanAsync(CancellationToken.None);
+
+        Assert.Equal(0, count);
+        var savedDevice = Assert.Single(repository.Devices);
+        Assert.Equal("192.168.1.25", savedDevice.IpAddress);
+        Assert.Equal("AA:BB:CC:DD:EE:25", savedDevice.MacAddress);
+    }
+
+    /// <summary>
     /// Verifies a newly observed port creates a new listening port event.
     /// </summary>
     [Fact]
@@ -167,15 +190,31 @@ public sealed class ServiceScanCoordinatorTests
         Assert.Equal(99, networkEvent.ApplicationId);
         Assert.Contains("different application", networkEvent.DetailsJson);
     }
-    private static ServiceScanCoordinator CreateCoordinator(FakeRepository repository, FakeScanner scanner)
+    private static ServiceScanCoordinator CreateCoordinator(FakeRepository repository, FakeScanner scanner, IReadOnlyList<NetworkDevice>? devices = null)
     {
         return new ServiceScanCoordinator(
             repository,
             scanner,
+            new FakeDeviceDiscovery(devices ?? []),
             new RiskScoringService(),
             new AccessWatchSettings(),
             new NotificationMessageFactory(),
             NullLogger<ServiceScanCoordinator>.Instance);
+    }
+
+    private sealed class FakeDeviceDiscovery : INetworkDeviceDiscoveryService
+    {
+        private readonly IReadOnlyList<NetworkDevice> devices;
+
+        public FakeDeviceDiscovery(IReadOnlyList<NetworkDevice> devices)
+        {
+            this.devices = devices;
+        }
+
+        public Task<IReadOnlyList<NetworkDevice>> DiscoverAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(devices);
+        }
     }
 
     private sealed class FakeScanner : IListeningPortScanner
@@ -205,6 +244,8 @@ public sealed class ServiceScanCoordinatorTests
 
         public List<NetworkEvent> Events { get; } = [];
 
+        public List<NetworkDevice> Devices { get; } = [];
+
         public Task InitializeAsync(CancellationToken cancellationToken)
         {
             WasInitialized = true;
@@ -214,6 +255,7 @@ public sealed class ServiceScanCoordinatorTests
 
         public Task<long> UpsertDeviceAsync(NetworkDevice device, CancellationToken cancellationToken)
         {
+            Devices.Add(device);
             return Task.FromResult(1L);
         }
 

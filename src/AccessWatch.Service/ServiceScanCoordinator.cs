@@ -11,6 +11,7 @@ public sealed class ServiceScanCoordinator
 {
     private readonly IAccessWatchRepository repository;
     private readonly IListeningPortScanner portScanner;
+    private readonly INetworkDeviceDiscoveryService deviceDiscoveryService;
     private readonly IRiskScoringService riskScoringService;
     private readonly AccessWatchSettings settings;
     private readonly NotificationMessageFactory notificationFactory;
@@ -21,6 +22,7 @@ public sealed class ServiceScanCoordinator
     /// </summary>
     /// <param name="repository">AccessWatch repository.</param>
     /// <param name="portScanner">Listening port scanner.</param>
+    /// <param name="deviceDiscoveryService">Local network device discovery service.</param>
     /// <param name="riskScoringService">Risk scoring service.</param>
     /// <param name="settings">AccessWatch settings.</param>
     /// <param name="notificationFactory">Notification message factory.</param>
@@ -28,6 +30,7 @@ public sealed class ServiceScanCoordinator
     public ServiceScanCoordinator(
         IAccessWatchRepository repository,
         IListeningPortScanner portScanner,
+        INetworkDeviceDiscoveryService deviceDiscoveryService,
         IRiskScoringService riskScoringService,
         AccessWatchSettings settings,
         NotificationMessageFactory notificationFactory,
@@ -35,6 +38,7 @@ public sealed class ServiceScanCoordinator
     {
         this.repository = repository;
         this.portScanner = portScanner;
+        this.deviceDiscoveryService = deviceDiscoveryService;
         this.riskScoringService = riskScoringService;
         this.settings = settings;
         this.notificationFactory = notificationFactory;
@@ -57,6 +61,16 @@ public sealed class ServiceScanCoordinator
     /// <returns>The number of newly created events.</returns>
     public async Task<int> RunListeningPortScanAsync(CancellationToken cancellationToken)
     {
+        var devices = await deviceDiscoveryService.DiscoverAsync(cancellationToken);
+        foreach (var device in devices)
+        {
+            await repository.UpsertDeviceAsync(device, cancellationToken);
+        }
+
+        logger.LogInformation(
+            "AccessWatch device discovery completed. Observed {DeviceCount} network devices.",
+            devices.Count);
+
         var ports = await portScanner.ScanAsync(cancellationToken);
         var createdEvents = 0;
 
