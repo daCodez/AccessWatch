@@ -65,7 +65,7 @@
                     </StackPanel>
                 </DockPanel>
 
-                <ItemsControl Grid.Row="1" ItemsSource="{Binding Metrics}" Margin="0,0,0,18" Visibility="{Binding IsOverviewSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding Metrics}" Margin="0,0,0,18" Visibility="{Binding OverviewVisibility}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <UniformGrid Columns="6" />
@@ -83,7 +83,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding IsOverviewSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding OverviewVisibility}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -117,7 +117,7 @@
                     </Grid>
                 </Border>
 
-                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding IsDevicesSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding DevicesVisibility}">
                     <DataGrid ItemsSource="{Binding Devices}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Device" Binding="{Binding Name}" Width="1.5*" />
@@ -132,7 +132,7 @@
                     </DataGrid>
                 </Border>
 
-                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding IsApplicationsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding ApplicationsVisibility}">
                     <DataGrid ItemsSource="{Binding Applications}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Application" Binding="{Binding Name}" Width="1.5*" />
@@ -146,7 +146,7 @@
                     </DataGrid>
                 </Border>
 
-                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="24" Visibility="{Binding IsPlaceholderSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="24" Visibility="{Binding PlaceholderVisibility}">
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                         <TextBlock Text="This section is next." FontSize="18" FontWeight="SemiBold" Foreground="#24292F" HorizontalAlignment="Center" />
                         <TextBlock Text="{Binding SelectedPageSummary}" FontSize="13" Foreground="#57606A" Margin="0,6,0,0" TextWrapping="Wrap" TextAlignment="Center" />

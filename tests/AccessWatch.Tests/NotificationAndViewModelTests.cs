@@ -80,6 +80,10 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.IsDevicesSelected);
         Assert.False(model.IsApplicationsSelected);
         Assert.False(model.IsPlaceholderSelected);
+        Assert.Equal("Visible", model.OverviewVisibility);
+        Assert.Equal("Collapsed", model.DevicesVisibility);
+        Assert.Equal("Collapsed", model.ApplicationsVisibility);
+        Assert.Equal("Collapsed", model.PlaceholderVisibility);
 
         model.SelectedPage = model.Pages.Single(page => page.Name == "Devices");
 
@@ -88,9 +92,14 @@ public sealed class NotificationAndViewModelTests
         Assert.True(model.IsDevicesSelected);
         Assert.False(model.IsApplicationsSelected);
         Assert.False(model.IsPlaceholderSelected);
+        Assert.Equal("Collapsed", model.OverviewVisibility);
+        Assert.Equal("Visible", model.DevicesVisibility);
+        Assert.Equal("Collapsed", model.ApplicationsVisibility);
+        Assert.Equal("Collapsed", model.PlaceholderVisibility);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedPage), changed);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedPageTitle), changed);
         Assert.Contains(nameof(DashboardShellViewModel.IsDevicesSelected), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.DevicesVisibility), changed);
 
         changed.Clear();
         model.SelectedPage = model.SelectedPage;
@@ -103,6 +112,10 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.IsDevicesSelected);
         Assert.True(model.IsApplicationsSelected);
         Assert.False(model.IsPlaceholderSelected);
+        Assert.Equal("Collapsed", model.OverviewVisibility);
+        Assert.Equal("Collapsed", model.DevicesVisibility);
+        Assert.Equal("Visible", model.ApplicationsVisibility);
+        Assert.Equal("Collapsed", model.PlaceholderVisibility);
 
         model.SelectedPage = model.Pages.Single(page => page.Name == "Ports");
 
@@ -111,6 +124,10 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.IsDevicesSelected);
         Assert.False(model.IsApplicationsSelected);
         Assert.True(model.IsPlaceholderSelected);
+        Assert.Equal("Collapsed", model.OverviewVisibility);
+        Assert.Equal("Collapsed", model.DevicesVisibility);
+        Assert.Equal("Collapsed", model.ApplicationsVisibility);
+        Assert.Equal("Visible", model.PlaceholderVisibility);
 
         model.SelectedPage = null;
 

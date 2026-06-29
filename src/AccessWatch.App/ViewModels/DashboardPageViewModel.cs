@@ -126,6 +126,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsDevicesSelected));
             OnPropertyChanged(nameof(IsApplicationsSelected));
             OnPropertyChanged(nameof(IsPlaceholderSelected));
+            OnPropertyChanged(nameof(OverviewVisibility));
+            OnPropertyChanged(nameof(DevicesVisibility));
+            OnPropertyChanged(nameof(ApplicationsVisibility));
+            OnPropertyChanged(nameof(PlaceholderVisibility));
         }
     }
 
@@ -158,6 +162,26 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets whether the selected page is not yet implemented.
     /// </summary>
     public bool IsPlaceholderSelected => !IsOverviewSelected && !IsDevicesSelected && !IsApplicationsSelected;
+
+    /// <summary>
+    /// Gets WPF visibility text for the overview panel.
+    /// </summary>
+    public string OverviewVisibility => ToVisibility(IsOverviewSelected);
+
+    /// <summary>
+    /// Gets WPF visibility text for the devices panel.
+    /// </summary>
+    public string DevicesVisibility => ToVisibility(IsDevicesSelected);
+
+    /// <summary>
+    /// Gets WPF visibility text for the applications panel.
+    /// </summary>
+    public string ApplicationsVisibility => ToVisibility(IsApplicationsSelected);
+
+    /// <summary>
+    /// Gets WPF visibility text for the placeholder panel.
+    /// </summary>
+    public string PlaceholderVisibility => ToVisibility(IsPlaceholderSelected);
 
     /// <summary>
     /// Gets overview metrics loaded from storage.
@@ -271,6 +295,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         {
             IsLoading = false;
         }
+    }
+
+    private static string ToVisibility(bool isVisible)
+    {
+        return isVisible ? "Visible" : "Collapsed";
     }
 
     private void ReplaceMetrics(int devices, int applications, int ports, int events)
