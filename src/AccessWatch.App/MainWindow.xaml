@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="AccessWatch" Height="560" Width="960" MinHeight="480" MinWidth="760"
+        Title="AccessWatch" Height="620" Width="1040" MinHeight="520" MinWidth="820"
         Background="#F6F8FA">
     <Grid>
         <Grid.RowDefinitions>
@@ -36,7 +36,12 @@
                          HorizontalContentAlignment="Stretch">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Name}" Padding="10,8" FontSize="14" Foreground="#24292F" />
+                            <Border Margin="0,2" Padding="10,8">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" />
+                                    <TextBlock Text="{Binding Summary}" Margin="0,3,0,0" FontSize="11" Foreground="#57606A" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -45,28 +50,66 @@
             <Grid Grid.Column="1" Margin="24">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Margin="0,0,0,18">
-                    <TextBlock Text="Overview" FontSize="26" FontWeight="SemiBold" Foreground="#24292F" />
-                    <TextBlock Text="Listening ports, app identities, and recent events will appear here as the service records them."
-                               Margin="0,6,0,0" FontSize="14" Foreground="#57606A" TextWrapping="Wrap" />
-                </StackPanel>
+                <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,18">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Scan now" Width="104" Height="32" Margin="0,0,8,0" Click="OnScanNowClick" />
+                        <Button Content="Refresh" Width="96" Height="32" Click="OnRefreshClick" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Overview" FontSize="26" FontWeight="SemiBold" Foreground="#24292F" />
+                        <TextBlock Text="{Binding StatusMessage}" Margin="0,6,16,0" FontSize="14" Foreground="#57606A" TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
 
-                <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18">
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding Metrics}" Margin="0,0,0,18">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="6" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="14" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" Foreground="#57606A" FontSize="12" />
+                                    <TextBlock Text="{Binding Count}" Foreground="#24292F" FontSize="24" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <TextBlock Text="Recent activity" FontSize="18" FontWeight="SemiBold" Foreground="#24292F" />
-                        <TextBlock Grid.Row="1" Text="No recent events loaded." FontSize="15" Foreground="#57606A"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <ListView Grid.Row="1" ItemsSource="{Binding RecentActivity}" Margin="0,12,0,0" BorderThickness="0">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Kind}" Foreground="#0969DA" FontWeight="SemiBold" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding Summary}" Foreground="#24292F" FontSize="14" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Detail}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                     </Grid>
                 </Border>
             </Grid>
         </Grid>
     </Grid>
 </Window>
-
