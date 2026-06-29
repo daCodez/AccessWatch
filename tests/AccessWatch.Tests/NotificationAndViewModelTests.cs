@@ -121,6 +121,112 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies devices and applications are exposed as first-class dashboard inventories.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_LoadsDeviceAndApplicationInventories()
+    {
+        var repository = new FakeRepository
+        {
+            Devices =
+            [
+                new NetworkDevice
+                {
+                    Hostname = "living-room-tv",
+                    IpAddress = "192.168.1.50",
+                    MacAddress = "AA:BB:CC:DD:EE:50",
+                    Vendor = "Example Devices",
+                    DeviceTypeGuess = "Smart TV",
+                    Notes = "Allowed media device",
+                    TrustStatus = TrustStatus.Trusted,
+                    RiskStatus = RiskStatus.Normal,
+                    LastSeenUtc = new DateTimeOffset(2026, 6, 29, 12, 0, 0, TimeSpan.Zero)
+                },
+                new NetworkDevice { IpAddress = "192.168.1.77" }
+            ],
+            Applications =
+            [
+                new AppIdentity
+                {
+                    DisplayName = "Plex Media Server",
+                    ProcessName = "plex",
+                    Publisher = "Plex Inc.",
+                    FilePath = "C:\\Program Files\\Plex\\plex.exe",
+                    SignatureStatus = SignatureStatus.TrustedSigned,
+                    TrustStatus = TrustStatus.Trusted,
+                    LastSeenUtc = new DateTimeOffset(2026, 6, 29, 12, 30, 0, TimeSpan.Zero)
+                },
+                new AppIdentity
+                {
+                    DisplayName = string.Empty,
+                    ProcessName = "worker",
+                    SignatureStatus = SignatureStatus.Unsigned,
+                    TrustStatus = TrustStatus.KnownWatched
+                },
+                new AppIdentity
+                {
+                    DisplayName = string.Empty,
+                    ProcessName = string.Empty,
+                    SignatureStatus = SignatureStatus.Unknown
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.Devices,
+            device =>
+            {
+                Assert.Equal("living-room-tv", device.Name);
+                Assert.Equal("192.168.1.50", device.IpAddress);
+                Assert.Equal("AA:BB:CC:DD:EE:50", device.MacAddress);
+                Assert.Equal("Example Devices", device.Vendor);
+                Assert.Equal("Trusted", device.TrustStatus);
+                Assert.Equal("Normal", device.RiskStatus);
+                Assert.NotEqual("Not recorded", device.LastSeen);
+                Assert.Equal("Smart TV; Allowed media device", device.Detail);
+            },
+            device =>
+            {
+                Assert.Equal("192.168.1.77", device.Name);
+                Assert.Equal("MAC address unavailable", device.MacAddress);
+                Assert.Equal("Vendor unavailable", device.Vendor);
+                Assert.Equal("Not recorded", device.LastSeen);
+                Assert.Equal("No extra device details recorded yet.", device.Detail);
+            });
+        Assert.Collection(
+            model.Applications,
+            application =>
+            {
+                Assert.Equal("Plex Media Server", application.Name);
+                Assert.Equal("plex", application.ProcessName);
+                Assert.Equal("Plex Inc.", application.Publisher);
+                Assert.Equal("Trusted signature", application.SignatureStatus);
+                Assert.Equal("Trusted", application.TrustStatus);
+                Assert.NotEqual("Not recorded", application.LastSeen);
+                Assert.Contains("Signed by Plex Inc.", application.Detail);
+                Assert.Contains("C:\\Program Files\\Plex\\plex.exe", application.Detail);
+            },
+            application =>
+            {
+                Assert.Equal("worker", application.Name);
+                Assert.Equal("worker", application.ProcessName);
+                Assert.Equal("Publisher unavailable", application.Publisher);
+                Assert.Equal("Unsigned executable", application.SignatureStatus);
+                Assert.Equal("KnownWatched", application.TrustStatus);
+                Assert.Equal("Not recorded", application.LastSeen);
+            },
+            application =>
+            {
+                Assert.Equal("Unknown application", application.Name);
+                Assert.Equal("Process unavailable", application.ProcessName);
+                Assert.Equal("Publisher unavailable", application.Publisher);
+                Assert.Equal("Signature status unknown", application.SignatureStatus);
+            });
+    }
+    /// <summary>
     /// Verifies event activity explains the owning application and the reason AccessWatch flagged it.
     /// </summary>
     [Fact]

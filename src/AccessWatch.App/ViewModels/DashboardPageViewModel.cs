@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Text.Json;
 using AccessWatch.Core;
 using AppIdentity = AccessWatch.Core.ApplicationIdentity;
@@ -27,6 +28,31 @@ public sealed record DashboardActivityItemViewModel(
     string ApplicationIdentity,
     string WhyItMatters,
     string SuggestedAction);
+
+/// <summary>
+/// Represents a device row shown in the dashboard.
+/// </summary>
+public sealed record DashboardDeviceItemViewModel(
+    string Name,
+    string IpAddress,
+    string MacAddress,
+    string Vendor,
+    string TrustStatus,
+    string RiskStatus,
+    string LastSeen,
+    string Detail);
+
+/// <summary>
+/// Represents an application row shown in the dashboard.
+/// </summary>
+public sealed record DashboardApplicationItemViewModel(
+    string Name,
+    string ProcessName,
+    string Publisher,
+    string SignatureStatus,
+    string TrustStatus,
+    string LastSeen,
+    string Detail);
 
 /// <summary>
 /// Provides dashboard data loaded from the AccessWatch repository.
@@ -87,6 +113,16 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public ObservableCollection<DashboardActivityItemViewModel> RecentActivity { get; } = [];
 
     /// <summary>
+    /// Gets recent devices loaded from storage.
+    /// </summary>
+    public ObservableCollection<DashboardDeviceItemViewModel> Devices { get; } = [];
+
+    /// <summary>
+    /// Gets recent applications loaded from storage.
+    /// </summary>
+    public ObservableCollection<DashboardApplicationItemViewModel> Applications { get; } = [];
+
+    /// <summary>
     /// Gets the current dashboard load status.
     /// </summary>
     public string StatusMessage
@@ -134,6 +170,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             var events = await repository.ListRecentNetworkEventsAsync(50, cancellationToken);
 
             ReplaceMetrics(devices.Count, applications.Count, ports.Count, events.Count);
+            ReplaceDevices(devices);
+            ReplaceApplications(applications);
             ReplaceRecentActivity(events, applications, ports, devices);
             StatusMessage = events.Count == 0 && ports.Count == 0 && devices.Count == 0
                 ? "No stored activity yet. Start the AccessWatch service to record listening ports and devices."
@@ -187,6 +225,39 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         Metrics.Add(new DashboardMetricViewModel("Events", events));
     }
 
+    private void ReplaceDevices(IReadOnlyList<NetworkDevice> devices)
+    {
+        Devices.Clear();
+        foreach (var device in devices.Take(100))
+        {
+            Devices.Add(new DashboardDeviceItemViewModel(
+                FirstUseful(device.Hostname, device.IpAddress, "Unknown device"),
+                device.IpAddress,
+                FirstUseful(device.MacAddress, "MAC address unavailable"),
+                FirstUseful(device.Vendor, "Vendor unavailable"),
+                device.TrustStatus.ToString(),
+                device.RiskStatus.ToString(),
+                FormatTimestamp(device.LastSeenUtc),
+                BuildDeviceDetail(device)));
+        }
+    }
+
+    private void ReplaceApplications(IReadOnlyList<AppIdentity> applications)
+    {
+        Applications.Clear();
+        foreach (var application in applications.Take(100))
+        {
+            Applications.Add(new DashboardApplicationItemViewModel(
+                FirstUseful(application.DisplayName, application.ProcessName, "Unknown application"),
+                FirstUseful(application.ProcessName, "Process unavailable"),
+                FirstUseful(application.Publisher, "Publisher unavailable"),
+                SignatureLabel(application.SignatureStatus),
+                application.TrustStatus.ToString(),
+                FormatTimestamp(application.LastSeenUtc),
+                BuildApplicationIdentity(application, application.ProcessName)));
+        }
+    }
+
     private void ReplaceRecentActivity(
         IReadOnlyList<NetworkEvent> events,
         IReadOnlyList<AppIdentity> applications,
@@ -231,6 +302,34 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                     "Trust or block the device when device controls are enabled."));
             }
         }
+    }
+
+    private static string BuildDeviceDetail(NetworkDevice device)
+    {
+        var details = new List<string>();
+        if (!string.IsNullOrWhiteSpace(device.DeviceTypeGuess))
+        {
+            details.Add(device.DeviceTypeGuess);
+        }
+
+        if (!string.IsNullOrWhiteSpace(device.Notes))
+        {
+            details.Add(device.Notes);
+        }
+
+        if (details.Count == 0)
+        {
+            details.Add("No extra device details recorded yet.");
+        }
+
+        return string.Join("; ", details);
+    }
+
+    private static string FormatTimestamp(DateTimeOffset timestamp)
+    {
+        return timestamp == default
+            ? "Not recorded"
+            : timestamp.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
     }
 
     private static DashboardActivityItemViewModel CreateEventActivity(

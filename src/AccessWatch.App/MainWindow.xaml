@@ -83,38 +83,64 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="Recent activity" FontSize="18" FontWeight="SemiBold" Foreground="#24292F" />
-                        <ListView Grid.Row="1" ItemsSource="{Binding RecentActivity}" Margin="0,12,0,0" BorderThickness="0">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="82" />
-                                            <ColumnDefinition Width="190" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="{Binding Kind}" Foreground="#0969DA" FontWeight="SemiBold" />
-                                        <StackPanel Grid.Column="1" Margin="0,0,18,0">
-                                            <TextBlock Text="{Binding ApplicationName}" Foreground="#24292F" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding ApplicationIdentity}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="{Binding Summary}" Foreground="#24292F" FontSize="14" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding Detail}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding WhyItMatters, StringFormat=Why: {0}}" Foreground="#57606A" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding SuggestedAction, StringFormat=Action: {0}}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                    </Grid>
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="0">
+                    <TabControl BorderThickness="0" Background="#FFFFFF">
+                        <TabItem Header="Recent activity">
+                            <Grid Margin="18">
+                                <ListView ItemsSource="{Binding RecentActivity}" BorderThickness="0">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="82" />
+                                                    <ColumnDefinition Width="190" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Kind}" Foreground="#0969DA" FontWeight="SemiBold" />
+                                                <StackPanel Grid.Column="1" Margin="0,0,18,0">
+                                                    <TextBlock Text="{Binding ApplicationName}" Foreground="#24292F" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding ApplicationIdentity}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2">
+                                                    <TextBlock Text="{Binding Summary}" Foreground="#24292F" FontSize="14" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding Detail}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding WhyItMatters, StringFormat=Why: {0}}" Foreground="#57606A" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding SuggestedAction, StringFormat=Action: {0}}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </Grid>
+                        </TabItem>
+                        <TabItem Header="Devices">
+                            <DataGrid ItemsSource="{Binding Devices}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" Margin="18" BorderThickness="0">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Device" Binding="{Binding Name}" Width="1.5*" />
+                                    <DataGridTextColumn Header="IP address" Binding="{Binding IpAddress}" Width="120" />
+                                    <DataGridTextColumn Header="MAC" Binding="{Binding MacAddress}" Width="150" />
+                                    <DataGridTextColumn Header="Vendor" Binding="{Binding Vendor}" Width="1.2*" />
+                                    <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
+                                    <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
+                                    <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
+                                    <DataGridTextColumn Header="Details" Binding="{Binding Detail}" Width="2*" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </TabItem>
+                        <TabItem Header="Applications">
+                            <DataGrid ItemsSource="{Binding Applications}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" Margin="18" BorderThickness="0">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Application" Binding="{Binding Name}" Width="1.5*" />
+                                    <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="130" />
+                                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="1.2*" />
+                                    <DataGridTextColumn Header="Signature" Binding="{Binding SignatureStatus}" Width="150" />
+                                    <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
+                                    <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
+                                    <DataGridTextColumn Header="Identity" Binding="{Binding Detail}" Width="2.5*" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </TabItem>
+                    </TabControl>
                 </Border>
             </Grid>
         </Grid>
