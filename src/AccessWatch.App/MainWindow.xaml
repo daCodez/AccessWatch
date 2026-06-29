@@ -30,7 +30,7 @@
 
             <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="0,0,1,0" Padding="12">
                 <ListBox ItemsSource="{Binding Pages}"
-                         SelectedIndex="0"
+                         SelectedItem="{Binding SelectedPage, Mode=TwoWay}"
                          BorderThickness="0"
                          Background="Transparent"
                          HorizontalContentAlignment="Stretch">
@@ -60,7 +60,7 @@
                         <Button Content="Refresh" Width="96" Height="32" Click="OnRefreshClick" />
                     </StackPanel>
                     <StackPanel>
-                        <TextBlock Text="Overview" FontSize="26" FontWeight="SemiBold" Foreground="#24292F" />
+                        <TextBlock Text="{Binding SelectedPageTitle}" FontSize="26" FontWeight="SemiBold" Foreground="#24292F" />
                         <TextBlock Text="{Binding StatusMessage}" Margin="0,6,16,0" FontSize="14" Foreground="#57606A" TextWrapping="Wrap" />
                     </StackPanel>
                 </DockPanel>

@@ -65,6 +65,20 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies the dashboard shell binds sidebar selection to the active page.
+    /// </summary>
+    [Fact]
+    public void DashboardShellXaml_BindsSidebarSelectionToSelectedPage()
+    {
+        var xaml = File.ReadAllText(FindMainWindowXaml());
+
+        Assert.Contains("SelectedItem=\"{Binding SelectedPage, Mode=TwoWay}\"", xaml);
+        Assert.DoesNotContain("SelectedIndex=\"0\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedPageTitle}\"", xaml);
+        Assert.DoesNotContain("Text=\"Overview\" FontSize=\"26\"", xaml);
+    }
+
+    /// <summary>
     /// Verifies sidebar selection drives the main dashboard content.
     /// </summary>
     [Fact]
@@ -648,6 +662,23 @@ public sealed class NotificationAndViewModelTests
         var model = new TrayQuickActionsViewModel();
 
         Assert.Contains(model.Actions, action => action.Command == "OpenDashboard" && action.Name == "Open dashboard");
+    }
+
+    private static string FindMainWindowXaml()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "src", "AccessWatch.App", "MainWindow.xaml");
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate src/AccessWatch.App/MainWindow.xaml from the test output folder.");
     }
 
     private sealed class FakeRepository : IAccessWatchRepository
