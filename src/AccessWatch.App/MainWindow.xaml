@@ -93,15 +93,22 @@
                         <ListView Grid.Row="1" ItemsSource="{Binding RecentActivity}" Margin="0,12,0,0" BorderThickness="0">
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Margin="0,6">
+                                    <Grid Margin="0,8">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="82" />
+                                            <ColumnDefinition Width="190" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Kind}" Foreground="#0969DA" FontWeight="SemiBold" />
-                                        <StackPanel Grid.Column="1">
+                                        <StackPanel Grid.Column="1" Margin="0,0,18,0">
+                                            <TextBlock Text="{Binding ApplicationName}" Foreground="#24292F" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding ApplicationIdentity}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
                                             <TextBlock Text="{Binding Summary}" Foreground="#24292F" FontSize="14" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Detail}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding WhyItMatters, StringFormat=Why: {0}}" Foreground="#57606A" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding SuggestedAction, StringFormat=Action: {0}}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>

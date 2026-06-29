@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Text.Json;
 using AccessWatch.Core;
+using AppIdentity = AccessWatch.Core.ApplicationIdentity;
 
 namespace AccessWatch.App.ViewModels;
 
@@ -17,7 +19,14 @@ public sealed record DashboardMetricViewModel(string Name, int Count);
 /// <summary>
 /// Represents a recent dashboard activity row.
 /// </summary>
-public sealed record DashboardActivityItemViewModel(string Kind, string Summary, string Detail);
+public sealed record DashboardActivityItemViewModel(
+    string Kind,
+    string ApplicationName,
+    string Summary,
+    string Detail,
+    string ApplicationIdentity,
+    string WhyItMatters,
+    string SuggestedAction);
 
 /// <summary>
 /// Provides dashboard data loaded from the AccessWatch repository.
@@ -125,7 +134,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             var events = await repository.ListRecentNetworkEventsAsync(50, cancellationToken);
 
             ReplaceMetrics(devices.Count, applications.Count, ports.Count, events.Count);
-            ReplaceRecentActivity(events, ports, devices);
+            ReplaceRecentActivity(events, applications, ports, devices);
             StatusMessage = events.Count == 0 && ports.Count == 0 && devices.Count == 0
                 ? "No stored activity yet. Start the AccessWatch service to record listening ports and devices."
                 : $"Loaded {events.Count} events, {ports.Count} ports, and {devices.Count} devices.";
@@ -139,7 +148,6 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             IsLoading = false;
         }
     }
-
 
     /// <summary>
     /// Runs a scan, saves any new observations, and reloads dashboard data.
@@ -169,6 +177,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             IsLoading = false;
         }
     }
+
     private void ReplaceMetrics(int devices, int applications, int ports, int events)
     {
         Metrics.Clear();
@@ -180,26 +189,31 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private void ReplaceRecentActivity(
         IReadOnlyList<NetworkEvent> events,
+        IReadOnlyList<AppIdentity> applications,
         IReadOnlyList<ListeningPort> ports,
         IReadOnlyList<NetworkDevice> devices)
     {
         RecentActivity.Clear();
         foreach (var networkEvent in events.Take(8))
         {
-            RecentActivity.Add(new DashboardActivityItemViewModel(
-                networkEvent.RiskLevel.ToString(),
-                networkEvent.Summary,
-                $"{networkEvent.EventType} on {networkEvent.DestinationIp ?? "local"}:{networkEvent.DestinationPort?.ToString() ?? "n/a"}"));
+            RecentActivity.Add(CreateEventActivity(networkEvent, applications));
         }
 
         if (RecentActivity.Count == 0)
         {
             foreach (var port in ports.Take(5))
             {
+                var applicationName = port.Application?.DisplayName ?? "Unknown application";
                 RecentActivity.Add(new DashboardActivityItemViewModel(
                     port.RiskStatus.ToString(),
+                    applicationName,
                     $"Port {port.PortNumber} is listening on {port.LocalAddress}.",
-                    port.Application?.DisplayName ?? "Application identity unavailable in list view."));
+                    $"{port.Protocol} {port.LocalAddress}:{port.PortNumber} is {port.Reachability}.",
+                    BuildApplicationIdentity(port.Application, port.Application?.ProcessName),
+                    port.Reachability == PortReachability.NetworkReachable
+                        ? "Other devices on your network may be able to connect to this service."
+                        : "The listener appears local to this computer or its reachability is unknown.",
+                    "Review this only if you do not recognize the application or port."));
             }
         }
 
@@ -209,14 +223,174 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             {
                 RecentActivity.Add(new DashboardActivityItemViewModel(
                     device.TrustStatus.ToString(),
+                    device.Hostname ?? device.IpAddress,
                     $"Device observed at {device.IpAddress}.",
-                    device.MacAddress ?? "MAC address unavailable"));
+                    device.MacAddress ?? "MAC address unavailable",
+                    device.Vendor ?? "Device vendor unavailable",
+                    "AccessWatch saw this device on the local network.",
+                    "Trust or block the device when device controls are enabled."));
             }
         }
+    }
+
+    private static DashboardActivityItemViewModel CreateEventActivity(
+        NetworkEvent networkEvent,
+        IReadOnlyList<AppIdentity> applications)
+    {
+        var details = ParseEventDetails(networkEvent.DetailsJson);
+        var application = applications.FirstOrDefault(candidate => candidate.ApplicationId == networkEvent.ApplicationId);
+        var applicationName = FirstUseful(application?.DisplayName, details.App, "Unknown application");
+        var endpoint = $"{networkEvent.Protocol} {networkEvent.DestinationIp ?? "local"}:{networkEvent.DestinationPort?.ToString() ?? "n/a"}";
+        var reachability = string.IsNullOrWhiteSpace(details.Reachability) ? string.Empty : $"; {details.Reachability}";
+        var whatHappened = FirstUseful(details.WhatHappened, FriendlyEventType(networkEvent.EventType));
+
+        return new DashboardActivityItemViewModel(
+            networkEvent.RiskLevel.ToString(),
+            applicationName,
+            networkEvent.Summary,
+            $"{whatHappened} {endpoint}{reachability}.",
+            BuildApplicationIdentity(application, details.ProcessName),
+            FirstUseful(details.WhyItMatters, DefaultWhyItMatters(networkEvent.RiskLevel)),
+            FirstUseful(details.SuggestedAction, DefaultSuggestedAction(networkEvent.RiskLevel)));
+    }
+
+    private static EventDetails ParseEventDetails(string detailsJson)
+    {
+        if (string.IsNullOrWhiteSpace(detailsJson))
+        {
+            return new EventDetails();
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(detailsJson);
+            var root = document.RootElement;
+            return new EventDetails(
+                GetString(root, "whatHappened"),
+                GetString(root, "app"),
+                GetString(root, "processName"),
+                GetString(root, "reachability"),
+                GetString(root, "whyItMatters"),
+                GetString(root, "suggestedAction"));
+        }
+        catch (JsonException)
+        {
+            return new EventDetails();
+        }
+    }
+
+    private static string BuildApplicationIdentity(AppIdentity? application, string? processName)
+    {
+        if (application is null)
+        {
+            return string.IsNullOrWhiteSpace(processName)
+                ? "Application identity unavailable"
+                : $"Process {processName}; stored app identity unavailable";
+        }
+
+        var parts = new List<string>();
+        var resolvedProcessName = FirstUseful(application.ProcessName, processName, string.Empty);
+        if (!string.IsNullOrWhiteSpace(resolvedProcessName))
+        {
+            parts.Add($"Process {resolvedProcessName}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(application.Publisher))
+        {
+            var publisherPrefix = application.SignatureStatus is SignatureStatus.TrustedSigned or SignatureStatus.SignedUnknown
+                ? "Signed by"
+                : "Publisher";
+            parts.Add($"{publisherPrefix} {application.Publisher}");
+        }
+        else
+        {
+            parts.Add(SignatureLabel(application.SignatureStatus));
+        }
+
+        if (!string.IsNullOrWhiteSpace(application.FilePath))
+        {
+            parts.Add(application.FilePath);
+        }
+        else
+        {
+            parts.Add("Executable path unavailable");
+        }
+
+        return string.Join("; ", parts);
+    }
+
+    private static string SignatureLabel(SignatureStatus signatureStatus)
+    {
+        return signatureStatus switch
+        {
+            SignatureStatus.TrustedSigned => "Trusted signature",
+            SignatureStatus.SignedUnknown => "Signed; publisher trust unknown",
+            SignatureStatus.Unsigned => "Unsigned executable",
+            SignatureStatus.InvalidSignature => "Invalid signature",
+            _ => "Signature status unknown"
+        };
+    }
+
+    private static string FriendlyEventType(string eventType)
+    {
+        return eventType switch
+        {
+            "NewListeningPort" => "A new listening TCP port appeared.",
+            "ListeningPortApplicationChanged" => "A known listening TCP port changed owning application.",
+            _ => "AccessWatch recorded network activity."
+        };
+    }
+
+    private static string DefaultWhyItMatters(RiskLevel riskLevel)
+    {
+        return riskLevel switch
+        {
+            RiskLevel.High or RiskLevel.Critical => "This activity may expose a service to other devices and deserves review.",
+            RiskLevel.Medium => "This activity is visible enough to keep on your radar.",
+            _ => "AccessWatch logged this for your activity history."
+        };
+    }
+
+    private static string DefaultSuggestedAction(RiskLevel riskLevel)
+    {
+        return riskLevel switch
+        {
+            RiskLevel.High or RiskLevel.Critical => "Confirm the application and port are expected before trusting it.",
+            RiskLevel.Medium => "No action needed if you recognize the application.",
+            _ => "No action needed."
+        };
+    }
+
+    private static string FirstUseful(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string? GetString(JsonElement root, string propertyName)
+    {
+        return root.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
     }
 
     private void OnPropertyChanged(string propertyName)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+
+    private sealed record EventDetails(
+        string? WhatHappened = null,
+        string? App = null,
+        string? ProcessName = null,
+        string? Reachability = null,
+        string? WhyItMatters = null,
+        string? SuggestedAction = null);
 }

@@ -121,6 +121,161 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies event activity explains the owning application and the reason AccessWatch flagged it.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_ExplainsEventApplicationAndReason()
+    {
+        var repository = new FakeRepository
+        {
+            Applications =
+            [
+                new AppIdentity
+                {
+                    ApplicationId = 42,
+                    DisplayName = "Windows Service Host",
+                    ProcessName = "svchost",
+                    Publisher = "Microsoft Windows",
+                    SignatureStatus = SignatureStatus.TrustedSigned
+                }
+            ],
+            Events =
+            [
+                new NetworkEvent
+                {
+                    ApplicationId = 42,
+                    EventType = "NewListeningPort",
+                    DestinationIp = "0.0.0.0",
+                    DestinationPort = 49667,
+                    RiskLevel = RiskLevel.High,
+                    Summary = "svchost opened a network-reachable port.",
+                    DetailsJson = "{ \"whatHappened\": \"A new listening TCP port appeared.\", \"app\": \"svchost\", \"processName\": \"svchost\", \"reachability\": \"NetworkReachable\", \"whyItMatters\": \"Other devices on your network may be able to connect to this service.\", \"suggestedAction\": \"Confirm the app is expected before trusting it.\" }"
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        var activity = Assert.Single(model.RecentActivity);
+        Assert.Equal("Windows Service Host", activity.ApplicationName);
+        Assert.Contains("Signed by Microsoft Windows", activity.ApplicationIdentity);
+        Assert.Contains("A new listening TCP port appeared.", activity.Detail);
+        Assert.Contains("NetworkReachable", activity.Detail);
+        Assert.Equal("Other devices on your network may be able to connect to this service.", activity.WhyItMatters);
+        Assert.Equal("Confirm the app is expected before trusting it.", activity.SuggestedAction);
+    }
+    /// <summary>
+    /// Verifies event activity remains useful when stored detail JSON is missing or malformed.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_ExplainsEventsWithMissingDetails()
+    {
+        var repository = new FakeRepository
+        {
+            Events =
+            [
+                new NetworkEvent
+                {
+                    EventType = "UnexpectedTraffic",
+                    Protocol = "TCP",
+                    RiskLevel = RiskLevel.Low,
+                    Summary = "AccessWatch recorded an event.",
+                    DetailsJson = "{not-json"
+                },
+                new NetworkEvent
+                {
+                    EventType = "ListeningPortApplicationChanged",
+                    DestinationIp = "127.0.0.1",
+                    DestinationPort = 7000,
+                    RiskLevel = RiskLevel.Medium,
+                    Summary = "A port changed owners.",
+                    DetailsJson = "{ \"app\": \"Helper Process\", \"processName\": \"helper\" }"
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.RecentActivity,
+            first =>
+            {
+                Assert.Equal("Unknown application", first.ApplicationName);
+                Assert.Equal("Application identity unavailable", first.ApplicationIdentity);
+                Assert.Contains("AccessWatch recorded network activity.", first.Detail);
+                Assert.Equal("AccessWatch logged this for your activity history.", first.WhyItMatters);
+                Assert.Equal("No action needed.", first.SuggestedAction);
+            },
+            second =>
+            {
+                Assert.Equal("Helper Process", second.ApplicationName);
+                Assert.Contains("Process helper", second.ApplicationIdentity);
+                Assert.Contains("stored app identity unavailable", second.ApplicationIdentity);
+                Assert.Contains("changed owning application", second.Detail);
+                Assert.Equal("This activity is visible enough to keep on your radar.", second.WhyItMatters);
+                Assert.Equal("No action needed if you recognize the application.", second.SuggestedAction);
+            });
+    }
+
+    /// <summary>
+    /// Verifies event activity exposes application signature and publisher context.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_ExplainsApplicationIdentityVariants()
+    {
+        var repository = new FakeRepository
+        {
+            Applications =
+            [
+                new AppIdentity { ApplicationId = 1, DisplayName = "Trusted", ProcessName = "trusted", SignatureStatus = SignatureStatus.TrustedSigned, FilePath = "C:\\Apps\\trusted.exe" },
+                new AppIdentity { ApplicationId = 2, DisplayName = "Signed", ProcessName = "signed", SignatureStatus = SignatureStatus.SignedUnknown },
+                new AppIdentity { ApplicationId = 3, DisplayName = "Unsigned", ProcessName = "unsigned", SignatureStatus = SignatureStatus.Unsigned },
+                new AppIdentity { ApplicationId = 4, DisplayName = "Invalid", ProcessName = "invalid", SignatureStatus = SignatureStatus.InvalidSignature },
+                new AppIdentity { ApplicationId = 5, DisplayName = "Unknown", ProcessName = "unknown", SignatureStatus = SignatureStatus.Unknown },
+                new AppIdentity { ApplicationId = 6, DisplayName = "Publisher Only", ProcessName = "publisher", Publisher = "Example Corp", SignatureStatus = SignatureStatus.Unsigned },
+                new AppIdentity { ApplicationId = 7, DisplayName = "Blank Process", ProcessName = string.Empty, SignatureStatus = SignatureStatus.Unknown }
+            ],
+            Events =
+            [
+                NewIdentityEvent(1, RiskLevel.High),
+                NewIdentityEvent(2, RiskLevel.High),
+                NewIdentityEvent(3, RiskLevel.High),
+                NewIdentityEvent(4, RiskLevel.High),
+                NewIdentityEvent(5, RiskLevel.High),
+                NewIdentityEvent(6, RiskLevel.High),
+                NewIdentityEvent(7, RiskLevel.High) with { DetailsJson = string.Empty }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Contains(model.RecentActivity, activity => activity.ApplicationIdentity.Contains("Trusted signature") && activity.ApplicationIdentity.Contains("C:\\Apps\\trusted.exe"));
+        Assert.Contains(model.RecentActivity, activity => activity.ApplicationIdentity.Contains("Signed; publisher trust unknown"));
+        Assert.Contains(model.RecentActivity, activity => activity.ApplicationIdentity.Contains("Unsigned executable"));
+        Assert.Contains(model.RecentActivity, activity => activity.ApplicationIdentity.Contains("Invalid signature"));
+        Assert.Contains(model.RecentActivity, activity => activity.ApplicationIdentity.Contains("Signature status unknown"));
+        Assert.Contains(model.RecentActivity, activity => activity.ApplicationIdentity.Contains("Publisher Example Corp"));
+        Assert.Contains(model.RecentActivity, activity => activity.ApplicationName == "Blank Process" && activity.ApplicationIdentity == "Signature status unknown; Executable path unavailable");
+        Assert.All(model.RecentActivity, activity => Assert.Equal("Confirm the application and port are expected before trusting it.", activity.SuggestedAction));
+    }
+
+    private static NetworkEvent NewIdentityEvent(long applicationId, RiskLevel riskLevel)
+    {
+        return new NetworkEvent
+        {
+            ApplicationId = applicationId,
+            EventType = "NewListeningPort",
+            DestinationIp = "0.0.0.0",
+            DestinationPort = 5000 + (int)applicationId,
+            RiskLevel = riskLevel,
+            Summary = $"Application {applicationId} opened a port.",
+            DetailsJson = "{ \"app\": 7 }"
+        };
+    }
+    /// <summary>
     /// Verifies the dashboard falls back to port rows when no events exist.
     /// </summary>
     [Fact]
@@ -146,9 +301,37 @@ public sealed class NotificationAndViewModelTests
         var activity = Assert.Single(model.RecentActivity);
         Assert.Equal("Normal", activity.Kind);
         Assert.Contains("Port 8080", activity.Summary);
-        Assert.Equal("Dev server", activity.Detail);
+        Assert.Equal("Dev server", activity.ApplicationName);
+        Assert.Contains("TCP 127.0.0.1:8080", activity.Detail);
     }
 
+    /// <summary>
+    /// Verifies port fallback rows handle incomplete app identity records.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_UsesUnknownApplicationForIncompletePortIdentity()
+    {
+        var repository = new FakeRepository
+        {
+            Ports =
+            [
+                new ListeningPort
+                {
+                    PortNumber = 7777,
+                    LocalAddress = "0.0.0.0",
+                    Reachability = PortReachability.NetworkReachable,
+                    Application = new AppIdentity { DisplayName = null!, ProcessName = "mystery" }
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        var activity = Assert.Single(model.RecentActivity);
+        Assert.Equal("Unknown application", activity.ApplicationName);
+        Assert.Contains("Other devices", activity.WhyItMatters);
+    }
     /// <summary>
     /// Verifies the dashboard falls back to device rows when no events or ports exist.
     /// </summary>
@@ -217,7 +400,9 @@ public sealed class NotificationAndViewModelTests
             Ports = [new ListeningPort { PortNumber = 9000, LocalAddress = "127.0.0.1" }]
         });
         await portModel.LoadAsync(CancellationToken.None);
-        Assert.Equal("Application identity unavailable in list view.", Assert.Single(portModel.RecentActivity).Detail);
+        var portActivity = Assert.Single(portModel.RecentActivity);
+        Assert.Equal("Unknown application", portActivity.ApplicationName);
+        Assert.Contains("TCP 127.0.0.1:9000", portActivity.Detail);
 
         var deviceModel = new DashboardShellViewModel(new FakeRepository
         {
