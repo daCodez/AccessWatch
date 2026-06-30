@@ -114,7 +114,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Content=\"Copy packet\"", xaml);
         Assert.Contains("Click=\"OnCreateIncidentAiHandoffClick\"", xaml);
         Assert.Contains("Click=\"OnCopyIncidentAiHandoffClick\"", xaml);
-        Assert.Contains("Text=\"{Binding SelectedIncidentAiHandoff}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentAiHandoff, Mode=OneWay}\"", xaml);
     }
 
     /// <summary>
