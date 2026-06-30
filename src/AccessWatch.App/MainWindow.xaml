@@ -56,12 +56,16 @@
 
                 <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,18">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button Content="Scan now" Width="104" Height="32" Margin="0,0,8,0" Click="OnScanNowClick" />
-                        <Button Content="Refresh" Width="96" Height="32" Click="OnRefreshClick" />
+                        <Button Content="{Binding ScanButtonText}" IsEnabled="{Binding CanRunActions}" Width="112" Height="32" Margin="0,0,8,0" Click="OnScanNowClick" />
+                        <Button Content="{Binding RefreshButtonText}" IsEnabled="{Binding CanRunActions}" Width="104" Height="32" Click="OnRefreshClick" />
                     </StackPanel>
                     <StackPanel>
                         <TextBlock Text="{Binding SelectedPageTitle}" FontSize="26" FontWeight="SemiBold" Foreground="#24292F" />
                         <TextBlock Text="{Binding StatusMessage}" Margin="0,6,16,0" FontSize="14" Foreground="#57606A" TextWrapping="Wrap" />
+                        <StackPanel Margin="0,10,16,0" Visibility="{Binding LoadingVisibility}">
+                            <ProgressBar Height="4" Width="320" HorizontalAlignment="Left" IsIndeterminate="True" />
+                            <TextBlock Text="{Binding ProgressMessage}" Margin="0,6,0,0" FontSize="12" Foreground="#57606A" />
+                        </StackPanel>
                     </StackPanel>
                 </DockPanel>
 

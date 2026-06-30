@@ -63,6 +63,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private readonly Func<CancellationToken, Task<int>>? scanAsync;
     private DashboardPageViewModel selectedPage;
     private string statusMessage = "Connect the service or run a scan to load AccessWatch activity.";
+    private string activeOperation = string.Empty;
     private bool isLoading;
 
     /// <summary>
@@ -226,8 +227,40 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         {
             isLoading = value;
             OnPropertyChanged(nameof(IsLoading));
+            OnPropertyChanged(nameof(CanRunActions));
+            OnPropertyChanged(nameof(LoadingVisibility));
+            OnPropertyChanged(nameof(ScanButtonText));
+            OnPropertyChanged(nameof(RefreshButtonText));
+            OnPropertyChanged(nameof(ProgressMessage));
         }
     }
+
+    /// <summary>
+    /// Gets whether dashboard actions can be started.
+    /// </summary>
+    public bool CanRunActions => !IsLoading;
+
+    /// <summary>
+    /// Gets WPF visibility text for the progress indicator.
+    /// </summary>
+    public string LoadingVisibility => ToVisibility(IsLoading);
+
+    /// <summary>
+    /// Gets the current scan button label.
+    /// </summary>
+    public string ScanButtonText => IsLoading && activeOperation == "Scan" ? "Scanning..." : "Scan now";
+
+    /// <summary>
+    /// Gets the current refresh button label.
+    /// </summary>
+    public string RefreshButtonText => IsLoading && activeOperation == "Refresh" ? "Refreshing..." : "Refresh";
+
+    /// <summary>
+    /// Gets the current progress indicator label.
+    /// </summary>
+    public string ProgressMessage => activeOperation == "Scan"
+        ? "Searching network devices and listening ports..."
+        : "Refreshing dashboard data...";
 
     /// <summary>
     /// Loads dashboard data from the repository.
@@ -241,7 +274,12 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        IsLoading = true;
+        var ownsLoading = !IsLoading;
+        if (ownsLoading)
+        {
+            BeginLoading("Refresh", "Refreshing dashboard data...");
+        }
+
         try
         {
             await repository.InitializeAsync(cancellationToken);
@@ -264,7 +302,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
         finally
         {
-            IsLoading = false;
+            if (ownsLoading)
+            {
+                EndLoading();
+            }
         }
     }
 
@@ -280,7 +321,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        IsLoading = true;
+        BeginLoading("Scan", "Scanning network devices and listening ports...");
         try
         {
             var createdEvents = await scanAsync(cancellationToken);
@@ -293,8 +334,27 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
         finally
         {
-            IsLoading = false;
+            EndLoading();
         }
+    }
+
+    private void BeginLoading(string operation, string message)
+    {
+        activeOperation = operation;
+        StatusMessage = message;
+        IsLoading = true;
+        OnPropertyChanged(nameof(ScanButtonText));
+        OnPropertyChanged(nameof(RefreshButtonText));
+        OnPropertyChanged(nameof(ProgressMessage));
+    }
+
+    private void EndLoading()
+    {
+        IsLoading = false;
+        activeOperation = string.Empty;
+        OnPropertyChanged(nameof(ScanButtonText));
+        OnPropertyChanged(nameof(RefreshButtonText));
+        OnPropertyChanged(nameof(ProgressMessage));
     }
 
     private static string ToVisibility(bool isVisible)

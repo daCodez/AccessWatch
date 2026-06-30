@@ -76,6 +76,12 @@ public sealed class NotificationAndViewModelTests
         Assert.DoesNotContain("SelectedIndex=\"0\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedPageTitle}\"", xaml);
         Assert.DoesNotContain("Text=\"Overview\" FontSize=\"26\"", xaml);
+        Assert.Contains("Content=\"{Binding ScanButtonText}\"", xaml);
+        Assert.Contains("Content=\"{Binding RefreshButtonText}\"", xaml);
+        Assert.Contains("IsEnabled=\"{Binding CanRunActions}\"", xaml);
+        Assert.Contains("Visibility=\"{Binding LoadingVisibility}\"", xaml);
+        Assert.Contains("IsIndeterminate=\"True\"", xaml);
+        Assert.Contains("Text=\"{Binding ProgressMessage}\"", xaml);
     }
 
     /// <summary>
@@ -148,6 +154,73 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Overview", model.SelectedPageTitle);
         Assert.True(model.IsOverviewSelected);
     }
+    /// <summary>
+    /// Verifies refresh work exposes button and progress state while loading.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_ShowsRefreshProgressState()
+    {
+        var releaseLoad = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new FakeRepository { InitializeGate = releaseLoad };
+        var model = new DashboardShellViewModel(repository);
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        var loadTask = model.LoadAsync(CancellationToken.None);
+
+        Assert.True(model.IsLoading);
+        Assert.False(model.CanRunActions);
+        Assert.Equal("Visible", model.LoadingVisibility);
+        Assert.Equal("Scan now", model.ScanButtonText);
+        Assert.Equal("Refreshing...", model.RefreshButtonText);
+        Assert.Equal("Refreshing dashboard data...", model.ProgressMessage);
+        Assert.Equal("Refreshing dashboard data...", model.StatusMessage);
+        Assert.Contains(nameof(DashboardShellViewModel.CanRunActions), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.LoadingVisibility), changed);
+
+        releaseLoad.SetResult();
+        await loadTask;
+
+        Assert.False(model.IsLoading);
+        Assert.True(model.CanRunActions);
+        Assert.Equal("Collapsed", model.LoadingVisibility);
+        Assert.Equal("Refresh", model.RefreshButtonText);
+    }
+
+    /// <summary>
+    /// Verifies scan work exposes button and progress state while searching.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_RunScanAsync_ShowsScanProgressState()
+    {
+        var releaseScan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new FakeRepository();
+        var model = new DashboardShellViewModel(repository, async _ =>
+        {
+            await releaseScan.Task;
+            return 2;
+        });
+
+        var scanTask = model.RunScanAsync(CancellationToken.None);
+
+        Assert.True(model.IsLoading);
+        Assert.False(model.CanRunActions);
+        Assert.Equal("Visible", model.LoadingVisibility);
+        Assert.Equal("Scanning...", model.ScanButtonText);
+        Assert.Equal("Refresh", model.RefreshButtonText);
+        Assert.Equal("Searching network devices and listening ports...", model.ProgressMessage);
+        Assert.Equal("Scanning network devices and listening ports...", model.StatusMessage);
+
+        releaseScan.SetResult();
+        await scanTask;
+
+        Assert.False(model.IsLoading);
+        Assert.True(model.CanRunActions);
+        Assert.Equal("Collapsed", model.LoadingVisibility);
+        Assert.Equal("Scan now", model.ScanButtonText);
+        Assert.Equal("Scan completed. Created 2 new events.", model.StatusMessage);
+    }
+
     /// <summary>
     /// Verifies the dashboard reports when no repository is connected.
     /// </summary>
@@ -697,17 +770,23 @@ public sealed class NotificationAndViewModelTests
 
         public Exception? Failure { get; init; }
 
+        public TaskCompletionSource? InitializeGate { get; init; }
+
         public bool WasInitialized { get; private set; }
 
-        public Task InitializeAsync(CancellationToken cancellationToken)
+        public async Task InitializeAsync(CancellationToken cancellationToken)
         {
             if (Failure is not null)
             {
                 throw Failure;
             }
 
+            if (InitializeGate is not null)
+            {
+                await InitializeGate.Task.WaitAsync(cancellationToken);
+            }
+
             WasInitialized = true;
-            return Task.CompletedTask;
         }
 
         public Task<long> UpsertDeviceAsync(NetworkDevice device, CancellationToken cancellationToken)
