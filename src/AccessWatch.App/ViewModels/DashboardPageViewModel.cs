@@ -61,6 +61,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 {
     private readonly IAccessWatchRepository? repository;
     private readonly Func<CancellationToken, Task<int>>? scanAsync;
+    private readonly Func<CancellationToken, Task<int>>? simulateAsync;
     private DashboardPageViewModel selectedPage;
     private string statusMessage = "Connect the service or run a scan to load AccessWatch activity.";
     private string activeOperation = string.Empty;
@@ -79,12 +80,15 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     /// <param name="repository">Repository used to load dashboard data.</param>
     /// <param name="scanAsync">Optional scan action that persists fresh observations.</param>
+    /// <param name="simulateAsync">Optional simulator action that persists a demo event.</param>
     public DashboardShellViewModel(
         IAccessWatchRepository repository,
-        Func<CancellationToken, Task<int>>? scanAsync = null)
+        Func<CancellationToken, Task<int>>? scanAsync = null,
+        Func<CancellationToken, Task<int>>? simulateAsync = null)
     {
         this.repository = repository;
         this.scanAsync = scanAsync;
+        this.simulateAsync = simulateAsync;
         selectedPage = Pages[0];
     }
 
@@ -230,6 +234,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(CanRunActions));
             OnPropertyChanged(nameof(LoadingVisibility));
             OnPropertyChanged(nameof(ScanButtonText));
+            OnPropertyChanged(nameof(SimulateButtonText));
             OnPropertyChanged(nameof(RefreshButtonText));
             OnPropertyChanged(nameof(ProgressMessage));
         }
@@ -251,6 +256,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public string ScanButtonText => IsLoading && activeOperation == "Scan" ? "Scanning..." : "Scan now";
 
     /// <summary>
+    /// Gets the current simulator button label.
+    /// </summary>
+    public string SimulateButtonText => IsLoading && activeOperation == "Simulation" ? "Simulating..." : "Simulate event";
+
+    /// <summary>
     /// Gets the current refresh button label.
     /// </summary>
     public string RefreshButtonText => IsLoading && activeOperation == "Refresh" ? "Refreshing..." : "Refresh";
@@ -258,9 +268,12 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <summary>
     /// Gets the current progress indicator label.
     /// </summary>
-    public string ProgressMessage => activeOperation == "Scan"
-        ? "Searching network devices and listening ports..."
-        : "Refreshing dashboard data...";
+    public string ProgressMessage => activeOperation switch
+    {
+        "Scan" => "Searching network devices and listening ports...",
+        "Simulation" => "Creating a simulated network event...",
+        _ => "Refreshing dashboard data..."
+    };
 
     /// <summary>
     /// Loads dashboard data from the repository.
@@ -338,12 +351,42 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Creates a simulated event, saves it, notifies the user, and reloads dashboard data.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task RunSimulationAsync(CancellationToken cancellationToken)
+    {
+        if (simulateAsync is null)
+        {
+            StatusMessage = "Event simulator is not connected yet.";
+            return;
+        }
+
+        BeginLoading("Simulation", "Creating a simulated network event...");
+        try
+        {
+            var createdEvents = await simulateAsync(cancellationToken);
+            await LoadAsync(cancellationToken);
+            StatusMessage = $"Simulation completed. Created {createdEvents} event.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Could not run AccessWatch simulator: {ex.Message}";
+        }
+        finally
+        {
+            EndLoading();
+        }
+    }
+
     private void BeginLoading(string operation, string message)
     {
         activeOperation = operation;
         StatusMessage = message;
         IsLoading = true;
         OnPropertyChanged(nameof(ScanButtonText));
+        OnPropertyChanged(nameof(SimulateButtonText));
         OnPropertyChanged(nameof(RefreshButtonText));
         OnPropertyChanged(nameof(ProgressMessage));
     }
@@ -353,6 +396,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         IsLoading = false;
         activeOperation = string.Empty;
         OnPropertyChanged(nameof(ScanButtonText));
+        OnPropertyChanged(nameof(SimulateButtonText));
         OnPropertyChanged(nameof(RefreshButtonText));
         OnPropertyChanged(nameof(ProgressMessage));
     }
@@ -639,3 +683,4 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         string? WhyItMatters = null,
         string? SuggestedAction = null);
 }
+

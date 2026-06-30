@@ -57,6 +57,7 @@
                 <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,18">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button Content="{Binding ScanButtonText}" IsEnabled="{Binding CanRunActions}" Width="112" Height="32" Margin="0,0,8,0" Click="OnScanNowClick" />
+                        <Button Content="{Binding SimulateButtonText}" IsEnabled="{Binding CanRunActions}" Width="120" Height="32" Margin="0,0,8,0" Click="OnSimulateEventClick" />
                         <Button Content="{Binding RefreshButtonText}" IsEnabled="{Binding CanRunActions}" Width="104" Height="32" Click="OnRefreshClick" />
                     </StackPanel>
                     <StackPanel>
@@ -160,3 +161,4 @@
         </Grid>
     </Grid>
 </Window>
+

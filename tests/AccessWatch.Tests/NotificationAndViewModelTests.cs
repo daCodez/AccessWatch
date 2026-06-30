@@ -77,11 +77,13 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Text=\"{Binding SelectedPageTitle}\"", xaml);
         Assert.DoesNotContain("Text=\"Overview\" FontSize=\"26\"", xaml);
         Assert.Contains("Content=\"{Binding ScanButtonText}\"", xaml);
+        Assert.Contains("Content=\"{Binding SimulateButtonText}\"", xaml);
         Assert.Contains("Content=\"{Binding RefreshButtonText}\"", xaml);
         Assert.Contains("IsEnabled=\"{Binding CanRunActions}\"", xaml);
         Assert.Contains("Visibility=\"{Binding LoadingVisibility}\"", xaml);
         Assert.Contains("IsIndeterminate=\"True\"", xaml);
         Assert.Contains("Text=\"{Binding ProgressMessage}\"", xaml);
+        Assert.Contains("Click=\"OnSimulateEventClick\"", xaml);
     }
 
     /// <summary>
@@ -172,6 +174,7 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.CanRunActions);
         Assert.Equal("Visible", model.LoadingVisibility);
         Assert.Equal("Scan now", model.ScanButtonText);
+        Assert.Equal("Simulate event", model.SimulateButtonText);
         Assert.Equal("Refreshing...", model.RefreshButtonText);
         Assert.Equal("Refreshing dashboard data...", model.ProgressMessage);
         Assert.Equal("Refreshing dashboard data...", model.StatusMessage);
@@ -207,6 +210,7 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.CanRunActions);
         Assert.Equal("Visible", model.LoadingVisibility);
         Assert.Equal("Scanning...", model.ScanButtonText);
+        Assert.Equal("Simulate event", model.SimulateButtonText);
         Assert.Equal("Refresh", model.RefreshButtonText);
         Assert.Equal("Searching network devices and listening ports...", model.ProgressMessage);
         Assert.Equal("Scanning network devices and listening ports...", model.StatusMessage);
@@ -727,6 +731,98 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.IsLoading);
     }
     /// <summary>
+    /// Verifies simulator requests report when no simulator function is connected.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_RunSimulationAsyncWithoutSimulator_ShowsDisconnectedState()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository());
+
+        await model.RunSimulationAsync(CancellationToken.None);
+
+        Assert.Equal("Event simulator is not connected yet.", model.StatusMessage);
+    }
+
+    /// <summary>
+    /// Verifies simulator work exposes button and progress state while generating an event.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_RunSimulationAsync_ShowsSimulationProgressState()
+    {
+        var releaseSimulation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new FakeRepository();
+        var model = new DashboardShellViewModel(
+            repository,
+            null,
+            async _ =>
+            {
+                await releaseSimulation.Task;
+                return 1;
+            });
+
+        var simulationTask = model.RunSimulationAsync(CancellationToken.None);
+
+        Assert.True(model.IsLoading);
+        Assert.False(model.CanRunActions);
+        Assert.Equal("Visible", model.LoadingVisibility);
+        Assert.Equal("Scan now", model.ScanButtonText);
+        Assert.Equal("Simulating...", model.SimulateButtonText);
+        Assert.Equal("Refresh", model.RefreshButtonText);
+        Assert.Equal("Creating a simulated network event...", model.ProgressMessage);
+        Assert.Equal("Creating a simulated network event...", model.StatusMessage);
+
+        releaseSimulation.SetResult();
+        await simulationTask;
+
+        Assert.False(model.IsLoading);
+        Assert.True(model.CanRunActions);
+        Assert.Equal("Collapsed", model.LoadingVisibility);
+        Assert.Equal("Simulate event", model.SimulateButtonText);
+        Assert.Equal("Simulation completed. Created 1 event.", model.StatusMessage);
+    }
+
+    /// <summary>
+    /// Verifies simulator requests reload dashboard data after creating an event.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_RunSimulationAsync_ReloadsData()
+    {
+        var repository = new FakeRepository
+        {
+            Events = [new NetworkEvent { EventType = "NewListeningPort", RiskLevel = RiskLevel.High, Summary = "Simulated event.", DestinationPort = 9443 }]
+        };
+        var simulationCount = 0;
+        var model = new DashboardShellViewModel(
+            repository,
+            null,
+            _ =>
+            {
+                simulationCount++;
+                return Task.FromResult(1);
+            });
+
+        await model.RunSimulationAsync(CancellationToken.None);
+
+        Assert.Equal(1, simulationCount);
+        Assert.Single(model.RecentActivity);
+        Assert.Equal("Simulation completed. Created 1 event.", model.StatusMessage);
+        Assert.False(model.IsLoading);
+    }
+
+    /// <summary>
+    /// Verifies simulator failures are shown as dashboard status instead of crashing the window.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_RunSimulationAsync_ShowsSimulationFailure()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository(), null, _ => throw new InvalidOperationException("simulator failed"));
+
+        await model.RunSimulationAsync(CancellationToken.None);
+
+        Assert.Contains("simulator failed", model.StatusMessage);
+        Assert.False(model.IsLoading);
+    }
+    /// <summary>
     /// Verifies tray quick actions include opening the dashboard.
     /// </summary>
     [Fact]
@@ -865,3 +961,4 @@ public sealed class NotificationAndViewModelTests
         }
     }
 }
+
