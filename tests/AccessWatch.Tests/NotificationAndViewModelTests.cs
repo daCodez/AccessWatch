@@ -436,6 +436,37 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Confirm the app is expected before trusting it.", activity.SuggestedAction);
     }
     /// <summary>
+    /// Verifies event detail device names are shown when the stored device row is not available.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_UsesEventDetailDeviceNameWhenDeviceJoinIsMissing()
+    {
+        var repository = new FakeRepository
+        {
+            Applications = [new AppIdentity { ApplicationId = 12, DisplayName = "Visual Studio", ProcessName = "devenv" }],
+            Events =
+            [
+                new NetworkEvent
+                {
+                    ApplicationId = 12,
+                    EventType = "CameraActivated",
+                    Protocol = "Local",
+                    Direction = "SensorAccess",
+                    RiskLevel = RiskLevel.High,
+                    Summary = "Visual Studio started using the camera.",
+                    DetailsJson = "{ \"whatHappened\": \"Visual Studio activated the camera.\", \"app\": \"Visual Studio\", \"processName\": \"devenv\", \"deviceName\": \"office-laptop\", \"reachability\": \"Local sensor access\", \"whyItMatters\": \"Camera activation is sensitive.\", \"suggestedAction\": \"Confirm this was expected.\" }"
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        var activity = Assert.Single(model.RecentActivity);
+        Assert.Contains("Device office-laptop", activity.Detail);
+        Assert.Contains("Visual Studio activated the camera.", activity.Detail);
+    }
+    /// <summary>
     /// Verifies sensor events describe the app and device without showing a fake network endpoint.
     /// </summary>
     [Fact]

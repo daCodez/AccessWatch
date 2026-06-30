@@ -535,7 +535,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             ? string.Empty
             : $" {networkEvent.Protocol} {networkEvent.DestinationIp ?? "local"}:{networkEvent.DestinationPort}.";
         var reachability = string.IsNullOrWhiteSpace(details.Reachability) ? string.Empty : $" {details.Reachability}.";
-        var sourceDevice = device is null ? string.Empty : $"Device {FirstUseful(device.Hostname, device.IpAddress, "unknown device")}. ";
+        var sourceDeviceName = FirstUseful(device?.Hostname, device?.IpAddress, details.DeviceName);
+        var sourceDevice = string.IsNullOrWhiteSpace(sourceDeviceName) ? string.Empty : $"Device {sourceDeviceName}. ";
         var whatHappened = FirstUseful(details.WhatHappened, FriendlyEventType(networkEvent.EventType));
 
         return new DashboardActivityItemViewModel(
@@ -563,6 +564,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 GetString(root, "whatHappened"),
                 GetString(root, "app"),
                 GetString(root, "processName"),
+                GetString(root, "deviceName"),
                 GetString(root, "reachability"),
                 GetString(root, "whyItMatters"),
                 GetString(root, "suggestedAction"));
@@ -684,6 +686,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         string? WhatHappened = null,
         string? App = null,
         string? ProcessName = null,
+        string? DeviceName = null,
         string? Reachability = null,
         string? WhyItMatters = null,
         string? SuggestedAction = null);

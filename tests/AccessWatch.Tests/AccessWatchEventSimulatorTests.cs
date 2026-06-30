@@ -42,6 +42,8 @@ public sealed class AccessWatchEventSimulatorTests
         Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("\"sensor\":\"Camera\""));
         Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("\"sensor\":\"Microphone\""));
         Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("Kitchen tablet joined"));
+        Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("\"deviceName\":\"office-laptop\""));
+        Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("\"deviceName\":\"kitchen-tablet\""));
         Assert.Equal(4, repository.Notifications.Count);
         Assert.Contains(repository.Notifications, notification => notification.Body.Contains("camera"));
         Assert.Contains(repository.Notifications, notification => notification.Body.Contains("microphone"));
