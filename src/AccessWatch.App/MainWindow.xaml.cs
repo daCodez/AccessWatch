@@ -77,6 +77,36 @@ public partial class MainWindow : Window
         await viewModel.RunSimulationAsync(CancellationToken.None);
     }
 
+    private async void OnTrustDeviceClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Trusted, CancellationToken.None);
+    }
+
+    private async void OnWatchDeviceClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.KnownWatched, CancellationToken.None);
+    }
+
+    private async void OnBlockDeviceClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+    }
+
+    private async void OnTrustApplicationClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Trusted, CancellationToken.None);
+    }
+
+    private async void OnWatchApplicationClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.KnownWatched, CancellationToken.None);
+    }
+
+    private async void OnBlockApplicationClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+    }
+
     private void OnApplySettingsClick(object sender, RoutedEventArgs e)
     {
         viewModel.ApplySettings();

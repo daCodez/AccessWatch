@@ -99,6 +99,14 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Text=\"{Binding SelectedDeviceDetail}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedApplication, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedApplicationDetail}\"", xaml);
+        Assert.Contains("Content=\"Trust device\"", xaml);
+        Assert.Contains("Content=\"Watch device\"", xaml);
+        Assert.Contains("Content=\"Block device\"", xaml);
+        Assert.Contains("Content=\"Trust app\"", xaml);
+        Assert.Contains("Content=\"Watch app\"", xaml);
+        Assert.Contains("Content=\"Block app\"", xaml);
+        Assert.Contains("Click=\"OnTrustDeviceClick\"", xaml);
+        Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
     }
 
     /// <summary>
@@ -519,6 +527,8 @@ public sealed class NotificationAndViewModelTests
 
         Assert.Equal("office-laptop", model.SelectedDevice?.Name);
         Assert.Equal("Visual Studio", model.SelectedApplication?.Name);
+        Assert.True(model.CanApplyDeviceTrustDecision);
+        Assert.True(model.CanApplyApplicationTrustDecision);
         Assert.Contains("office-laptop", model.SelectedDeviceDetail);
         Assert.Contains("192.168.1.25", model.SelectedDeviceDetail);
         Assert.Contains("Visual Studio", model.SelectedApplicationDetail);
@@ -532,8 +542,86 @@ public sealed class NotificationAndViewModelTests
 
         Assert.Contains("Select a device", model.SelectedDeviceDetail);
         Assert.Contains("Select an application", model.SelectedApplicationDetail);
+        Assert.False(model.CanApplyDeviceTrustDecision);
+        Assert.False(model.CanApplyApplicationTrustDecision);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedDeviceDetail), changed);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedApplicationDetail), changed);
+    }
+
+    /// <summary>
+    /// Verifies device and application action buttons persist trust decisions and update the selected row.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplyTrustDecision_UpdatesInventories()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 42, Hostname = "office-laptop", IpAddress = "192.168.1.25", MacAddress = "02:AC:CE:55:20:25" }],
+            Applications = [new AppIdentity { ApplicationId = 84, DisplayName = "Visual Studio", ProcessName = "devenv" }]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Trusted, CancellationToken.None);
+        await model.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+
+        Assert.Equal("Trusted", Assert.Single(model.Devices).TrustStatus);
+        Assert.Equal("Trusted", model.SelectedDevice?.TrustStatus);
+        Assert.Equal("Blocked", Assert.Single(model.Applications).TrustStatus);
+        Assert.Equal("Blocked", model.SelectedApplication?.TrustStatus);
+        Assert.Contains("Blocked Visual Studio", model.StatusMessage);
+        Assert.Collection(
+            repository.TrustDecisions,
+            decision =>
+            {
+                Assert.Equal("Device", decision.TargetType);
+                Assert.Equal(42, decision.TargetId);
+                Assert.Equal(TrustStatus.Trusted, decision.Decision);
+            },
+            decision =>
+            {
+                Assert.Equal("Application", decision.TargetType);
+                Assert.Equal(84, decision.TargetId);
+                Assert.Equal(TrustStatus.Blocked, decision.Decision);
+            });
+    }
+
+    /// <summary>
+    /// Verifies watch and reset trust decisions update the dashboard status text.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplyTrustDecision_UsesDecisionStatusText()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 43, Hostname = "office-laptop", IpAddress = "192.168.1.25", MacAddress = "02:AC:CE:55:20:25" }],
+            Applications = [new AppIdentity { ApplicationId = 85, DisplayName = "Visual Studio", ProcessName = "devenv" }]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.KnownWatched, CancellationToken.None);
+
+        Assert.Contains("Watching office-laptop", model.StatusMessage);
+
+        await model.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Unknown, CancellationToken.None);
+
+        Assert.Contains("Updated Visual Studio", model.StatusMessage);
+    }
+
+    /// <summary>
+    /// Verifies action requests explain when there is no selected row to update.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplyTrustDecision_RequiresSelection()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository());
+
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Trusted, CancellationToken.None);
+        Assert.Equal("Select a device before applying a trust decision.", model.StatusMessage);
+
+        await model.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Trusted, CancellationToken.None);
+        Assert.Equal("Select an application before applying a trust decision.", model.StatusMessage);
     }
 
     /// <summary>
@@ -1271,6 +1359,8 @@ public sealed class NotificationAndViewModelTests
 
         public IReadOnlyList<AccessWatchRule> Rules { get; init; } = [];
 
+        public List<TrustDecision> TrustDecisions { get; } = [];
+
         public Exception? Failure { get; init; }
 
         public TaskCompletionSource? InitializeGate { get; init; }
@@ -1324,7 +1414,8 @@ public sealed class NotificationAndViewModelTests
 
         public Task<long> AddTrustDecisionAsync(TrustDecision trustDecision, CancellationToken cancellationToken)
         {
-            return Task.FromResult(1L);
+            TrustDecisions.Add(trustDecision with { TrustDecisionId = TrustDecisions.Count + 1 });
+            return Task.FromResult((long)TrustDecisions.Count);
         }
 
         public Task<TrustStatus?> GetActiveTrustDecisionAsync(string targetType, long targetId, CancellationToken cancellationToken)

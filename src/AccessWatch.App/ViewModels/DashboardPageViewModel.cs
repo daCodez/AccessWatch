@@ -34,6 +34,7 @@ public sealed record DashboardActivityItemViewModel(
 /// Represents a device row shown in the dashboard.
 /// </summary>
 public sealed record DashboardDeviceItemViewModel(
+    long DeviceId,
     string Name,
     string IpAddress,
     string MacAddress,
@@ -47,6 +48,7 @@ public sealed record DashboardDeviceItemViewModel(
 /// Represents an application row shown in the dashboard.
 /// </summary>
 public sealed record DashboardApplicationItemViewModel(
+    long ApplicationId,
     string Name,
     string ProcessName,
     string Publisher,
@@ -306,6 +308,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             selectedDevice = value;
             OnPropertyChanged(nameof(SelectedDevice));
             OnPropertyChanged(nameof(SelectedDeviceDetail));
+            OnPropertyChanged(nameof(CanApplyDeviceTrustDecision));
         }
     }
 
@@ -315,6 +318,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public string SelectedDeviceDetail => selectedDevice is null
         ? "Select a device to see its name, address, trust, and risk context."
         : $"Device: {selectedDevice.Name} | IP: {selectedDevice.IpAddress} | MAC: {selectedDevice.MacAddress} | Vendor: {selectedDevice.Vendor} | Trust: {selectedDevice.TrustStatus} | Risk: {selectedDevice.RiskStatus} | Details: {selectedDevice.Detail}";
+
+    /// <summary>
+    /// Gets whether device trust action buttons can run.
+    /// </summary>
+    public bool CanApplyDeviceTrustDecision => selectedDevice is not null;
 
     /// <summary>
     /// Gets or sets the selected application shown in the detail panel.
@@ -332,6 +340,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             selectedApplication = value;
             OnPropertyChanged(nameof(SelectedApplication));
             OnPropertyChanged(nameof(SelectedApplicationDetail));
+            OnPropertyChanged(nameof(CanApplyApplicationTrustDecision));
         }
     }
 
@@ -341,6 +350,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public string SelectedApplicationDetail => selectedApplication is null
         ? "Select an application to see publisher, signature, trust, and executable context."
         : $"Application: {selectedApplication.Name} | Process: {selectedApplication.ProcessName} | Publisher: {selectedApplication.Publisher} | Signature: {selectedApplication.SignatureStatus} | Trust: {selectedApplication.TrustStatus} | Identity: {selectedApplication.Detail}";
+
+    /// <summary>
+    /// Gets whether application trust action buttons can run.
+    /// </summary>
+    public bool CanApplyApplicationTrustDecision => selectedApplication is not null;
 
     /// <summary>
     /// Gets recent listening ports loaded from storage.
@@ -568,6 +582,42 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Applies a trust decision to the selected device and updates the dashboard row.
+    /// </summary>
+    public async Task ApplySelectedDeviceTrustDecisionAsync(TrustStatus decision, CancellationToken cancellationToken)
+    {
+        if (selectedDevice is null)
+        {
+            StatusMessage = "Select a device before applying a trust decision.";
+            return;
+        }
+
+        var updatedDevice = selectedDevice with { TrustStatus = decision.ToString() };
+        await repository!.AddTrustDecisionAsync(CreateTrustDecision("Device", selectedDevice.DeviceId, decision), cancellationToken);
+        Devices[Devices.IndexOf(selectedDevice)] = updatedDevice;
+        SelectedDevice = updatedDevice;
+        StatusMessage = $"{TrustDecisionVerb(decision)} {updatedDevice.Name}.";
+    }
+
+    /// <summary>
+    /// Applies a trust decision to the selected application and updates the dashboard row.
+    /// </summary>
+    public async Task ApplySelectedApplicationTrustDecisionAsync(TrustStatus decision, CancellationToken cancellationToken)
+    {
+        if (selectedApplication is null)
+        {
+            StatusMessage = "Select an application before applying a trust decision.";
+            return;
+        }
+
+        var updatedApplication = selectedApplication with { TrustStatus = decision.ToString() };
+        await repository!.AddTrustDecisionAsync(CreateTrustDecision("Application", selectedApplication.ApplicationId, decision), cancellationToken);
+        Applications[Applications.IndexOf(selectedApplication)] = updatedApplication;
+        SelectedApplication = updatedApplication;
+        StatusMessage = $"{TrustDecisionVerb(decision)} {updatedApplication.Name}.";
+    }
+
+    /// <summary>
     /// Runs a scan, saves any new observations, and reloads dashboard data.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -666,6 +716,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         foreach (var device in devices.Take(100))
         {
             Devices.Add(new DashboardDeviceItemViewModel(
+                device.DeviceId,
                 DisplayDeviceName(device),
                 device.IpAddress,
                 FirstUseful(device.MacAddress, "MAC address unavailable"),
@@ -685,6 +736,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         foreach (var application in applications.Take(100))
         {
             Applications.Add(new DashboardApplicationItemViewModel(
+                application.ApplicationId,
                 FirstUseful(application.DisplayName, application.ProcessName, "Unknown application"),
                 FirstUseful(application.ProcessName, "Process unavailable"),
                 FirstUseful(application.Publisher, "Publisher unavailable"),
@@ -796,6 +848,29 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
 
         return parts.Count == 0 ? "Target unavailable" : string.Join(" on ", parts);
+    }
+
+    private static TrustDecision CreateTrustDecision(string targetType, long targetId, TrustStatus decision)
+    {
+        return new TrustDecision
+        {
+            TargetType = targetType,
+            TargetId = targetId,
+            Decision = decision,
+            Reason = "Selected from dashboard inventory.",
+            CreatedUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static string TrustDecisionVerb(TrustStatus decision)
+    {
+        return decision switch
+        {
+            TrustStatus.Trusted => "Trusted",
+            TrustStatus.KnownWatched => "Watching",
+            TrustStatus.Blocked => "Blocked",
+            _ => "Updated"
+        };
     }
 
     private static string DisplayDeviceName(NetworkDevice device)
