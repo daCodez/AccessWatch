@@ -104,6 +104,11 @@ public sealed class AccessWatchEventSimulatorTests
             return Task.FromResult<IReadOnlyList<NetworkDevice>>(Devices);
         }
 
+        public Task UpdateDeviceAliasAsync(long deviceId, string? userAlias, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task<long> UpsertApplicationAsync(AppIdentity application, CancellationToken cancellationToken)
         {
             var applicationId = ++nextApplicationId;

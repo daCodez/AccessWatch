@@ -17,6 +17,9 @@ public sealed record NetworkDevice
     /// <summary>Resolved hostname when available.</summary>
     public string? Hostname { get; init; }
 
+    /// <summary>User-friendly name assigned from the dashboard.</summary>
+    public string? UserAlias { get; init; }
+
     /// <summary>MAC vendor when available.</summary>
     public string? Vendor { get; init; }
 

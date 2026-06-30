@@ -61,18 +61,27 @@ public sealed class SqlServerAccessWatchRepositoryTests
         };
 
         var firstId = await repository.UpsertDeviceAsync(device, CancellationToken.None);
+        await repository.UpdateDeviceAliasAsync(firstId, "  Media Center  ", CancellationToken.None);
         var secondId = await repository.UpsertDeviceAsync(device with { Hostname = "living-room-tv", Vendor = "Example Vendor", LastConfirmedUtc = DateTimeOffset.UnixEpoch.AddMinutes(2) }, CancellationToken.None);
         await repository.UpsertDeviceAsync(device with { IpAddress = "192.168.1.26", LastConfirmedUtc = null }, CancellationToken.None);
+        await repository.UpsertDeviceAsync(device with { IpAddress = "192.168.1.27", UserAlias = "Kitchen Tablet" }, CancellationToken.None);
         var devices = await repository.ListRecentDevicesAsync(10, CancellationToken.None);
 
-        Assert.Equal(2, devices.Count);
+        Assert.Equal(3, devices.Count);
         var saved = Assert.Single(devices, device => device.IpAddress == "192.168.1.25");
         var unconfirmed = Assert.Single(devices, device => device.IpAddress == "192.168.1.26");
+        var aliased = Assert.Single(devices, device => device.IpAddress == "192.168.1.27");
         Assert.Equal(firstId, secondId);
         Assert.Equal("living-room-tv", saved.Hostname);
+        Assert.Equal("Media Center", saved.UserAlias);
         Assert.Equal("Example Vendor", saved.Vendor);
+        Assert.Equal("Kitchen Tablet", aliased.UserAlias);
         Assert.Equal(DateTimeOffset.UnixEpoch.AddMinutes(2), saved.LastConfirmedUtc);
         Assert.Null(unconfirmed.LastConfirmedUtc);
+
+        await repository.UpdateDeviceAliasAsync(firstId, null, CancellationToken.None);
+        saved = Assert.Single(await repository.ListRecentDevicesAsync(10, CancellationToken.None), device => device.IpAddress == "192.168.1.25");
+        Assert.Null(saved.UserAlias);
     }
 
     /// <summary>

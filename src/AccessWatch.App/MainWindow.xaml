@@ -142,6 +142,10 @@
                         </DataGrid>
                         <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -151,6 +155,12 @@
                                     <Button Content="Trust device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,0" Click="OnTrustDeviceClick" />
                                     <Button Content="Watch device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="98" Height="30" Margin="0,0,8,0" Click="OnWatchDeviceClick" />
                                     <Button Content="Block device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Click="OnBlockDeviceClick" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">
+                                    <TextBlock Text="Alias" Foreground="#57606A" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBox Text="{Binding SelectedDeviceAlias, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="220" Height="30" Margin="0,0,8,0" />
+                                    <Button Content="Save alias" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="88" Height="30" Margin="0,0,8,0" Click="OnSaveDeviceAliasClick" />
+                                    <Button Content="Clear" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="64" Height="30" Click="OnClearDeviceAliasClick" />
                                 </StackPanel>
                             </Grid>
                         </Border>

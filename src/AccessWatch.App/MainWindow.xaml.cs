@@ -77,6 +77,15 @@ public partial class MainWindow : Window
         await viewModel.RunSimulationAsync(CancellationToken.None);
     }
 
+    private async void OnSaveDeviceAliasClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.SaveSelectedDeviceAliasAsync(CancellationToken.None);
+    }
+
+    private async void OnClearDeviceAliasClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ClearSelectedDeviceAliasAsync(CancellationToken.None);
+    }
     private async void OnTrustDeviceClick(object sender, RoutedEventArgs e)
     {
         await viewModel.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Trusted, CancellationToken.None);

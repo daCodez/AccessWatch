@@ -587,6 +587,53 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies device aliases are saved, shown as the device name, and can be cleared back to the discovered name.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_SaveSelectedDeviceAliasAsync_SavesAndClearsAlias()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 100, Hostname = "printer-den", IpAddress = "192.168.1.44", MacAddress = "02:AC:CE:55:44:44" }]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+        model.SelectedDeviceAlias = null!;
+        Assert.Equal(string.Empty, model.SelectedDeviceAlias);
+
+        model.SelectedDeviceAlias = "  Office Printer  ";
+        await model.SaveSelectedDeviceAliasAsync(CancellationToken.None);
+
+        Assert.Equal("Office Printer", model.SelectedDeviceAlias);
+        Assert.Equal("Office Printer", model.SelectedDevice?.Name);
+        Assert.Equal("Office Printer", Assert.Single(model.Devices).UserAlias);
+        Assert.Equal((100L, "Office Printer"), Assert.Single(repository.AliasUpdates));
+        Assert.Equal("Saved alias Office Printer for 192.168.1.44.", model.StatusMessage);
+
+        await model.ClearSelectedDeviceAliasAsync(CancellationToken.None);
+
+        Assert.Equal(string.Empty, model.SelectedDeviceAlias);
+        Assert.Equal("printer-den", model.SelectedDevice?.Name);
+        Assert.Equal(string.Empty, Assert.Single(model.Devices).UserAlias);
+        Assert.Equal((100L, null), repository.AliasUpdates[1]);
+        Assert.Equal("Cleared alias for 192.168.1.44.", model.StatusMessage);
+    }
+
+    /// <summary>
+    /// Verifies alias saves require a selected device.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_SaveSelectedDeviceAliasAsync_RequiresSelection()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository());
+
+        await model.SaveSelectedDeviceAliasAsync(CancellationToken.None);
+
+        Assert.Equal("Select a device before saving an alias.", model.StatusMessage);
+    }
+
+    /// <summary>
     /// Verifies watch and reset trust decisions update the dashboard status text.
     /// </summary>
     [Fact]
@@ -1361,6 +1408,8 @@ public sealed class NotificationAndViewModelTests
 
         public List<TrustDecision> TrustDecisions { get; } = [];
 
+        public List<(long DeviceId, string? UserAlias)> AliasUpdates { get; } = [];
+
         public Exception? Failure { get; init; }
 
         public TaskCompletionSource? InitializeGate { get; init; }
@@ -1390,6 +1439,12 @@ public sealed class NotificationAndViewModelTests
         public Task<IReadOnlyList<NetworkDevice>> ListRecentDevicesAsync(int limit, CancellationToken cancellationToken)
         {
             return Task.FromResult(Devices);
+        }
+
+        public Task UpdateDeviceAliasAsync(long deviceId, string? userAlias, CancellationToken cancellationToken)
+        {
+            AliasUpdates.Add((deviceId, userAlias));
+            return Task.CompletedTask;
         }
 
         public Task<long> UpsertApplicationAsync(AppIdentity application, CancellationToken cancellationToken)

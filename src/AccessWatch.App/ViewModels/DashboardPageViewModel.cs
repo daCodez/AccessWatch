@@ -36,6 +36,8 @@ public sealed record DashboardActivityItemViewModel(
 public sealed record DashboardDeviceItemViewModel(
     long DeviceId,
     string Name,
+    string UserAlias,
+    string ResolvedName,
     string IpAddress,
     string MacAddress,
     string Vendor,
@@ -105,6 +107,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private string activeOperation = string.Empty;
     private DashboardDeviceItemViewModel? selectedDevice;
     private DashboardApplicationItemViewModel? selectedApplication;
+    private string selectedDeviceAlias = string.Empty;
     private bool isLoading;
 
     /// <summary>
@@ -306,7 +309,9 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             }
 
             selectedDevice = value;
+            selectedDeviceAlias = value?.UserAlias ?? string.Empty;
             OnPropertyChanged(nameof(SelectedDevice));
+            OnPropertyChanged(nameof(SelectedDeviceAlias));
             OnPropertyChanged(nameof(SelectedDeviceDetail));
             OnPropertyChanged(nameof(CanApplyDeviceTrustDecision));
         }
@@ -323,6 +328,19 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets whether device trust action buttons can run.
     /// </summary>
     public bool CanApplyDeviceTrustDecision => selectedDevice is not null;
+
+    /// <summary>
+    /// Gets or sets the editable alias for the selected device.
+    /// </summary>
+    public string SelectedDeviceAlias
+    {
+        get => selectedDeviceAlias;
+        set
+        {
+            selectedDeviceAlias = value ?? string.Empty;
+            OnPropertyChanged(nameof(SelectedDeviceAlias));
+        }
+    }
 
     /// <summary>
     /// Gets or sets the selected application shown in the detail panel.
@@ -582,6 +600,33 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Saves the alias entered for the selected device.
+    /// </summary>
+    public async Task SaveSelectedDeviceAliasAsync(CancellationToken cancellationToken)
+    {
+        if (selectedDevice is null)
+        {
+            StatusMessage = "Select a device before saving an alias.";
+            return;
+        }
+
+        var alias = NormalizeAlias(SelectedDeviceAlias);
+        await repository!.UpdateDeviceAliasAsync(selectedDevice.DeviceId, alias, cancellationToken);
+        UpdateSelectedDeviceAlias(alias);
+        StatusMessage = alias is null
+            ? $"Cleared alias for {selectedDevice.IpAddress}."
+            : $"Saved alias {alias} for {selectedDevice.IpAddress}.";
+    }
+
+    /// <summary>
+    /// Clears the alias for the selected device.
+    /// </summary>
+    public async Task ClearSelectedDeviceAliasAsync(CancellationToken cancellationToken)
+    {
+        SelectedDeviceAlias = string.Empty;
+        await SaveSelectedDeviceAliasAsync(cancellationToken);
+    }
+    /// <summary>
     /// Applies a trust decision to the selected device and updates the dashboard row.
     /// </summary>
     public async Task ApplySelectedDeviceTrustDecisionAsync(TrustStatus decision, CancellationToken cancellationToken)
@@ -718,6 +763,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             Devices.Add(new DashboardDeviceItemViewModel(
                 device.DeviceId,
                 DisplayDeviceName(device),
+                FirstUseful(device.UserAlias),
+                ResolvedDeviceName(device),
                 device.IpAddress,
                 FirstUseful(device.MacAddress, "MAC address unavailable"),
                 FirstUseful(device.Vendor, "Vendor unavailable"),
@@ -850,6 +897,18 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         return parts.Count == 0 ? "Target unavailable" : string.Join(" on ", parts);
     }
 
+    private void UpdateSelectedDeviceAlias(string? alias)
+    {
+        var currentDevice = selectedDevice!;
+        var updatedDevice = currentDevice with
+        {
+            Name = FirstUseful(alias, currentDevice.ResolvedName, "Name unavailable"),
+            UserAlias = alias ?? string.Empty
+        };
+        Devices[Devices.IndexOf(currentDevice)] = updatedDevice;
+        SelectedDevice = updatedDevice;
+    }
+
     private static TrustDecision CreateTrustDecision(string targetType, long targetId, TrustStatus decision)
     {
         return new TrustDecision
@@ -875,7 +934,12 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private static string DisplayDeviceName(NetworkDevice device)
     {
-        return IsUsefulDeviceName(device.Hostname) ? device.Hostname!.Trim() : "Name unavailable";
+        return FirstUseful(device.UserAlias, ResolvedDeviceName(device), "Name unavailable");
+    }
+
+    private static string ResolvedDeviceName(NetworkDevice device)
+    {
+        return IsUsefulDeviceName(device.Hostname) ? device.Hostname!.Trim() : string.Empty;
     }
 
     private static bool IsUsefulDeviceName(string? value)
@@ -1054,6 +1118,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         };
     }
 
+    private static string? NormalizeAlias(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
     private static string FirstUseful(params string?[] values)
     {
         foreach (var value in values)

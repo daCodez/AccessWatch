@@ -64,6 +64,15 @@ public interface IAccessWatchRepository
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>Recent devices ordered newest first.</returns>
     Task<IReadOnlyList<NetworkDevice>> ListRecentDevicesAsync(int limit, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Updates the friendly alias for a known device.
+    /// </summary>
+    /// <param name="deviceId">Device row identifier.</param>
+    /// <param name="userAlias">Friendly alias, or null to clear it.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    Task UpdateDeviceAliasAsync(long deviceId, string? userAlias, CancellationToken cancellationToken);
+
     /// <summary>
     /// Saves or updates an application identity.
     /// </summary>
@@ -182,6 +191,4 @@ public interface IAiHandoffService
     /// <returns>Redacted JSON suitable for manual copy.</returns>
     string CreateRedactedIncidentSummary(NetworkEvent networkEvent, int eventCount, TimeSpan timeWindow);
 }
-
-
 

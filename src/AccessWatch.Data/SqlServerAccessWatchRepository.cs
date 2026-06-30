@@ -48,6 +48,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
                 UPDATE dbo.Devices
                 SET MacAddress = @macAddress,
                     Hostname = @hostname,
+                    UserAlias = CASE WHEN @userAliasWasProvided = 1 THEN @userAlias ELSE UserAlias END,
                     Vendor = @vendor,
                     DeviceTypeGuess = @deviceTypeGuess,
                     TrustStatus = @trustStatus,
@@ -67,10 +68,10 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             await using var insert = connection.CreateCommand();
             insert.CommandText = """
                 INSERT INTO dbo.Devices
-                (IpAddress, MacAddress, Hostname, Vendor, DeviceTypeGuess, TrustStatus, RiskStatus,
+                (IpAddress, MacAddress, Hostname, UserAlias, Vendor, DeviceTypeGuess, TrustStatus, RiskStatus,
                  FirstSeenUtc, LastSeenUtc, LastConfirmedUtc, Notes)
                 VALUES
-                (@ipAddress, @macAddress, @hostname, @vendor, @deviceTypeGuess, @trustStatus, @riskStatus,
+                (@ipAddress, @macAddress, @hostname, @userAlias, @vendor, @deviceTypeGuess, @trustStatus, @riskStatus,
                  @firstSeenUtc, @lastSeenUtc, @lastConfirmedUtc, @notes);
                 SELECT CONVERT(bigint, SCOPE_IDENTITY());
                 """;
@@ -88,7 +89,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT TOP (@limit) DeviceId, IpAddress, MacAddress, Hostname, Vendor, DeviceTypeGuess,
+            SELECT TOP (@limit) DeviceId, IpAddress, MacAddress, Hostname, UserAlias, Vendor, DeviceTypeGuess,
                    TrustStatus, RiskStatus, FirstSeenUtc, LastSeenUtc, LastConfirmedUtc, Notes
             FROM dbo.Devices
             ORDER BY LastSeenUtc DESC, DeviceId DESC;
@@ -102,6 +103,17 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         }
 
         return devices;
+    }
+
+    /// <inheritdoc />
+    public async Task UpdateDeviceAliasAsync(long deviceId, string? userAlias, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE dbo.Devices SET UserAlias = @userAlias WHERE DeviceId = @deviceId;";
+        command.Parameters.AddWithValue("@deviceId", deviceId);
+        command.Parameters.AddWithValue("@userAlias", DbValue(NormalizeAlias(userAlias)));
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -486,6 +498,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             IpAddress nvarchar(45) NOT NULL,
             MacAddress nvarchar(32) NULL,
             Hostname nvarchar(255) NULL,
+            UserAlias nvarchar(255) NULL,
             Vendor nvarchar(255) NULL,
             DeviceTypeGuess nvarchar(128) NULL,
             TrustStatus nvarchar(64) NOT NULL,
@@ -495,6 +508,10 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             LastConfirmedUtc datetimeoffset NULL,
             Notes nvarchar(max) NULL
         );
+        """,
+        """
+        IF COL_LENGTH(N'dbo.Devices', N'UserAlias') IS NULL
+        ALTER TABLE dbo.Devices ADD UserAlias nvarchar(255) NULL;
         """,
         """
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Devices_IpAddress' AND object_id = OBJECT_ID(N'dbo.Devices'))
@@ -718,6 +735,8 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         command.Parameters.AddWithValue("@ipAddress", device.IpAddress);
         command.Parameters.AddWithValue("@macAddress", DbValue(device.MacAddress));
         command.Parameters.AddWithValue("@hostname", DbValue(device.Hostname));
+        command.Parameters.AddWithValue("@userAlias", DbValue(NormalizeAlias(device.UserAlias)));
+        command.Parameters.AddWithValue("@userAliasWasProvided", string.IsNullOrWhiteSpace(device.UserAlias) ? 0 : 1);
         command.Parameters.AddWithValue("@vendor", DbValue(device.Vendor));
         command.Parameters.AddWithValue("@deviceTypeGuess", DbValue(device.DeviceTypeGuess));
         command.Parameters.AddWithValue("@trustStatus", device.TrustStatus.ToString());
@@ -752,6 +771,11 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         command.Parameters.AddWithValue("@lastSeenUtc", ToDatabaseTime(port.LastSeenUtc, now));
         command.Parameters.AddWithValue("@trustStatus", port.TrustStatus.ToString());
         command.Parameters.AddWithValue("@riskStatus", port.RiskStatus.ToString());
+    }
+
+    private static string? NormalizeAlias(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private static object DbValue<T>(T? value)
@@ -818,16 +842,18 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             IpAddress = reader.GetString(1),
             MacAddress = ReadNullableString(reader, 2),
             Hostname = ReadNullableString(reader, 3),
-            Vendor = ReadNullableString(reader, 4),
-            DeviceTypeGuess = ReadNullableString(reader, 5),
-            TrustStatus = Enum.Parse<TrustStatus>(reader.GetString(6)),
-            RiskStatus = Enum.Parse<RiskStatus>(reader.GetString(7)),
-            FirstSeenUtc = reader.GetFieldValue<DateTimeOffset>(8),
-            LastSeenUtc = reader.GetFieldValue<DateTimeOffset>(9),
-            LastConfirmedUtc = ReadNullableDateTimeOffset(reader, 10),
-            Notes = ReadNullableString(reader, 11)
+            UserAlias = ReadNullableString(reader, 4),
+            Vendor = ReadNullableString(reader, 5),
+            DeviceTypeGuess = ReadNullableString(reader, 6),
+            TrustStatus = Enum.Parse<TrustStatus>(reader.GetString(7)),
+            RiskStatus = Enum.Parse<RiskStatus>(reader.GetString(8)),
+            FirstSeenUtc = reader.GetFieldValue<DateTimeOffset>(9),
+            LastSeenUtc = reader.GetFieldValue<DateTimeOffset>(10),
+            LastConfirmedUtc = ReadNullableDateTimeOffset(reader, 11),
+            Notes = ReadNullableString(reader, 12)
         };
     }
+
     private static ApplicationIdentity ReadApplication(SqlDataReader reader)
     {
         return new ApplicationIdentity
@@ -913,10 +939,4 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         return $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]";
     }
 }
-
-
-
-
-
-
 

@@ -220,6 +220,7 @@ public sealed class ServiceScanCoordinatorTests
         {
             return Task.FromResult(devices);
         }
+
     }
 
     private sealed class FakeScanner : IListeningPortScanner
@@ -276,6 +277,12 @@ public sealed class ServiceScanCoordinatorTests
         {
             return Task.FromResult<IReadOnlyList<NetworkDevice>>([]);
         }
+
+        public Task UpdateDeviceAliasAsync(long deviceId, string? userAlias, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task<long> UpsertApplicationAsync(AppIdentity application, CancellationToken cancellationToken)
         {
             return Task.FromResult(99L);
@@ -343,8 +350,4 @@ public sealed class ServiceScanCoordinatorTests
         }
     }
 }
-
-
-
-
 
