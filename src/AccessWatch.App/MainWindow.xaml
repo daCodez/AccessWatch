@@ -217,18 +217,39 @@
                 </Border>
 
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding IncidentsVisibility}">
-                    <DataGrid ItemsSource="{Binding Incidents}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Incident" Binding="{Binding Title}" Width="1.6*" />
-                            <DataGridTextColumn Header="Risk" Binding="{Binding RiskLevel}" Width="90" />
-                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
-                            <DataGridTextColumn Header="Events" Binding="{Binding EventCount}" Width="70" />
-                            <DataGridTextColumn Header="Target" Binding="{Binding MainTarget}" Width="1.4*" />
-                            <DataGridTextColumn Header="Started" Binding="{Binding Started}" Width="130" />
-                            <DataGridTextColumn Header="Updated" Binding="{Binding LastUpdated}" Width="130" />
-                            <DataGridTextColumn Header="Summary" Binding="{Binding Summary}" Width="2*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <DataGrid Grid.Row="0" ItemsSource="{Binding Incidents}" SelectedItem="{Binding SelectedIncident, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Incident" Binding="{Binding Title}" Width="1.6*" />
+                                <DataGridTextColumn Header="Risk" Binding="{Binding RiskLevel}" Width="90" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                                <DataGridTextColumn Header="Events" Binding="{Binding EventCount}" Width="70" />
+                                <DataGridTextColumn Header="Target" Binding="{Binding MainTarget}" Width="1.4*" />
+                                <DataGridTextColumn Header="Started" Binding="{Binding Started}" Width="130" />
+                                <DataGridTextColumn Header="Updated" Binding="{Binding LastUpdated}" Width="130" />
+                                <DataGridTextColumn Header="Summary" Binding="{Binding Summary}" Width="2*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding SelectedIncidentDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button Content="Create AI packet" IsEnabled="{Binding CanCreateIncidentAiHandoff}" Width="118" Height="30" Margin="0,0,8,0" Click="OnCreateIncidentAiHandoffClick" />
+                                    <Button Content="Copy packet" IsEnabled="{Binding HasIncidentAiHandoff}" Width="92" Height="30" Click="OnCopyIncidentAiHandoffClick" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <TextBox Grid.Row="2" Text="{Binding SelectedIncidentAiHandoff}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
+                    </Grid>
                 </Border>
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding SettingsVisibility}">
                     <Grid>

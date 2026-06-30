@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AccessWatch.Core\AccessWatch.Core.csproj" />
+    <ProjectReference Include="..\AccessWatch.AI\AccessWatch.AI.csproj" />
     <ProjectReference Include="..\AccessWatch.Data\AccessWatch.Data.csproj" />
     <ProjectReference Include="..\AccessWatch.Service\AccessWatch.Service.csproj" />
     <ProjectReference Include="..\AccessWatch.Rules\AccessWatch.Rules.csproj" />

@@ -190,5 +190,12 @@ public interface IAiHandoffService
     /// <param name="timeWindow">The grouped event time window.</param>
     /// <returns>Redacted JSON suitable for manual copy.</returns>
     string CreateRedactedIncidentSummary(NetworkEvent networkEvent, int eventCount, TimeSpan timeWindow);
+
+    /// <summary>
+    /// Creates a safe JSON incident summary for manual ChatGPT review.
+    /// </summary>
+    /// <param name="incident">The grouped incident to summarize.</param>
+    /// <returns>Redacted JSON suitable for manual copy.</returns>
+    string CreateRedactedIncidentSummary(Incident incident);
 }
 

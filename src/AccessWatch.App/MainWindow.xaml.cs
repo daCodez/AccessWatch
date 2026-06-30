@@ -1,4 +1,5 @@
 using System.Windows;
+using AccessWatch.AI;
 using AccessWatch.App.ViewModels;
 using AccessWatch.Core;
 using AccessWatch.Data;
@@ -46,7 +47,8 @@ public partial class MainWindow : Window
                 return await coordinator.RunListeningPortScanAsync(cancellationToken);
             },
             simulator.TriggerDemoEventAsync,
-            settings);
+            settings,
+            new ManualAiHandoffService());
         DataContext = viewModel;
         Loaded += OnLoaded;
         Closed += OnClosed;
@@ -114,6 +116,20 @@ public partial class MainWindow : Window
     private async void OnBlockApplicationClick(object sender, RoutedEventArgs e)
     {
         await viewModel.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+    }
+
+    private void OnCreateIncidentAiHandoffClick(object sender, RoutedEventArgs e)
+    {
+        viewModel.CreateSelectedIncidentAiHandoff();
+    }
+
+    private void OnCopyIncidentAiHandoffClick(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(viewModel.SelectedIncidentAiHandoff))
+        {
+            System.Windows.Clipboard.SetText(viewModel.SelectedIncidentAiHandoff);
+            viewModel.MarkIncidentAiHandoffCopied();
+        }
     }
 
     private void OnApplySettingsClick(object sender, RoutedEventArgs e)

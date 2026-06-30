@@ -76,6 +76,11 @@ public sealed record DashboardPortItemViewModel(
 /// Represents an incident row shown in the dashboard.
 /// </summary>
 public sealed record DashboardIncidentItemViewModel(
+    long IncidentId,
+    long? MainDeviceId,
+    long? MainApplicationId,
+    RiskLevel RawRiskLevel,
+    IncidentStatus RawStatus,
     string Title,
     string RiskLevel,
     string Status,
@@ -98,6 +103,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private readonly IAccessWatchRepository? repository;
     private readonly Func<CancellationToken, Task<int>>? scanAsync;
     private readonly Func<CancellationToken, Task<int>>? simulateAsync;
+    private readonly IAiHandoffService? aiHandoffService;
     private readonly AccessWatchSettings settings;
     private DashboardPageViewModel selectedPage;
     private string selectedProtectionMode;
@@ -107,6 +113,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private string activeOperation = string.Empty;
     private DashboardDeviceItemViewModel? selectedDevice;
     private DashboardApplicationItemViewModel? selectedApplication;
+    private DashboardIncidentItemViewModel? selectedIncident;
+    private string selectedIncidentAiHandoff = string.Empty;
     private string selectedDeviceAlias = string.Empty;
     private bool isLoading;
 
@@ -128,15 +136,18 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <param name="scanAsync">Optional scan action that persists fresh observations.</param>
     /// <param name="simulateAsync">Optional simulator action that persists a demo event.</param>
     /// <param name="settings">Mutable settings used by dashboard actions in this app session.</param>
+    /// <param name="aiHandoffService">Optional service used to create redacted incident AI review packets.</param>
     public DashboardShellViewModel(
         IAccessWatchRepository repository,
         Func<CancellationToken, Task<int>>? scanAsync = null,
         Func<CancellationToken, Task<int>>? simulateAsync = null,
-        AccessWatchSettings? settings = null)
+        AccessWatchSettings? settings = null,
+        IAiHandoffService? aiHandoffService = null)
     {
         this.repository = repository;
         this.scanAsync = scanAsync;
         this.simulateAsync = simulateAsync;
+        this.aiHandoffService = aiHandoffService;
         this.settings = settings ?? new AccessWatchSettings();
         selectedProtectionMode = this.settings.ProtectionMode.ToString();
         selectedAiMode = this.settings.AiMode.ToString();
@@ -375,6 +386,54 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public bool CanApplyApplicationTrustDecision => selectedApplication is not null;
 
     /// <summary>
+    /// Gets or sets the selected incident shown in the detail panel.
+    /// </summary>
+    public DashboardIncidentItemViewModel? SelectedIncident
+    {
+        get => selectedIncident;
+        set
+        {
+            if (Equals(selectedIncident, value))
+            {
+                return;
+            }
+
+            selectedIncident = value;
+            selectedIncidentAiHandoff = string.Empty;
+            OnPropertyChanged(nameof(SelectedIncident));
+            OnPropertyChanged(nameof(SelectedIncidentDetail));
+            OnPropertyChanged(nameof(CanCreateIncidentAiHandoff));
+            OnPropertyChanged(nameof(SelectedIncidentAiHandoff));
+            OnPropertyChanged(nameof(HasIncidentAiHandoff));
+        }
+    }
+
+    /// <summary>
+    /// Gets plain-English details for the selected incident.
+    /// </summary>
+    public string SelectedIncidentDetail => selectedIncident is null
+        ? "Select an incident to see its target, timeline, and AI review context."
+        : $"Incident: {selectedIncident.Title} | Target: {selectedIncident.MainTarget} | Risk: {selectedIncident.RiskLevel} | Status: {selectedIncident.Status} | Events: {selectedIncident.EventCount} | Summary: {selectedIncident.Summary}";
+
+    /// <summary>
+    /// Gets whether an incident is selected for AI handoff.
+    /// </summary>
+    public bool CanCreateIncidentAiHandoff =>
+        selectedIncident is not null &&
+        aiHandoffService is not null &&
+        settings.AiMode != AiMode.Off;
+
+    /// <summary>
+    /// Gets the redacted AI handoff packet for the selected incident.
+    /// </summary>
+    public string SelectedIncidentAiHandoff => selectedIncidentAiHandoff;
+
+    /// <summary>
+    /// Gets whether the current incident has a generated handoff packet.
+    /// </summary>
+    public bool HasIncidentAiHandoff => !string.IsNullOrWhiteSpace(selectedIncidentAiHandoff);
+
+    /// <summary>
     /// Gets recent listening ports loaded from storage.
     /// </summary>
     public ObservableCollection<DashboardPortItemViewModel> Ports { get; } = [];
@@ -585,6 +644,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         SettingsStatus = $"Settings applied. Running {CurrentProtectionMode} protection with {CurrentAiMode} AI handoff.";
         OnPropertyChanged(nameof(CurrentProtectionMode));
         OnPropertyChanged(nameof(CurrentAiMode));
+        OnPropertyChanged(nameof(CanCreateIncidentAiHandoff));
     }
 
     /// <summary>
@@ -660,6 +720,57 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         Applications[Applications.IndexOf(selectedApplication)] = updatedApplication;
         SelectedApplication = updatedApplication;
         StatusMessage = $"{TrustDecisionVerb(decision)} {updatedApplication.Name}.";
+    }
+
+    /// <summary>
+    /// Creates a redacted AI review packet for the selected incident.
+    /// </summary>
+    public void CreateSelectedIncidentAiHandoff()
+    {
+        if (selectedIncident is null)
+        {
+            StatusMessage = "Select an incident before creating an AI review packet.";
+            return;
+        }
+
+        if (aiHandoffService is null)
+        {
+            StatusMessage = "AI handoff is not connected for this dashboard session.";
+            return;
+        }
+
+        if (settings.AiMode == AiMode.Off)
+        {
+            StatusMessage = "Turn on AI handoff in Settings before creating a review packet.";
+            return;
+        }
+
+        var incident = new Incident
+        {
+            IncidentId = selectedIncident.IncidentId,
+            MainDeviceId = selectedIncident.MainDeviceId,
+            MainApplicationId = selectedIncident.MainApplicationId,
+            Title = selectedIncident.Title,
+            Summary = selectedIncident.Summary,
+            RiskLevel = selectedIncident.RawRiskLevel,
+            Status = selectedIncident.RawStatus,
+            EventCount = selectedIncident.EventCount
+        };
+
+        selectedIncidentAiHandoff = aiHandoffService.CreateRedactedIncidentSummary(incident);
+        OnPropertyChanged(nameof(SelectedIncidentAiHandoff));
+        OnPropertyChanged(nameof(HasIncidentAiHandoff));
+        StatusMessage = $"Created redacted AI review packet for {selectedIncident.Title}.";
+    }
+
+    /// <summary>
+    /// Updates the status after copying the incident AI handoff packet.
+    /// </summary>
+    public void MarkIncidentAiHandoffCopied()
+    {
+        StatusMessage = HasIncidentAiHandoff
+            ? "Copied redacted AI review packet."
+            : "Create an AI review packet before copying it.";
     }
 
     /// <summary>
@@ -824,6 +935,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             var device = devices.FirstOrDefault(candidate => incident.MainDeviceId is not null && candidate.DeviceId == incident.MainDeviceId.Value);
             var application = applications.FirstOrDefault(candidate => incident.MainApplicationId is not null && candidate.ApplicationId == incident.MainApplicationId.Value);
             Incidents.Add(new DashboardIncidentItemViewModel(
+                incident.IncidentId,
+                incident.MainDeviceId,
+                incident.MainApplicationId,
+                incident.RiskLevel,
+                incident.Status,
                 FirstUseful(incident.Title, "Untitled incident"),
                 incident.RiskLevel.ToString(),
                 incident.Status.ToString(),
@@ -833,6 +949,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 FormatTimestamp(incident.LastUpdatedUtc),
                 FirstUseful(incident.Summary, "No incident summary recorded yet.")));
         }
+
+        SelectedIncident = Incidents.FirstOrDefault();
     }
 
     private void ReplaceRecentActivity(

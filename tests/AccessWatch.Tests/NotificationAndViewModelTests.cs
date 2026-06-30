@@ -1,4 +1,5 @@
 using AccessWatch.App.ViewModels;
+using AccessWatch.AI;
 using AccessWatch.Core;
 using AccessWatch.Notifications;
 using AccessWatch.Tray;
@@ -107,6 +108,13 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Content=\"Block app\"", xaml);
         Assert.Contains("Click=\"OnTrustDeviceClick\"", xaml);
         Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
+        Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentDetail}\"", xaml);
+        Assert.Contains("Content=\"Create AI packet\"", xaml);
+        Assert.Contains("Content=\"Copy packet\"", xaml);
+        Assert.Contains("Click=\"OnCreateIncidentAiHandoffClick\"", xaml);
+        Assert.Contains("Click=\"OnCopyIncidentAiHandoffClick\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentAiHandoff}\"", xaml);
     }
 
     /// <summary>
@@ -797,8 +805,9 @@ public sealed class NotificationAndViewModelTests
             [
                 new Incident
                 {
+                    IncidentId = 11,
                     Title = "Camera activated",
-                    Summary = "Visual Studio activated a camera-related capability.",
+                    Summary = "Visual Studio activated a camera-related capability on 192.168.1.25 from AA:BB:CC:DD:EE:FF.",
                     MainDeviceId = 5,
                     MainApplicationId = 7,
                     RiskLevel = RiskLevel.High,
@@ -846,7 +855,12 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("Visual Studio on office-laptop", incident.MainTarget);
                 Assert.NotEqual("Not recorded", incident.Started);
                 Assert.NotEqual("Not recorded", incident.LastUpdated);
-                Assert.Equal("Visual Studio activated a camera-related capability.", incident.Summary);
+                Assert.Equal(11, incident.IncidentId);
+                Assert.Equal(5, incident.MainDeviceId);
+                Assert.Equal(7, incident.MainApplicationId);
+                Assert.Equal(RiskLevel.High, incident.RawRiskLevel);
+                Assert.Equal(IncidentStatus.Open, incident.RawStatus);
+                Assert.Equal("Visual Studio activated a camera-related capability on 192.168.1.25 from AA:BB:CC:DD:EE:FF.", incident.Summary);
             },
             incident =>
             {
@@ -854,7 +868,114 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("Target unavailable", incident.MainTarget);
                 Assert.Equal("No incident summary recorded yet.", incident.Summary);
             });
+        Assert.Same(model.Incidents[0], model.SelectedIncident);
+        Assert.Contains("Camera activated", model.SelectedIncidentDetail);
+        Assert.False(model.CanCreateIncidentAiHandoff);
+        Assert.False(model.HasIncidentAiHandoff);
         Assert.Contains("Loaded 0 events, 2 ports, 2 incidents, and 1 devices.", model.StatusMessage);
+    }
+
+    /// <summary>
+    /// Verifies selected incidents can produce privacy-safe manual AI review packets.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_CreateSelectedIncidentAiHandoff_RedactsSelectedIncident()
+    {
+        var repository = new FakeRepository
+        {
+            Incidents =
+            [
+                new Incident
+                {
+                    IncidentId = 55,
+                    Title = "Microphone activated",
+                    Summary = "Skype accessed the microphone from 10.0.0.50 with MAC 02:AC:CE:55:10:01.",
+                    MainDeviceId = 4,
+                    MainApplicationId = 9,
+                    RiskLevel = RiskLevel.Medium,
+                    Status = IncidentStatus.Watching,
+                    EventCount = 4
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository, aiHandoffService: new ManualAiHandoffService());
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        await model.LoadAsync(CancellationToken.None);
+        model.CreateSelectedIncidentAiHandoff();
+
+        Assert.True(model.HasIncidentAiHandoff);
+        Assert.DoesNotContain("10.0.0.50", model.SelectedIncidentAiHandoff);
+        Assert.DoesNotContain("02:AC:CE:55:10:01", model.SelectedIncidentAiHandoff);
+        Assert.Contains("Microphone activated", model.SelectedIncidentAiHandoff);
+        Assert.Contains("[ip-address]", model.SelectedIncidentAiHandoff);
+        Assert.Contains("[mac-address]", model.SelectedIncidentAiHandoff);
+        Assert.Contains("Created redacted AI review packet", model.StatusMessage);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedIncidentAiHandoff), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.HasIncidentAiHandoff), changed);
+
+        model.MarkIncidentAiHandoffCopied();
+        Assert.Equal("Copied redacted AI review packet.", model.StatusMessage);
+    }
+
+    /// <summary>
+    /// Verifies AI handoff gives actionable status when no incident or AI mode is available.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_CreateSelectedIncidentAiHandoff_ExplainsUnavailableStates()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository(), aiHandoffService: new ManualAiHandoffService());
+
+        model.CreateSelectedIncidentAiHandoff();
+
+        Assert.Equal("Select an incident to see its target, timeline, and AI review context.", model.SelectedIncidentDetail);
+        Assert.False(model.CanCreateIncidentAiHandoff);
+        Assert.Equal("Select an incident before creating an AI review packet.", model.StatusMessage);
+        model.MarkIncidentAiHandoffCopied();
+        Assert.Equal("Create an AI review packet before copying it.", model.StatusMessage);
+
+        var noServiceModel = new DashboardShellViewModel(new FakeRepository());
+        noServiceModel.SelectedIncident = new DashboardIncidentItemViewModel(
+            2,
+            null,
+            null,
+            RiskLevel.Low,
+            IncidentStatus.Open,
+            "Port opened",
+            "Low",
+            "Open",
+            1,
+            "Target unavailable",
+            "Not recorded",
+            "Not recorded",
+            "No sensitive details.");
+
+        Assert.False(noServiceModel.CanCreateIncidentAiHandoff);
+        noServiceModel.CreateSelectedIncidentAiHandoff();
+        Assert.Equal("AI handoff is not connected for this dashboard session.", noServiceModel.StatusMessage);
+
+        var disabledSettings = new AccessWatchSettings { AiMode = AiMode.Off };
+        var disabledModel = new DashboardShellViewModel(new FakeRepository(), settings: disabledSettings, aiHandoffService: new ManualAiHandoffService());
+        disabledModel.SelectedIncident = new DashboardIncidentItemViewModel(
+            1,
+            null,
+            null,
+            RiskLevel.Low,
+            IncidentStatus.Open,
+            "Port opened",
+            "Low",
+            "Open",
+            1,
+            "Target unavailable",
+            "Not recorded",
+            "Not recorded",
+            "No sensitive details.");
+
+        Assert.False(disabledModel.CanCreateIncidentAiHandoff);
+        disabledModel.CreateSelectedIncidentAiHandoff();
+
+        Assert.Equal("Turn on AI handoff in Settings before creating a review packet.", disabledModel.StatusMessage);
     }
     /// <summary>
     /// Verifies event activity explains the owning application and the reason AccessWatch flagged it.

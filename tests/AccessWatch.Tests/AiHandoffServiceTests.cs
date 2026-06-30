@@ -63,6 +63,67 @@ public sealed class AiHandoffServiceTests
     }
 
     /// <summary>
+    /// Verifies grouped incidents are converted to redacted AI review packets.
+    /// </summary>
+    [Fact]
+    public void CreateRedactedIncidentSummary_RedactsGroupedIncidentIdentifiers()
+    {
+        var service = new ManualAiHandoffService();
+        var incident = new Incident
+        {
+            Title = "Camera activated",
+            Summary = "Visual Studio used camera near 192.168.1.25 from AA:BB:CC:DD:EE:FF.",
+            MainDeviceId = 12,
+            MainApplicationId = 34,
+            RiskLevel = RiskLevel.High,
+            Status = IncidentStatus.Open,
+            EventCount = 3
+        };
+
+        var json = service.CreateRedactedIncidentSummary(incident);
+
+        Assert.DoesNotContain("192.168.1.25", json);
+        Assert.DoesNotContain("AA:BB:CC:DD:EE:FF", json);
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        Assert.Equal("GroupedAccessWatchIncident", root.GetProperty("incidentType").GetString());
+        Assert.Equal("Camera activated", root.GetProperty("title").GetString());
+        Assert.Equal("High", root.GetProperty("riskLevel").GetString());
+        Assert.Equal("Open", root.GetProperty("status").GetString());
+        Assert.Equal(3, root.GetProperty("eventCount").GetInt32());
+        Assert.True(root.GetProperty("hasPrimaryDevice").GetBoolean());
+        Assert.True(root.GetProperty("hasPrimaryApplication").GetBoolean());
+        Assert.Contains("[ip-address]", root.GetProperty("summary").GetString());
+        Assert.Contains("[mac-address]", root.GetProperty("summary").GetString());
+        Assert.Contains("what the user should verify", root.GetProperty("suggestedReview").GetString());
+    }
+
+    /// <summary>
+    /// Verifies grouped incident handoff packets use safe fallback text.
+    /// </summary>
+    [Fact]
+    public void CreateRedactedIncidentSummary_UsesGroupedIncidentFallbackText()
+    {
+        var service = new ManualAiHandoffService();
+        var incident = new Incident
+        {
+            Title = "  ",
+            Summary = "",
+            RiskLevel = RiskLevel.Low,
+            Status = IncidentStatus.Open
+        };
+
+        var json = service.CreateRedactedIncidentSummary(incident);
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        Assert.Equal("Untitled incident", root.GetProperty("title").GetString());
+        Assert.Equal("No incident summary recorded yet.", root.GetProperty("summary").GetString());
+        Assert.False(root.GetProperty("hasPrimaryDevice").GetBoolean());
+        Assert.False(root.GetProperty("hasPrimaryApplication").GetBoolean());
+    }
+
+    /// <summary>
     /// Verifies known remote-access ports map to redacted service names.
     /// </summary>
     /// <param name="port">Target port.</param>
