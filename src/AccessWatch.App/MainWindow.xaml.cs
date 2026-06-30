@@ -16,6 +16,7 @@ namespace AccessWatch.App;
 public partial class MainWindow : Window
 {
     private readonly DashboardShellViewModel viewModel;
+    private readonly WindowsTrayNotificationService notificationService;
 
     /// <summary>
     /// Initializes the dashboard shell window.
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         var repository = new SqlServerAccessWatchRepository(new AccessWatchDatabaseOptions());
+        notificationService = new WindowsTrayNotificationService();
         var coordinator = new ServiceScanCoordinator(
             repository,
             new ListeningPortScanner(new AppIdentityResolver()),
@@ -31,6 +33,7 @@ public partial class MainWindow : Window
             new RiskScoringService(),
             new AccessWatchSettings(),
             new NotificationMessageFactory(),
+            notificationService,
             NullLogger<ServiceScanCoordinator>.Instance);
         viewModel = new DashboardShellViewModel(repository, async cancellationToken =>
         {
@@ -39,6 +42,12 @@ public partial class MainWindow : Window
         });
         DataContext = viewModel;
         Loaded += OnLoaded;
+        Closed += OnClosed;
+    }
+
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        notificationService.Dispose();
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

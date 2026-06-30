@@ -80,6 +80,9 @@ public sealed class ServiceScanCoordinatorTests
         Assert.Equal(3389, networkEvent.DestinationPort);
         Assert.True(networkEvent.WasUserNotified);
         Assert.Contains("Remote Desktop", networkEvent.DetailsJson);
+        var notification = Assert.Single(repository.Notifications);
+        Assert.Equal(RiskLevel.High, notification.RiskLevel);
+        Assert.Equal(NotificationAction.AskBeforeAllow, notification.Action);
     }
 
     /// <summary>
@@ -127,6 +130,7 @@ public sealed class ServiceScanCoordinatorTests
         Assert.False(networkEvent.WasUserNotified);
         Assert.Null(networkEvent.ApplicationId);
         Assert.Contains("Unknown application", networkEvent.DetailsJson);
+        Assert.Empty(repository.Notifications);
     }
 
     /// <summary>
@@ -199,6 +203,7 @@ public sealed class ServiceScanCoordinatorTests
             new RiskScoringService(),
             new AccessWatchSettings(),
             new NotificationMessageFactory(),
+            repository,
             NullLogger<ServiceScanCoordinator>.Instance);
     }
 
@@ -232,7 +237,7 @@ public sealed class ServiceScanCoordinatorTests
         }
     }
 
-    private sealed class FakeRepository : IAccessWatchRepository
+    private sealed class FakeRepository : IAccessWatchRepository, ITrayNotificationService
     {
         public bool WasInitialized { get; private set; }
 
@@ -244,7 +249,15 @@ public sealed class ServiceScanCoordinatorTests
 
         public List<NetworkEvent> Events { get; } = [];
 
+        public List<NotificationMessage> Notifications { get; } = [];
+
         public List<NetworkDevice> Devices { get; } = [];
+
+        public Task ShowAsync(NotificationMessage message, CancellationToken cancellationToken)
+        {
+            Notifications.Add(message);
+            return Task.CompletedTask;
+        }
 
         public Task InitializeAsync(CancellationToken cancellationToken)
         {

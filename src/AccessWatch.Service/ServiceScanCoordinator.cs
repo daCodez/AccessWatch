@@ -15,6 +15,7 @@ public sealed class ServiceScanCoordinator
     private readonly IRiskScoringService riskScoringService;
     private readonly AccessWatchSettings settings;
     private readonly NotificationMessageFactory notificationFactory;
+    private readonly ITrayNotificationService trayNotificationService;
     private readonly ILogger<ServiceScanCoordinator> logger;
 
     /// <summary>
@@ -26,6 +27,7 @@ public sealed class ServiceScanCoordinator
     /// <param name="riskScoringService">Risk scoring service.</param>
     /// <param name="settings">AccessWatch settings.</param>
     /// <param name="notificationFactory">Notification message factory.</param>
+    /// <param name="trayNotificationService">User-facing notification delivery service.</param>
     /// <param name="logger">Logger for scan diagnostics.</param>
     public ServiceScanCoordinator(
         IAccessWatchRepository repository,
@@ -34,6 +36,7 @@ public sealed class ServiceScanCoordinator
         IRiskScoringService riskScoringService,
         AccessWatchSettings settings,
         NotificationMessageFactory notificationFactory,
+        ITrayNotificationService trayNotificationService,
         ILogger<ServiceScanCoordinator> logger)
     {
         this.repository = repository;
@@ -42,6 +45,7 @@ public sealed class ServiceScanCoordinator
         this.riskScoringService = riskScoringService;
         this.settings = settings;
         this.notificationFactory = notificationFactory;
+        this.trayNotificationService = trayNotificationService;
         this.logger = logger;
     }
 
@@ -106,6 +110,11 @@ public sealed class ServiceScanCoordinator
             var eventType = isNewPort ? "NewListeningPort" : "ListeningPortApplicationChanged";
             var networkEvent = CreateListeningPortEvent(port, applicationId, assessment, eventType, notification.Action != NotificationAction.SilentLog);
             await repository.AddNetworkEventAsync(networkEvent, cancellationToken);
+            if (notification.Action != NotificationAction.SilentLog)
+            {
+                await trayNotificationService.ShowAsync(notification, cancellationToken);
+            }
+
             createdEvents++;
 
             logger.LogInformation(
