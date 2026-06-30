@@ -125,10 +125,10 @@
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding DevicesVisibility}">
                     <DataGrid ItemsSource="{Binding Devices}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Device" Binding="{Binding Name}" Width="1.5*" />
-                            <DataGridTextColumn Header="IP address" Binding="{Binding IpAddress}" Width="120" />
+                            <DataGridTextColumn Header="Device" Binding="{Binding Name}" Width="220" MinWidth="180" />
+                            <DataGridTextColumn Header="IP address" Binding="{Binding IpAddress}" Width="130" />
                             <DataGridTextColumn Header="MAC" Binding="{Binding MacAddress}" Width="150" />
-                            <DataGridTextColumn Header="Vendor" Binding="{Binding Vendor}" Width="1.2*" />
+                            <DataGridTextColumn Header="Vendor" Binding="{Binding Vendor}" Width="150" />
                             <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
                             <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
                             <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />

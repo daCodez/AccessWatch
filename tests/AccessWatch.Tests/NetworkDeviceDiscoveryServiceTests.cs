@@ -33,6 +33,28 @@ public sealed class NetworkDeviceDiscoveryServiceTests
     }
 
     /// <summary>
+    /// Verifies ARP broadcast and multicast rows are not shown as real devices.
+    /// </summary>
+    [Fact]
+    public void ParseArpOutput_FiltersBroadcastAndMulticastRows()
+    {
+        var service = new NetworkDeviceDiscoveryService(new FakeArpTableRunner(string.Empty), new FakeHostnameResolver());
+        var output = string.Join(Environment.NewLine,
+            "  172.31.191.255       ff-ff-ff-ff-ff-ff     static",
+            "  255.255.255.255      ff-ff-ff-ff-ff-ff     static",
+            "  224.0.0.251          01-00-5e-00-00-fb     static",
+            "  239.255.255.250      01-00-5e-7f-ff-fa     static",
+            "  999.999.999.999      00-11-22-33-44-55     dynamic",
+            "  192.168.1.25         02-ac-ce-55-20-25     dynamic");
+
+        var devices = service.ParseArpOutput(output, DateTimeOffset.UnixEpoch);
+
+        var device = Assert.Single(devices);
+        Assert.Equal("192.168.1.25", device.IpAddress);
+        Assert.Equal("02:AC:CE:55:20:25", device.MacAddress);
+    }
+
+    /// <summary>
     /// Verifies discovery delegates to the ARP runner and sorts devices consistently.
     /// </summary>
     [Fact]

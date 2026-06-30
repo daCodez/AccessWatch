@@ -71,10 +71,17 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
                 continue;
             }
 
+            var ipAddress = match.Groups["ip"].Value;
+            var macAddress = match.Groups["mac"].Value.Replace('-', ':').ToUpperInvariant();
+            if (!IsUsableDeviceAddress(ipAddress, macAddress))
+            {
+                continue;
+            }
+
             devices.Add(new NetworkDevice
             {
-                IpAddress = match.Groups["ip"].Value,
-                MacAddress = match.Groups["mac"].Value.Replace('-', ':').ToUpperInvariant(),
+                IpAddress = ipAddress,
+                MacAddress = macAddress,
                 DeviceTypeGuess = "Unknown",
                 TrustStatus = TrustStatus.Unknown,
                 RiskStatus = RiskStatus.Normal,
@@ -87,6 +94,23 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
         return devices
             .OrderBy(device => device.IpAddress, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static bool IsUsableDeviceAddress(string ipAddress, string macAddress)
+    {
+        if (!IPAddress.TryParse(ipAddress, out var parsedAddress))
+        {
+            return false;
+        }
+
+        var bytes = parsedAddress.GetAddressBytes();
+        return !IPAddress.IsLoopback(parsedAddress)
+            && !parsedAddress.Equals(IPAddress.Any)
+            && !parsedAddress.Equals(IPAddress.None)
+            && bytes[0] < 224
+            && bytes[3] != 255
+            && !string.Equals(macAddress, "FF:FF:FF:FF:FF:FF", StringComparison.OrdinalIgnoreCase)
+            && !macAddress.StartsWith("01:00:5E:", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<IReadOnlyList<NetworkDevice>> AddHostnamesAsync(IReadOnlyList<NetworkDevice> devices, CancellationToken cancellationToken)
