@@ -123,32 +123,50 @@
                 </Border>
 
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding DevicesVisibility}">
-                    <DataGrid ItemsSource="{Binding Devices}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Device" Binding="{Binding Name}" Width="220" MinWidth="180" />
-                            <DataGridTextColumn Header="IP address" Binding="{Binding IpAddress}" Width="130" />
-                            <DataGridTextColumn Header="MAC" Binding="{Binding MacAddress}" Width="150" />
-                            <DataGridTextColumn Header="Vendor" Binding="{Binding Vendor}" Width="150" />
-                            <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
-                            <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
-                            <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
-                            <DataGridTextColumn Header="Details" Binding="{Binding Detail}" Width="2*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <DataGrid ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Device" Binding="{Binding Name}" Width="220" MinWidth="180" />
+                                <DataGridTextColumn Header="IP address" Binding="{Binding IpAddress}" Width="130" />
+                                <DataGridTextColumn Header="MAC" Binding="{Binding MacAddress}" Width="150" />
+                                <DataGridTextColumn Header="Vendor" Binding="{Binding Vendor}" Width="150" />
+                                <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
+                                <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
+                                <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
+                                <DataGridTextColumn Header="Details" Binding="{Binding Detail}" Width="2*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
+                            <TextBlock Text="{Binding SelectedDeviceDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" />
+                        </Border>
+                    </Grid>
                 </Border>
 
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding ApplicationsVisibility}">
-                    <DataGrid ItemsSource="{Binding Applications}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Application" Binding="{Binding Name}" Width="1.5*" />
-                            <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="130" />
-                            <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="1.2*" />
-                            <DataGridTextColumn Header="Signature" Binding="{Binding SignatureStatus}" Width="150" />
-                            <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
-                            <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
-                            <DataGridTextColumn Header="Identity" Binding="{Binding Detail}" Width="2.5*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <DataGrid ItemsSource="{Binding Applications}" SelectedItem="{Binding SelectedApplication, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Application" Binding="{Binding Name}" Width="1.5*" />
+                                <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="130" />
+                                <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="1.2*" />
+                                <DataGridTextColumn Header="Signature" Binding="{Binding SignatureStatus}" Width="150" />
+                                <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
+                                <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
+                                <DataGridTextColumn Header="Identity" Binding="{Binding Detail}" Width="2.5*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
+                            <TextBlock Text="{Binding SelectedApplicationDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" />
+                        </Border>
+                    </Grid>
                 </Border>
 
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding PortsVisibility}">

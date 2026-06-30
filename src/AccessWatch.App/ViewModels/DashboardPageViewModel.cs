@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Net;
 using System.Text.Json;
 using AccessWatch.Core;
 using AppIdentity = AccessWatch.Core.ApplicationIdentity;
@@ -100,6 +101,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private string settingsStatus = "Settings match the running configuration.";
     private string statusMessage = "Connect the service or run a scan to load AccessWatch activity.";
     private string activeOperation = string.Empty;
+    private DashboardDeviceItemViewModel? selectedDevice;
+    private DashboardApplicationItemViewModel? selectedApplication;
     private bool isLoading;
 
     /// <summary>
@@ -286,6 +289,58 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets recent applications loaded from storage.
     /// </summary>
     public ObservableCollection<DashboardApplicationItemViewModel> Applications { get; } = [];
+
+    /// <summary>
+    /// Gets or sets the selected device shown in the detail panel.
+    /// </summary>
+    public DashboardDeviceItemViewModel? SelectedDevice
+    {
+        get => selectedDevice;
+        set
+        {
+            if (Equals(selectedDevice, value))
+            {
+                return;
+            }
+
+            selectedDevice = value;
+            OnPropertyChanged(nameof(SelectedDevice));
+            OnPropertyChanged(nameof(SelectedDeviceDetail));
+        }
+    }
+
+    /// <summary>
+    /// Gets plain-English details for the selected device.
+    /// </summary>
+    public string SelectedDeviceDetail => selectedDevice is null
+        ? "Select a device to see its name, address, trust, and risk context."
+        : $"Device: {selectedDevice.Name} | IP: {selectedDevice.IpAddress} | MAC: {selectedDevice.MacAddress} | Vendor: {selectedDevice.Vendor} | Trust: {selectedDevice.TrustStatus} | Risk: {selectedDevice.RiskStatus} | Details: {selectedDevice.Detail}";
+
+    /// <summary>
+    /// Gets or sets the selected application shown in the detail panel.
+    /// </summary>
+    public DashboardApplicationItemViewModel? SelectedApplication
+    {
+        get => selectedApplication;
+        set
+        {
+            if (Equals(selectedApplication, value))
+            {
+                return;
+            }
+
+            selectedApplication = value;
+            OnPropertyChanged(nameof(SelectedApplication));
+            OnPropertyChanged(nameof(SelectedApplicationDetail));
+        }
+    }
+
+    /// <summary>
+    /// Gets plain-English details for the selected application.
+    /// </summary>
+    public string SelectedApplicationDetail => selectedApplication is null
+        ? "Select an application to see publisher, signature, trust, and executable context."
+        : $"Application: {selectedApplication.Name} | Process: {selectedApplication.ProcessName} | Publisher: {selectedApplication.Publisher} | Signature: {selectedApplication.SignatureStatus} | Trust: {selectedApplication.TrustStatus} | Identity: {selectedApplication.Detail}";
 
     /// <summary>
     /// Gets recent listening ports loaded from storage.
@@ -611,7 +666,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         foreach (var device in devices.Take(100))
         {
             Devices.Add(new DashboardDeviceItemViewModel(
-                FirstUseful(device.Hostname, device.IpAddress, "Unknown device"),
+                DisplayDeviceName(device),
                 device.IpAddress,
                 FirstUseful(device.MacAddress, "MAC address unavailable"),
                 FirstUseful(device.Vendor, "Vendor unavailable"),
@@ -620,6 +675,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 FormatTimestamp(device.LastSeenUtc),
                 BuildDeviceDetail(device)));
         }
+
+        SelectedDevice = Devices.FirstOrDefault();
     }
 
     private void ReplaceApplications(IReadOnlyList<AppIdentity> applications)
@@ -636,6 +693,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 FormatTimestamp(application.LastSeenUtc),
                 BuildApplicationIdentity(application, application.ProcessName)));
         }
+
+        SelectedApplication = Applications.FirstOrDefault();
     }
 
     private void ReplacePorts(IReadOnlyList<ListeningPort> ports)
@@ -713,7 +772,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             {
                 RecentActivity.Add(new DashboardActivityItemViewModel(
                     device.TrustStatus.ToString(),
-                    device.Hostname ?? device.IpAddress,
+                    DisplayDeviceName(device),
                     $"Device observed at {device.IpAddress}.",
                     device.MacAddress ?? "MAC address unavailable",
                     device.Vendor ?? "Device vendor unavailable",
@@ -733,10 +792,26 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
         if (device is not null)
         {
-            parts.Add(FirstUseful(device.Hostname, device.IpAddress, "Unknown device"));
+            parts.Add(DisplayDeviceName(device));
         }
 
         return parts.Count == 0 ? "Target unavailable" : string.Join(" on ", parts);
+    }
+
+    private static string DisplayDeviceName(NetworkDevice device)
+    {
+        return IsUsefulDeviceName(device.Hostname) ? device.Hostname!.Trim() : "Name unavailable";
+    }
+
+    private static bool IsUsefulDeviceName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var trimmed = value.Trim();
+        return !IPAddress.TryParse(trimmed, out _) && !trimmed.Contains(":", StringComparison.Ordinal);
     }
 
     private static string BuildDeviceDetail(NetworkDevice device)
@@ -780,7 +855,9 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             ? string.Empty
             : $" {networkEvent.Protocol} {networkEvent.DestinationIp ?? "local"}:{networkEvent.DestinationPort}.";
         var reachability = string.IsNullOrWhiteSpace(details.Reachability) ? string.Empty : $" {details.Reachability}.";
-        var sourceDeviceName = FirstUseful(device?.Hostname, device?.IpAddress, details.DeviceName);
+        var sourceDeviceName = device is null
+            ? FirstUseful(details.DeviceName, networkEvent.SourceIp)
+            : FirstUseful(DisplayDeviceName(device), networkEvent.SourceIp);
         var sourceDevice = string.IsNullOrWhiteSpace(sourceDeviceName) ? string.Empty : $"Device {sourceDeviceName}. ";
         var whatHappened = FirstUseful(details.WhatHappened, FriendlyEventType(networkEvent.EventType));
 

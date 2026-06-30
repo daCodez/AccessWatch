@@ -95,6 +95,10 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("SelectedValue=\"{Binding SelectedAiMode, Mode=TwoWay}\"", xaml);
         Assert.Contains("Click=\"OnApplySettingsClick\"", xaml);
         Assert.Contains("Click=\"OnResetSettingsClick\"", xaml);
+        Assert.Contains("SelectedItem=\"{Binding SelectedDevice, Mode=TwoWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedDeviceDetail}\"", xaml);
+        Assert.Contains("SelectedItem=\"{Binding SelectedApplication, Mode=TwoWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedApplicationDetail}\"", xaml);
     }
 
     /// <summary>
@@ -434,7 +438,7 @@ public sealed class NotificationAndViewModelTests
             },
             device =>
             {
-                Assert.Equal("192.168.1.77", device.Name);
+                Assert.Equal("Name unavailable", device.Name);
                 Assert.Equal("MAC address unavailable", device.MacAddress);
                 Assert.Equal("Vendor unavailable", device.Vendor);
                 Assert.Equal("Not recorded", device.LastSeen);
@@ -470,6 +474,94 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("Signature status unknown", application.SignatureStatus);
             });
     }
+
+    /// <summary>
+    /// Verifies selected inventory rows expose a plain-English detail panel.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_SelectedInventoryRows_UpdateDetailPanels()
+    {
+        var repository = new FakeRepository
+        {
+            Devices =
+            [
+                new NetworkDevice
+                {
+                    Hostname = "office-laptop",
+                    IpAddress = "192.168.1.25",
+                    MacAddress = "02:AC:CE:55:20:25",
+                    Vendor = "AccessWatch Lab",
+                    DeviceTypeGuess = "Windows workstation",
+                    TrustStatus = TrustStatus.KnownWatched,
+                    RiskStatus = RiskStatus.Suspicious
+                }
+            ],
+            Applications =
+            [
+                new AppIdentity
+                {
+                    DisplayName = "Visual Studio",
+                    ProcessName = "devenv",
+                    Publisher = "Microsoft Corporation",
+                    SignatureStatus = SignatureStatus.TrustedSigned,
+                    FilePath = @"C:\Program Files\Microsoft Visual Studio\Common7\IDE\devenv.exe",
+                    TrustStatus = TrustStatus.Unknown
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        await model.LoadAsync(CancellationToken.None);
+        model.SelectedDevice = Assert.Single(model.Devices);
+        model.SelectedApplication = Assert.Single(model.Applications);
+
+        Assert.Equal("office-laptop", model.SelectedDevice?.Name);
+        Assert.Equal("Visual Studio", model.SelectedApplication?.Name);
+        Assert.Contains("office-laptop", model.SelectedDeviceDetail);
+        Assert.Contains("192.168.1.25", model.SelectedDeviceDetail);
+        Assert.Contains("Visual Studio", model.SelectedApplicationDetail);
+        Assert.Contains("Microsoft Corporation", model.SelectedApplicationDetail);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedDeviceDetail), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedApplicationDetail), changed);
+
+        changed.Clear();
+        model.SelectedDevice = null;
+        model.SelectedApplication = null;
+
+        Assert.Contains("Select a device", model.SelectedDeviceDetail);
+        Assert.Contains("Select an application", model.SelectedApplicationDetail);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedDeviceDetail), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedApplicationDetail), changed);
+    }
+
+    /// <summary>
+    /// Verifies weak device-name values are not presented as real device names.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_HidesWeakDeviceNames()
+    {
+        var repository = new FakeRepository
+        {
+            Devices =
+            [
+                new NetworkDevice { Hostname = "192.168.1.30", IpAddress = "192.168.1.30", MacAddress = "02:AC:CE:55:30:30" },
+                new NetworkDevice { Hostname = "printer:raw", IpAddress = "192.168.1.31", MacAddress = "02:AC:CE:55:30:31" },
+                new NetworkDevice { Hostname = "printer-den", IpAddress = "192.168.1.32", MacAddress = "02:AC:CE:55:30:32" }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.Devices,
+            device => Assert.Equal("Name unavailable", device.Name),
+            device => Assert.Equal("Name unavailable", device.Name),
+            device => Assert.Equal("printer-den", device.Name));
+    }
+
     /// <summary>
     /// Verifies Settings exposes the running protection and AI handoff configuration.
     /// </summary>
@@ -928,6 +1020,7 @@ public sealed class NotificationAndViewModelTests
         var activity = Assert.Single(model.RecentActivity);
         Assert.Equal("Unknown", activity.Kind);
         Assert.Contains("192.168.1.10", activity.Summary);
+        Assert.Equal("Name unavailable", activity.ApplicationName);
         Assert.Equal("AA:BB:CC:DD:EE:FF", activity.Detail);
     }
 
