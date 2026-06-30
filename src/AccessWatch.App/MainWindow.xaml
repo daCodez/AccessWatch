@@ -180,6 +180,55 @@
                         </DataGrid.Columns>
                     </DataGrid>
                 </Border>
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding SettingsVisibility}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Protection mode" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" VerticalAlignment="Center" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding ProtectionModeOptions}" SelectedValue="{Binding SelectedProtectionMode, Mode=TwoWay}" SelectedValuePath="Value" DisplayMemberPath="Name" Height="32" MinWidth="260" HorizontalAlignment="Left" />
+                        </Grid>
+
+                        <Grid Grid.Row="1" Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="AI handoff" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" VerticalAlignment="Center" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding AiModeOptions}" SelectedValue="{Binding SelectedAiMode, Mode=TwoWay}" SelectedValuePath="Value" DisplayMemberPath="Name" Height="32" MinWidth="260" HorizontalAlignment="Left" />
+                        </Grid>
+
+                        <StackPanel Grid.Row="2">
+                            <Grid Margin="0,0,0,18">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="220" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Running protection" FontSize="12" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding CurrentProtectionMode}" FontSize="18" FontWeight="SemiBold" Foreground="#24292F" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Running AI handoff" FontSize="12" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding CurrentAiMode}" FontSize="18" FontWeight="SemiBold" Foreground="#24292F" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="{Binding SettingsStatus}" Foreground="#57606A" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Apply settings" Width="120" Height="32" Margin="0,0,8,0" Click="OnApplySettingsClick" />
+                                <Button Content="Reset" Width="88" Height="32" Click="OnResetSettingsClick" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="24" Visibility="{Binding PlaceholderVisibility}">
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                         <TextBlock Text="This section is next." FontSize="18" FontWeight="SemiBold" Foreground="#24292F" HorizontalAlignment="Center" />

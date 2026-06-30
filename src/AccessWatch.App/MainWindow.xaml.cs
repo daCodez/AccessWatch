@@ -27,12 +27,13 @@ public partial class MainWindow : Window
         var repository = new SqlServerAccessWatchRepository(new AccessWatchDatabaseOptions());
         notificationService = new WindowsTrayNotificationService();
         var notificationFactory = new NotificationMessageFactory();
+        var settings = new AccessWatchSettings();
         var coordinator = new ServiceScanCoordinator(
             repository,
             new ListeningPortScanner(new AppIdentityResolver()),
             new NetworkDeviceDiscoveryService(),
             new RiskScoringService(),
-            new AccessWatchSettings(),
+            settings,
             notificationFactory,
             notificationService,
             NullLogger<ServiceScanCoordinator>.Instance);
@@ -44,7 +45,8 @@ public partial class MainWindow : Window
                 await coordinator.InitializeAsync(cancellationToken);
                 return await coordinator.RunListeningPortScanAsync(cancellationToken);
             },
-            simulator.TriggerDemoEventAsync);
+            simulator.TriggerDemoEventAsync,
+            settings);
         DataContext = viewModel;
         Loaded += OnLoaded;
         Closed += OnClosed;
@@ -73,6 +75,16 @@ public partial class MainWindow : Window
     private async void OnSimulateEventClick(object sender, RoutedEventArgs e)
     {
         await viewModel.RunSimulationAsync(CancellationToken.None);
+    }
+
+    private void OnApplySettingsClick(object sender, RoutedEventArgs e)
+    {
+        viewModel.ApplySettings();
+    }
+
+    private void OnResetSettingsClick(object sender, RoutedEventArgs e)
+    {
+        viewModel.ResetSettingsSelections();
     }
 }
 

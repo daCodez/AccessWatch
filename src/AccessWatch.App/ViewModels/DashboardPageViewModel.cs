@@ -81,6 +81,11 @@ public sealed record DashboardIncidentItemViewModel(
     string Summary);
 
 /// <summary>
+/// Represents a dashboard settings choice.
+/// </summary>
+public sealed record DashboardSettingsOptionViewModel(string Value, string Name, string Summary);
+
+/// <summary>
 /// Provides dashboard data loaded from the AccessWatch repository.
 /// </summary>
 public sealed class DashboardShellViewModel : INotifyPropertyChanged
@@ -88,7 +93,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private readonly IAccessWatchRepository? repository;
     private readonly Func<CancellationToken, Task<int>>? scanAsync;
     private readonly Func<CancellationToken, Task<int>>? simulateAsync;
+    private readonly AccessWatchSettings settings;
     private DashboardPageViewModel selectedPage;
+    private string selectedProtectionMode;
+    private string selectedAiMode;
+    private string settingsStatus = "Settings match the running configuration.";
     private string statusMessage = "Connect the service or run a scan to load AccessWatch activity.";
     private string activeOperation = string.Empty;
     private bool isLoading;
@@ -98,6 +107,9 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public DashboardShellViewModel()
     {
+        settings = new AccessWatchSettings();
+        selectedProtectionMode = settings.ProtectionMode.ToString();
+        selectedAiMode = settings.AiMode.ToString();
         selectedPage = Pages[0];
     }
 
@@ -107,14 +119,19 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <param name="repository">Repository used to load dashboard data.</param>
     /// <param name="scanAsync">Optional scan action that persists fresh observations.</param>
     /// <param name="simulateAsync">Optional simulator action that persists a demo event.</param>
+    /// <param name="settings">Mutable settings used by dashboard actions in this app session.</param>
     public DashboardShellViewModel(
         IAccessWatchRepository repository,
         Func<CancellationToken, Task<int>>? scanAsync = null,
-        Func<CancellationToken, Task<int>>? simulateAsync = null)
+        Func<CancellationToken, Task<int>>? simulateAsync = null,
+        AccessWatchSettings? settings = null)
     {
         this.repository = repository;
         this.scanAsync = scanAsync;
         this.simulateAsync = simulateAsync;
+        this.settings = settings ?? new AccessWatchSettings();
+        selectedProtectionMode = this.settings.ProtectionMode.ToString();
+        selectedAiMode = this.settings.AiMode.ToString();
         selectedPage = Pages[0];
     }
 
@@ -158,12 +175,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsApplicationsSelected));
             OnPropertyChanged(nameof(IsPortsSelected));
             OnPropertyChanged(nameof(IsIncidentsSelected));
+            OnPropertyChanged(nameof(IsSettingsSelected));
             OnPropertyChanged(nameof(IsPlaceholderSelected));
             OnPropertyChanged(nameof(OverviewVisibility));
             OnPropertyChanged(nameof(DevicesVisibility));
             OnPropertyChanged(nameof(ApplicationsVisibility));
             OnPropertyChanged(nameof(PortsVisibility));
             OnPropertyChanged(nameof(IncidentsVisibility));
+            OnPropertyChanged(nameof(SettingsVisibility));
             OnPropertyChanged(nameof(PlaceholderVisibility));
         }
     }
@@ -204,9 +223,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public bool IsIncidentsSelected => SelectedPageTitle == "Incidents";
 
     /// <summary>
+    /// Gets whether the settings page is selected.
+    /// </summary>
+    public bool IsSettingsSelected => SelectedPageTitle == "Settings";
+
+    /// <summary>
     /// Gets whether the selected page is not yet implemented.
     /// </summary>
-    public bool IsPlaceholderSelected => !IsOverviewSelected && !IsDevicesSelected && !IsApplicationsSelected && !IsPortsSelected && !IsIncidentsSelected;
+    public bool IsPlaceholderSelected => !IsOverviewSelected && !IsDevicesSelected && !IsApplicationsSelected && !IsPortsSelected && !IsIncidentsSelected && !IsSettingsSelected;
 
     /// <summary>
     /// Gets WPF visibility text for the overview panel.
@@ -232,6 +256,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets WPF visibility text for the incidents panel.
     /// </summary>
     public string IncidentsVisibility => ToVisibility(IsIncidentsSelected);
+
+    /// <summary>
+    /// Gets WPF visibility text for the settings panel.
+    /// </summary>
+    public string SettingsVisibility => ToVisibility(IsSettingsSelected);
 
     /// <summary>
     /// Gets WPF visibility text for the placeholder panel.
@@ -267,6 +296,79 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets recent incidents loaded from storage.
     /// </summary>
     public ObservableCollection<DashboardIncidentItemViewModel> Incidents { get; } = [];
+
+    /// <summary>
+    /// Gets protection mode choices shown on the Settings page.
+    /// </summary>
+    public IReadOnlyList<DashboardSettingsOptionViewModel> ProtectionModeOptions { get; } =
+    [
+        new("Quiet", "Quiet", "Minimize interruptions and keep medium-risk activity in history."),
+        new("Balanced", "Balanced", "Default low-noise notifications for activity that deserves attention."),
+        new("Strict", "Strict", "Notify more often when application or network activity is uncertain."),
+        new("Lockdown", "Lockdown", "Prepare for strongest enforcement as blocking controls come online.")
+    ];
+
+    /// <summary>
+    /// Gets AI handoff choices shown on the Settings page.
+    /// </summary>
+    public IReadOnlyList<DashboardSettingsOptionViewModel> AiModeOptions { get; } =
+    [
+        new("Off", "Off", "Keep incident review fully local with no AI handoff."),
+        new("ManualChatGptCopy", "Manual ChatGPT copy", "Create redacted incident summaries for manual review."),
+        new("LocalAi", "Local AI", "Reserve local model assistance for a future release."),
+        new("OpenAiApi", "OpenAI API", "Reserve connected AI assistance for a future release.")
+    ];
+
+    /// <summary>
+    /// Gets or sets the selected protection mode value.
+    /// </summary>
+    public string SelectedProtectionMode
+    {
+        get => selectedProtectionMode;
+        set
+        {
+            selectedProtectionMode = value ?? settings.ProtectionMode.ToString();
+            SettingsStatus = "Settings changed. Apply to update the running configuration.";
+            OnPropertyChanged(nameof(SelectedProtectionMode));
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the selected AI handoff mode value.
+    /// </summary>
+    public string SelectedAiMode
+    {
+        get => selectedAiMode;
+        set
+        {
+            selectedAiMode = value ?? settings.AiMode.ToString();
+            SettingsStatus = "Settings changed. Apply to update the running configuration.";
+            OnPropertyChanged(nameof(SelectedAiMode));
+        }
+    }
+
+    /// <summary>
+    /// Gets the protection mode currently used by new scans.
+    /// </summary>
+    public string CurrentProtectionMode => settings.ProtectionMode.ToString();
+
+    /// <summary>
+    /// Gets the AI handoff mode currently used by the dashboard.
+    /// </summary>
+    public string CurrentAiMode => settings.AiMode.ToString();
+
+    /// <summary>
+    /// Gets the current Settings page status.
+    /// </summary>
+    public string SettingsStatus
+    {
+        get => settingsStatus;
+        private set
+        {
+            settingsStatus = value;
+            OnPropertyChanged(nameof(SettingsStatus));
+        }
+    }
 
     /// <summary>
     /// Gets the current dashboard load status.
@@ -383,6 +485,30 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 EndLoading();
             }
         }
+    }
+
+    /// <summary>
+    /// Applies selected Settings page values to the running configuration.
+    /// </summary>
+    public void ApplySettings()
+    {
+        settings.ProtectionMode = Enum.Parse<ProtectionMode>(SelectedProtectionMode);
+        settings.AiMode = Enum.Parse<AiMode>(SelectedAiMode);
+        SettingsStatus = $"Settings applied. Running {CurrentProtectionMode} protection with {CurrentAiMode} AI handoff.";
+        OnPropertyChanged(nameof(CurrentProtectionMode));
+        OnPropertyChanged(nameof(CurrentAiMode));
+    }
+
+    /// <summary>
+    /// Restores Settings page selections to the running configuration.
+    /// </summary>
+    public void ResetSettingsSelections()
+    {
+        selectedProtectionMode = settings.ProtectionMode.ToString();
+        selectedAiMode = settings.AiMode.ToString();
+        SettingsStatus = "Settings match the running configuration.";
+        OnPropertyChanged(nameof(SelectedProtectionMode));
+        OnPropertyChanged(nameof(SelectedAiMode));
     }
 
     /// <summary>

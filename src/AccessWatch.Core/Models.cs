@@ -228,10 +228,10 @@ public sealed record TrustDecision
 public sealed record AccessWatchSettings
 {
     /// <summary>Protection mode that controls notification action in the MVP.</summary>
-    public ProtectionMode ProtectionMode { get; init; } = ProtectionMode.Balanced;
+    public ProtectionMode ProtectionMode { get; set; } = ProtectionMode.Balanced;
 
     /// <summary>AI assistance mode.</summary>
-    public AiMode AiMode { get; init; } = AiMode.ManualChatGptCopy;
+    public AiMode AiMode { get; set; } = AiMode.ManualChatGptCopy;
 }
 
 

@@ -88,6 +88,13 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Visibility=\"{Binding IncidentsVisibility}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Ports}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Incidents}\"", xaml);
+        Assert.Contains("Visibility=\"{Binding SettingsVisibility}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding ProtectionModeOptions}\"", xaml);
+        Assert.Contains("SelectedValue=\"{Binding SelectedProtectionMode, Mode=TwoWay}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding AiModeOptions}\"", xaml);
+        Assert.Contains("SelectedValue=\"{Binding SelectedAiMode, Mode=TwoWay}\"", xaml);
+        Assert.Contains("Click=\"OnApplySettingsClick\"", xaml);
+        Assert.Contains("Click=\"OnResetSettingsClick\"", xaml);
     }
 
     /// <summary>
@@ -107,12 +114,14 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.IsApplicationsSelected);
         Assert.False(model.IsPortsSelected);
         Assert.False(model.IsIncidentsSelected);
+        Assert.False(model.IsSettingsSelected);
         Assert.False(model.IsPlaceholderSelected);
         Assert.Equal("Visible", model.OverviewVisibility);
         Assert.Equal("Collapsed", model.DevicesVisibility);
         Assert.Equal("Collapsed", model.ApplicationsVisibility);
         Assert.Equal("Collapsed", model.PortsVisibility);
         Assert.Equal("Collapsed", model.IncidentsVisibility);
+        Assert.Equal("Collapsed", model.SettingsVisibility);
         Assert.Equal("Collapsed", model.PlaceholderVisibility);
 
         model.SelectedPage = model.Pages.Single(page => page.Name == "Devices");
@@ -155,12 +164,14 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.IsApplicationsSelected);
         Assert.True(model.IsPortsSelected);
         Assert.False(model.IsIncidentsSelected);
+        Assert.False(model.IsSettingsSelected);
         Assert.False(model.IsPlaceholderSelected);
         Assert.Equal("Collapsed", model.OverviewVisibility);
         Assert.Equal("Collapsed", model.DevicesVisibility);
         Assert.Equal("Collapsed", model.ApplicationsVisibility);
         Assert.Equal("Visible", model.PortsVisibility);
         Assert.Equal("Collapsed", model.IncidentsVisibility);
+        Assert.Equal("Collapsed", model.SettingsVisibility);
         Assert.Equal("Collapsed", model.PlaceholderVisibility);
         Assert.Contains(nameof(DashboardShellViewModel.IsPortsSelected), changed);
         Assert.Contains(nameof(DashboardShellViewModel.PortsVisibility), changed);
@@ -184,8 +195,20 @@ public sealed class NotificationAndViewModelTests
         model.SelectedPage = model.Pages.Single(page => page.Name == "Settings");
 
         Assert.Equal("Settings", model.SelectedPageTitle);
-        Assert.True(model.IsPlaceholderSelected);
-        Assert.Equal("Visible", model.PlaceholderVisibility);
+        Assert.False(model.IsOverviewSelected);
+        Assert.False(model.IsDevicesSelected);
+        Assert.False(model.IsApplicationsSelected);
+        Assert.False(model.IsPortsSelected);
+        Assert.False(model.IsIncidentsSelected);
+        Assert.True(model.IsSettingsSelected);
+        Assert.False(model.IsPlaceholderSelected);
+        Assert.Equal("Collapsed", model.OverviewVisibility);
+        Assert.Equal("Collapsed", model.DevicesVisibility);
+        Assert.Equal("Collapsed", model.ApplicationsVisibility);
+        Assert.Equal("Collapsed", model.PortsVisibility);
+        Assert.Equal("Collapsed", model.IncidentsVisibility);
+        Assert.Equal("Visible", model.SettingsVisibility);
+        Assert.Equal("Collapsed", model.PlaceholderVisibility);
 
         model.SelectedPage = null;
 
@@ -423,6 +446,60 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("Signature status unknown", application.SignatureStatus);
             });
     }
+    /// <summary>
+    /// Verifies Settings exposes the running protection and AI handoff configuration.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_Settings_AppliesRunningConfiguration()
+    {
+        var settings = new AccessWatchSettings
+        {
+            ProtectionMode = ProtectionMode.Strict,
+            AiMode = AiMode.Off
+        };
+        var model = new DashboardShellViewModel(new FakeRepository(), settings: settings);
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        Assert.Equal("Strict", model.SelectedProtectionMode);
+        Assert.Equal("Off", model.SelectedAiMode);
+        Assert.Equal("Strict", model.CurrentProtectionMode);
+        Assert.Equal("Off", model.CurrentAiMode);
+        Assert.Equal("Settings match the running configuration.", model.SettingsStatus);
+        Assert.Equal(["Quiet", "Balanced", "Strict", "Lockdown"], model.ProtectionModeOptions.Select(option => option.Value));
+        Assert.Equal(["Off", "ManualChatGptCopy", "LocalAi", "OpenAiApi"], model.AiModeOptions.Select(option => option.Value));
+
+        model.SelectedProtectionMode = "Lockdown";
+        model.SelectedAiMode = "OpenAiApi";
+        model.ApplySettings();
+
+        Assert.Equal(ProtectionMode.Lockdown, settings.ProtectionMode);
+        Assert.Equal(AiMode.OpenAiApi, settings.AiMode);
+        Assert.Equal("Lockdown", model.CurrentProtectionMode);
+        Assert.Equal("OpenAiApi", model.CurrentAiMode);
+        Assert.Contains("Settings applied", model.SettingsStatus);
+        Assert.Contains(nameof(DashboardShellViewModel.CurrentProtectionMode), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.CurrentAiMode), changed);
+
+        changed.Clear();
+        model.SelectedProtectionMode = null!;
+        model.SelectedAiMode = null!;
+
+        Assert.Equal("Lockdown", model.SelectedProtectionMode);
+        Assert.Equal("OpenAiApi", model.SelectedAiMode);
+
+        model.SelectedProtectionMode = "Strict";
+        model.SelectedAiMode = "Off";
+        model.ResetSettingsSelections();
+
+        Assert.Equal("Lockdown", model.SelectedProtectionMode);
+        Assert.Equal("OpenAiApi", model.SelectedAiMode);
+        Assert.Contains("match the running configuration", model.SettingsStatus);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedProtectionMode), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedAiMode), changed);
+    }
+
+
     /// <summary>
     /// Verifies ports and incidents are exposed as first-class dashboard inventories.
     /// </summary>
