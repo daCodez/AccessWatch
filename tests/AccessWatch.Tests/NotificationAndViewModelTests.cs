@@ -341,6 +341,30 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies stale broadcast and multicast rows already stored in the database are hidden from Devices.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_HidesStoredNoiseDevices()
+    {
+        var repository = new FakeRepository
+        {
+            Devices =
+            [
+                new NetworkDevice { IpAddress = "172.31.191.255", MacAddress = "FF:FF:FF:FF:FF:FF" },
+                new NetworkDevice { IpAddress = "224.0.0.251", MacAddress = "01:00:5E:00:00:FB" },
+                new NetworkDevice { Hostname = "office-laptop", IpAddress = "192.168.1.25", MacAddress = "02:AC:CE:55:20:25" }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        var device = Assert.Single(model.Devices);
+        Assert.Equal("office-laptop", device.Name);
+        Assert.Equal("192.168.1.25", device.IpAddress);
+        Assert.Equal("Loaded 0 events, 0 ports, 0 incidents, and 1 devices.", model.StatusMessage);
+    }
+    /// <summary>
     /// Verifies devices and applications are exposed as first-class dashboard inventories.
     /// </summary>
     [Fact]

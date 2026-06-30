@@ -51,4 +51,23 @@ public sealed class CoreModelTests
         Assert.Equal(0.42, confidence.Score);
         Assert.Equal("Reason", confidence.Reason);
     }
+
+    /// <summary>
+    /// Verifies device address classification excludes broadcast, multicast, and non-host rows.
+    /// </summary>
+    [Theory]
+    [InlineData("192.168.1.25", "02:AC:CE:55:20:25", true)]
+    [InlineData("192.168.1.25", null, true)]
+    [InlineData("172.31.191.255", "FF:FF:FF:FF:FF:FF", false)]
+    [InlineData("224.0.0.251", "01:00:5E:00:00:FB", false)]
+    [InlineData("239.255.255.250", "01:00:5E:7F:FF:FA", false)]
+    [InlineData("10.0.0.255", "00:11:22:33:44:55", false)]
+    [InlineData("0.0.0.0", "00:11:22:33:44:55", false)]
+    [InlineData("127.0.0.1", "00:11:22:33:44:55", false)]
+    [InlineData("fe80::1", "00:11:22:33:44:55", false)]
+    [InlineData("999.999.999.999", "00:11:22:33:44:55", false)]
+    public void DeviceAddressClassifier_IdentifiesUsableDeviceAddresses(string ipAddress, string? macAddress, bool expected)
+    {
+        Assert.Equal(expected, DeviceAddressClassifier.IsUsableDeviceAddress(ipAddress, macAddress));
+    }
 }

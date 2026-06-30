@@ -458,7 +458,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         try
         {
             await repository.InitializeAsync(cancellationToken);
-            var devices = await repository.ListRecentDevicesAsync(500, cancellationToken);
+            var storedDevices = await repository.ListRecentDevicesAsync(500, cancellationToken);
+            var devices = storedDevices.Where(device => DeviceAddressClassifier.IsUsableDeviceAddress(device.IpAddress, device.MacAddress)).ToList();
             var applications = await repository.ListRecentApplicationsAsync(500, cancellationToken);
             var ports = await repository.ListRecentPortsAsync(500, cancellationToken);
             var events = await repository.ListRecentNetworkEventsAsync(50, cancellationToken);
