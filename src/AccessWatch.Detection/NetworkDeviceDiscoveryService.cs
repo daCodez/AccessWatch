@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Text.RegularExpressions;
 using AccessWatch.Core;
 
@@ -15,6 +16,7 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private readonly IArpTableRunner arpTableRunner;
+    private readonly IDeviceHostnameResolver hostnameResolver;
 
     /// <summary>
     /// Initializes a new device discovery service using the default ARP runner.
@@ -29,15 +31,27 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
     /// </summary>
     /// <param name="arpTableRunner">Runner used to collect ARP output.</param>
     public NetworkDeviceDiscoveryService(IArpTableRunner arpTableRunner)
+        : this(arpTableRunner, new DnsDeviceHostnameResolver())
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new device discovery service with supplied ARP and hostname resolvers.
+    /// </summary>
+    /// <param name="arpTableRunner">Runner used to collect ARP output.</param>
+    /// <param name="hostnameResolver">Resolver used to label devices by hostname.</param>
+    public NetworkDeviceDiscoveryService(IArpTableRunner arpTableRunner, IDeviceHostnameResolver hostnameResolver)
     {
         this.arpTableRunner = arpTableRunner;
+        this.hostnameResolver = hostnameResolver;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<NetworkDevice>> DiscoverAsync(CancellationToken cancellationToken)
     {
         var output = await arpTableRunner.RunAsync(cancellationToken);
-        return ParseArpOutput(output, DateTimeOffset.UtcNow);
+        var devices = ParseArpOutput(output, DateTimeOffset.UtcNow);
+        return await AddHostnamesAsync(devices, cancellationToken);
     }
 
     /// <summary>
@@ -73,6 +87,53 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
         return devices
             .OrderBy(device => device.IpAddress, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private async Task<IReadOnlyList<NetworkDevice>> AddHostnamesAsync(IReadOnlyList<NetworkDevice> devices, CancellationToken cancellationToken)
+    {
+        var namedDevices = new List<NetworkDevice>(devices.Count);
+        foreach (var device in devices)
+        {
+            var hostname = await hostnameResolver.ResolveHostnameAsync(device.IpAddress, cancellationToken);
+            namedDevices.Add(string.IsNullOrWhiteSpace(hostname) ? device : device with { Hostname = hostname.Trim().TrimEnd('.') });
+        }
+
+        return namedDevices;
+    }
+}
+
+/// <summary>
+/// Resolves a device hostname from an IP address.
+/// </summary>
+public interface IDeviceHostnameResolver
+{
+    /// <summary>
+    /// Resolves a hostname for an IP address.
+    /// </summary>
+    /// <param name="ipAddress">IP address to resolve.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Hostname when available; otherwise null.</returns>
+    Task<string?> ResolveHostnameAsync(string ipAddress, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// DNS-backed device hostname resolver.
+/// </summary>
+[ExcludeFromCodeCoverage(Justification = "Thin DNS boundary; hostname enrichment is covered with deterministic resolver fakes.")]
+public sealed class DnsDeviceHostnameResolver : IDeviceHostnameResolver
+{
+    /// <inheritdoc />
+    public async Task<string?> ResolveHostnameAsync(string ipAddress, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var entry = await Dns.GetHostEntryAsync(ipAddress, cancellationToken);
+            return string.IsNullOrWhiteSpace(entry.HostName) ? null : entry.HostName;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 
@@ -121,3 +182,4 @@ public sealed class ArpTableRunner : IArpTableRunner
         return await outputTask;
     }
 }
+

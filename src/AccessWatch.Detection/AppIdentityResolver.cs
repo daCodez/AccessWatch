@@ -12,6 +12,16 @@ namespace AccessWatch.Detection;
 /// </summary>
 public sealed class AppIdentityResolver : IAppIdentityResolver
 {
+    private static readonly IReadOnlyDictionary<string, string> KnownApplicationNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["code"] = "Visual Studio Code",
+        ["devenv"] = "Visual Studio",
+        ["ms-teams"] = "Microsoft Teams",
+        ["skype"] = "Skype",
+        ["skypeapp"] = "Skype",
+        ["teams"] = "Microsoft Teams"
+    };
+
     private readonly IProcessMetadataReader processMetadataReader;
     private readonly IFileIdentityReader fileIdentityReader;
 
@@ -103,7 +113,13 @@ public sealed class AppIdentityResolver : IAppIdentityResolver
     {
         return EmptyToNull(productName)
             ?? EmptyToNull(fileDescription)
+            ?? KnownApplicationName(processName)
             ?? BuildContextualFallback(processName, filePath, publisher, signatureStatus);
+    }
+
+    private static string? KnownApplicationName(string processName)
+    {
+        return KnownApplicationNames.TryGetValue(processName.Trim(), out var friendlyName) ? friendlyName : null;
     }
 
     private static string BuildContextualFallback(string processName, string? filePath, string? publisher, SignatureStatus signatureStatus)
@@ -387,3 +403,4 @@ public sealed class WindowsFileIdentityReader : IFileIdentityReader
         }
     }
 }
+

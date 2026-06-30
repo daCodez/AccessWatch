@@ -127,6 +127,21 @@ public sealed class AppIdentityResolverTests
     }
 
     /// <summary>
+    /// Verifies known application process names use friendly product names when file metadata is sparse.
+    /// </summary>
+    [Theory]
+    [InlineData("devenv", "Visual Studio")]
+    [InlineData("Skype", "Skype")]
+    [InlineData("Teams", "Microsoft Teams")]
+    public void ChooseDisplayName_UsesKnownApplicationName_WhenFriendlyMetadataIsMissing(string processName, string expectedName)
+    {
+        var resolver = new AppIdentityResolver(new FakeProcessReader(null), new FakeFileReader(FileIdentityMetadata.Unknown));
+
+        var displayName = resolver.ChooseDisplayName(processName, null, null, null, null, SignatureStatus.Unknown);
+
+        Assert.Equal(expectedName, displayName);
+    }
+    /// <summary>
     /// Verifies process name is the final display-name fallback.
     /// </summary>
     [Fact]
@@ -169,3 +184,4 @@ public sealed class AppIdentityResolverTests
         }
     }
 }
+

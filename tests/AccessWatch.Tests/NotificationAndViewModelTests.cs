@@ -395,6 +395,7 @@ public sealed class NotificationAndViewModelTests
     {
         var repository = new FakeRepository
         {
+            Devices = [new NetworkDevice { DeviceId = 7, Hostname = "office-printer", IpAddress = "192.168.1.44" }],
             Applications =
             [
                 new AppIdentity
@@ -411,6 +412,7 @@ public sealed class NotificationAndViewModelTests
                 new NetworkEvent
                 {
                     ApplicationId = 42,
+                    SourceDeviceId = 7,
                     EventType = "NewListeningPort",
                     DestinationIp = "0.0.0.0",
                     DestinationPort = 49667,
@@ -428,6 +430,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Windows Service Host", activity.ApplicationName);
         Assert.Contains("Signed by Microsoft Windows", activity.ApplicationIdentity);
         Assert.Contains("A new listening TCP port appeared.", activity.Detail);
+        Assert.Contains("Device office-printer", activity.Detail);
         Assert.Contains("NetworkReachable", activity.Detail);
         Assert.Equal("Other devices on your network may be able to connect to this service.", activity.WhyItMatters);
         Assert.Equal("Confirm the app is expected before trusting it.", activity.SuggestedAction);

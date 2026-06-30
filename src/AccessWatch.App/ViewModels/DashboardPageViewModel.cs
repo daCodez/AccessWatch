@@ -457,7 +457,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         RecentActivity.Clear();
         foreach (var networkEvent in events.Take(8))
         {
-            RecentActivity.Add(CreateEventActivity(networkEvent, applications));
+            RecentActivity.Add(CreateEventActivity(networkEvent, applications, devices));
         }
 
         if (RecentActivity.Count == 0)
@@ -524,20 +524,23 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private static DashboardActivityItemViewModel CreateEventActivity(
         NetworkEvent networkEvent,
-        IReadOnlyList<AppIdentity> applications)
+        IReadOnlyList<AppIdentity> applications,
+        IReadOnlyList<NetworkDevice> devices)
     {
         var details = ParseEventDetails(networkEvent.DetailsJson);
         var application = applications.FirstOrDefault(candidate => candidate.ApplicationId == networkEvent.ApplicationId);
+        var device = devices.FirstOrDefault(candidate => networkEvent.SourceDeviceId is not null && candidate.DeviceId == networkEvent.SourceDeviceId.Value);
         var applicationName = FirstUseful(application?.DisplayName, details.App, "Unknown application");
         var endpoint = $"{networkEvent.Protocol} {networkEvent.DestinationIp ?? "local"}:{networkEvent.DestinationPort?.ToString() ?? "n/a"}";
         var reachability = string.IsNullOrWhiteSpace(details.Reachability) ? string.Empty : $"; {details.Reachability}";
+        var sourceDevice = device is null ? string.Empty : $"Device {FirstUseful(device.Hostname, device.IpAddress, "unknown device")}. ";
         var whatHappened = FirstUseful(details.WhatHappened, FriendlyEventType(networkEvent.EventType));
 
         return new DashboardActivityItemViewModel(
             networkEvent.RiskLevel.ToString(),
             applicationName,
             networkEvent.Summary,
-            $"{whatHappened} {endpoint}{reachability}.",
+            $"{sourceDevice}{whatHappened} {endpoint}{reachability}.",
             BuildApplicationIdentity(application, details.ProcessName),
             FirstUseful(details.WhyItMatters, DefaultWhyItMatters(networkEvent.RiskLevel)),
             FirstUseful(details.SuggestedAction, DefaultSuggestedAction(networkEvent.RiskLevel)));
