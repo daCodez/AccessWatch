@@ -151,6 +151,35 @@
                     </DataGrid>
                 </Border>
 
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding PortsVisibility}">
+                    <DataGrid ItemsSource="{Binding Ports}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Endpoint" Binding="{Binding Endpoint}" Width="150" />
+                            <DataGridTextColumn Header="Application" Binding="{Binding ApplicationName}" Width="1.5*" />
+                            <DataGridTextColumn Header="Reachability" Binding="{Binding Reachability}" Width="130" />
+                            <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
+                            <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
+                            <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="130" />
+                            <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
+                            <DataGridTextColumn Header="Identity" Binding="{Binding Detail}" Width="2*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Border>
+
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding IncidentsVisibility}">
+                    <DataGrid ItemsSource="{Binding Incidents}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Incident" Binding="{Binding Title}" Width="1.6*" />
+                            <DataGridTextColumn Header="Risk" Binding="{Binding RiskLevel}" Width="90" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                            <DataGridTextColumn Header="Events" Binding="{Binding EventCount}" Width="70" />
+                            <DataGridTextColumn Header="Target" Binding="{Binding MainTarget}" Width="1.4*" />
+                            <DataGridTextColumn Header="Started" Binding="{Binding Started}" Width="130" />
+                            <DataGridTextColumn Header="Updated" Binding="{Binding LastUpdated}" Width="130" />
+                            <DataGridTextColumn Header="Summary" Binding="{Binding Summary}" Width="2*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Border>
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="24" Visibility="{Binding PlaceholderVisibility}">
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                         <TextBlock Text="This section is next." FontSize="18" FontWeight="SemiBold" Foreground="#24292F" HorizontalAlignment="Center" />

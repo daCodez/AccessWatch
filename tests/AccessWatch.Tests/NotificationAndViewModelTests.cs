@@ -84,6 +84,10 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("IsIndeterminate=\"True\"", xaml);
         Assert.Contains("Text=\"{Binding ProgressMessage}\"", xaml);
         Assert.Contains("Click=\"OnSimulateEventClick\"", xaml);
+        Assert.Contains("Visibility=\"{Binding PortsVisibility}\"", xaml);
+        Assert.Contains("Visibility=\"{Binding IncidentsVisibility}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding Ports}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding Incidents}\"", xaml);
     }
 
     /// <summary>
@@ -101,10 +105,14 @@ public sealed class NotificationAndViewModelTests
         Assert.True(model.IsOverviewSelected);
         Assert.False(model.IsDevicesSelected);
         Assert.False(model.IsApplicationsSelected);
+        Assert.False(model.IsPortsSelected);
+        Assert.False(model.IsIncidentsSelected);
         Assert.False(model.IsPlaceholderSelected);
         Assert.Equal("Visible", model.OverviewVisibility);
         Assert.Equal("Collapsed", model.DevicesVisibility);
         Assert.Equal("Collapsed", model.ApplicationsVisibility);
+        Assert.Equal("Collapsed", model.PortsVisibility);
+        Assert.Equal("Collapsed", model.IncidentsVisibility);
         Assert.Equal("Collapsed", model.PlaceholderVisibility);
 
         model.SelectedPage = model.Pages.Single(page => page.Name == "Devices");
@@ -145,10 +153,38 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.IsOverviewSelected);
         Assert.False(model.IsDevicesSelected);
         Assert.False(model.IsApplicationsSelected);
-        Assert.True(model.IsPlaceholderSelected);
+        Assert.True(model.IsPortsSelected);
+        Assert.False(model.IsIncidentsSelected);
+        Assert.False(model.IsPlaceholderSelected);
         Assert.Equal("Collapsed", model.OverviewVisibility);
         Assert.Equal("Collapsed", model.DevicesVisibility);
         Assert.Equal("Collapsed", model.ApplicationsVisibility);
+        Assert.Equal("Visible", model.PortsVisibility);
+        Assert.Equal("Collapsed", model.IncidentsVisibility);
+        Assert.Equal("Collapsed", model.PlaceholderVisibility);
+        Assert.Contains(nameof(DashboardShellViewModel.IsPortsSelected), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.PortsVisibility), changed);
+
+        model.SelectedPage = model.Pages.Single(page => page.Name == "Incidents");
+
+        Assert.Equal("Incidents", model.SelectedPageTitle);
+        Assert.False(model.IsOverviewSelected);
+        Assert.False(model.IsDevicesSelected);
+        Assert.False(model.IsApplicationsSelected);
+        Assert.False(model.IsPortsSelected);
+        Assert.True(model.IsIncidentsSelected);
+        Assert.False(model.IsPlaceholderSelected);
+        Assert.Equal("Collapsed", model.OverviewVisibility);
+        Assert.Equal("Collapsed", model.DevicesVisibility);
+        Assert.Equal("Collapsed", model.ApplicationsVisibility);
+        Assert.Equal("Collapsed", model.PortsVisibility);
+        Assert.Equal("Visible", model.IncidentsVisibility);
+        Assert.Equal("Collapsed", model.PlaceholderVisibility);
+
+        model.SelectedPage = model.Pages.Single(page => page.Name == "Settings");
+
+        Assert.Equal("Settings", model.SelectedPageTitle);
+        Assert.True(model.IsPlaceholderSelected);
         Assert.Equal("Visible", model.PlaceholderVisibility);
 
         model.SelectedPage = null;
@@ -275,7 +311,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Medium", activity.Kind);
         Assert.Contains("Plex opened", activity.Summary);
         Assert.Contains("0.0.0.0:32400", activity.Detail);
-        Assert.Contains("Loaded 1 events, 1 ports, and 1 devices.", model.StatusMessage);
+        Assert.Contains("Loaded 1 events, 1 ports, 0 incidents, and 1 devices.", model.StatusMessage);
         Assert.Contains(nameof(DashboardShellViewModel.IsLoading), changed);
         Assert.Contains(nameof(DashboardShellViewModel.StatusMessage), changed);
         Assert.False(model.IsLoading);
@@ -386,6 +422,111 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("Publisher unavailable", application.Publisher);
                 Assert.Equal("Signature status unknown", application.SignatureStatus);
             });
+    }
+    /// <summary>
+    /// Verifies ports and incidents are exposed as first-class dashboard inventories.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_LoadsPortAndIncidentInventories()
+    {
+        var application = new AppIdentity
+        {
+            ApplicationId = 7,
+            DisplayName = "Visual Studio",
+            ProcessName = "devenv",
+            Publisher = "Microsoft",
+            SignatureStatus = SignatureStatus.TrustedSigned,
+            FilePath = "C:\\Program Files\\Microsoft Visual Studio\\devenv.exe"
+        };
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 5, Hostname = "office-laptop", IpAddress = "192.168.1.25" }],
+            Applications = [application],
+            Ports =
+            [
+                new ListeningPort
+                {
+                    PortNumber = 9443,
+                    Protocol = "TCP",
+                    LocalAddress = "0.0.0.0",
+                    Reachability = PortReachability.NetworkReachable,
+                    RiskStatus = RiskStatus.HighRisk,
+                    TrustStatus = TrustStatus.Unknown,
+                    FirstSeenUtc = new DateTimeOffset(2026, 6, 29, 11, 0, 0, TimeSpan.Zero),
+                    LastSeenUtc = new DateTimeOffset(2026, 6, 29, 11, 15, 0, TimeSpan.Zero),
+                    Application = application
+                },
+                new ListeningPort
+                {
+                    PortNumber = 65535,
+                    Protocol = "UDP",
+                    LocalAddress = "127.0.0.1",
+                    Reachability = PortReachability.LocalOnly,
+                    RiskStatus = RiskStatus.Normal
+                }
+            ],
+            Incidents =
+            [
+                new Incident
+                {
+                    Title = "Camera activated",
+                    Summary = "Visual Studio activated a camera-related capability.",
+                    MainDeviceId = 5,
+                    MainApplicationId = 7,
+                    RiskLevel = RiskLevel.High,
+                    Status = IncidentStatus.Open,
+                    EventCount = 2,
+                    StartedUtc = new DateTimeOffset(2026, 6, 29, 11, 2, 0, TimeSpan.Zero),
+                    LastUpdatedUtc = new DateTimeOffset(2026, 6, 29, 11, 5, 0, TimeSpan.Zero)
+                },
+                new Incident { RiskLevel = RiskLevel.Medium, Status = IncidentStatus.Watching }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.Ports,
+            port =>
+            {
+                Assert.Equal("TCP 0.0.0.0:9443", port.Endpoint);
+                Assert.Equal("Visual Studio", port.ApplicationName);
+                Assert.Equal("NetworkReachable", port.Reachability);
+                Assert.Equal("HighRisk", port.RiskStatus);
+                Assert.Equal("Unknown", port.TrustStatus);
+                Assert.NotEqual("Not recorded", port.FirstSeen);
+                Assert.NotEqual("Not recorded", port.LastSeen);
+                Assert.Contains("Signed by Microsoft", port.Detail);
+            },
+            port =>
+            {
+                Assert.Equal("UDP 127.0.0.1:65535", port.Endpoint);
+                Assert.Equal("Unknown application", port.ApplicationName);
+                Assert.Equal("LocalOnly", port.Reachability);
+                Assert.Equal("Not recorded", port.FirstSeen);
+                Assert.Equal("Application identity unavailable", port.Detail);
+            });
+        Assert.Collection(
+            model.Incidents,
+            incident =>
+            {
+                Assert.Equal("Camera activated", incident.Title);
+                Assert.Equal("High", incident.RiskLevel);
+                Assert.Equal("Open", incident.Status);
+                Assert.Equal(2, incident.EventCount);
+                Assert.Equal("Visual Studio on office-laptop", incident.MainTarget);
+                Assert.NotEqual("Not recorded", incident.Started);
+                Assert.NotEqual("Not recorded", incident.LastUpdated);
+                Assert.Equal("Visual Studio activated a camera-related capability.", incident.Summary);
+            },
+            incident =>
+            {
+                Assert.Equal("Untitled incident", incident.Title);
+                Assert.Equal("Target unavailable", incident.MainTarget);
+                Assert.Equal("No incident summary recorded yet.", incident.Summary);
+            });
+        Assert.Contains("Loaded 0 events, 2 ports, 2 incidents, and 1 devices.", model.StatusMessage);
     }
     /// <summary>
     /// Verifies event activity explains the owning application and the reason AccessWatch flagged it.

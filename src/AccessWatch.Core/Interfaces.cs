@@ -114,6 +114,22 @@ public interface IAccessWatchRepository
     Task<TrustStatus?> GetActiveTrustDecisionAsync(string targetType, long targetId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Saves or updates an incident.
+    /// </summary>
+    /// <param name="incident">The incident to save.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>The database incident identifier.</returns>
+    Task<long> UpsertIncidentAsync(Incident incident, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists recent incidents for dashboard and future UI surfaces.
+    /// </summary>
+    /// <param name="limit">Maximum number of rows to return.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>Recent incidents ordered newest first.</returns>
+    Task<IReadOnlyList<Incident>> ListRecentIncidentsAsync(int limit, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Lists recent applications for future UI surfaces.
     /// </summary>
     /// <param name="limit">Maximum number of rows to return.</param>

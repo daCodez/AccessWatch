@@ -55,6 +55,32 @@ public sealed record DashboardApplicationItemViewModel(
     string Detail);
 
 /// <summary>
+/// Represents a listening port row shown in the dashboard.
+/// </summary>
+public sealed record DashboardPortItemViewModel(
+    string Endpoint,
+    string ApplicationName,
+    string Reachability,
+    string RiskStatus,
+    string TrustStatus,
+    string FirstSeen,
+    string LastSeen,
+    string Detail);
+
+/// <summary>
+/// Represents an incident row shown in the dashboard.
+/// </summary>
+public sealed record DashboardIncidentItemViewModel(
+    string Title,
+    string RiskLevel,
+    string Status,
+    int EventCount,
+    string MainTarget,
+    string Started,
+    string LastUpdated,
+    string Summary);
+
+/// <summary>
 /// Provides dashboard data loaded from the AccessWatch repository.
 /// </summary>
 public sealed class DashboardShellViewModel : INotifyPropertyChanged
@@ -130,10 +156,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsOverviewSelected));
             OnPropertyChanged(nameof(IsDevicesSelected));
             OnPropertyChanged(nameof(IsApplicationsSelected));
+            OnPropertyChanged(nameof(IsPortsSelected));
+            OnPropertyChanged(nameof(IsIncidentsSelected));
             OnPropertyChanged(nameof(IsPlaceholderSelected));
             OnPropertyChanged(nameof(OverviewVisibility));
             OnPropertyChanged(nameof(DevicesVisibility));
             OnPropertyChanged(nameof(ApplicationsVisibility));
+            OnPropertyChanged(nameof(PortsVisibility));
+            OnPropertyChanged(nameof(IncidentsVisibility));
             OnPropertyChanged(nameof(PlaceholderVisibility));
         }
     }
@@ -164,9 +194,19 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public bool IsApplicationsSelected => SelectedPageTitle == "Applications";
 
     /// <summary>
+    /// Gets whether the ports page is selected.
+    /// </summary>
+    public bool IsPortsSelected => SelectedPageTitle == "Ports";
+
+    /// <summary>
+    /// Gets whether the incidents page is selected.
+    /// </summary>
+    public bool IsIncidentsSelected => SelectedPageTitle == "Incidents";
+
+    /// <summary>
     /// Gets whether the selected page is not yet implemented.
     /// </summary>
-    public bool IsPlaceholderSelected => !IsOverviewSelected && !IsDevicesSelected && !IsApplicationsSelected;
+    public bool IsPlaceholderSelected => !IsOverviewSelected && !IsDevicesSelected && !IsApplicationsSelected && !IsPortsSelected && !IsIncidentsSelected;
 
     /// <summary>
     /// Gets WPF visibility text for the overview panel.
@@ -182,6 +222,16 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets WPF visibility text for the applications panel.
     /// </summary>
     public string ApplicationsVisibility => ToVisibility(IsApplicationsSelected);
+
+    /// <summary>
+    /// Gets WPF visibility text for the ports panel.
+    /// </summary>
+    public string PortsVisibility => ToVisibility(IsPortsSelected);
+
+    /// <summary>
+    /// Gets WPF visibility text for the incidents panel.
+    /// </summary>
+    public string IncidentsVisibility => ToVisibility(IsIncidentsSelected);
 
     /// <summary>
     /// Gets WPF visibility text for the placeholder panel.
@@ -207,6 +257,16 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets recent applications loaded from storage.
     /// </summary>
     public ObservableCollection<DashboardApplicationItemViewModel> Applications { get; } = [];
+
+    /// <summary>
+    /// Gets recent listening ports loaded from storage.
+    /// </summary>
+    public ObservableCollection<DashboardPortItemViewModel> Ports { get; } = [];
+
+    /// <summary>
+    /// Gets recent incidents loaded from storage.
+    /// </summary>
+    public ObservableCollection<DashboardIncidentItemViewModel> Incidents { get; } = [];
 
     /// <summary>
     /// Gets the current dashboard load status.
@@ -300,14 +360,17 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             var applications = await repository.ListRecentApplicationsAsync(500, cancellationToken);
             var ports = await repository.ListRecentPortsAsync(500, cancellationToken);
             var events = await repository.ListRecentNetworkEventsAsync(50, cancellationToken);
+            var incidents = await repository.ListRecentIncidentsAsync(200, cancellationToken);
 
             ReplaceMetrics(devices.Count, applications.Count, ports.Count, events.Count);
             ReplaceDevices(devices);
             ReplaceApplications(applications);
+            ReplacePorts(ports);
+            ReplaceIncidents(incidents, devices, applications);
             ReplaceRecentActivity(events, applications, ports, devices);
-            StatusMessage = events.Count == 0 && ports.Count == 0 && devices.Count == 0
+            StatusMessage = events.Count == 0 && ports.Count == 0 && devices.Count == 0 && incidents.Count == 0
                 ? "No stored activity yet. Start the AccessWatch service to record listening ports and devices."
-                : $"Loaded {events.Count} events, {ports.Count} ports, and {devices.Count} devices.";
+                : $"Loaded {events.Count} events, {ports.Count} ports, {incidents.Count} incidents, and {devices.Count} devices.";
         }
         catch (Exception ex)
         {
@@ -448,6 +511,45 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
     }
 
+    private void ReplacePorts(IReadOnlyList<ListeningPort> ports)
+    {
+        Ports.Clear();
+        foreach (var port in ports.Take(200))
+        {
+            Ports.Add(new DashboardPortItemViewModel(
+                $"{port.Protocol} {port.LocalAddress}:{port.PortNumber}",
+                FirstUseful(port.Application?.DisplayName, port.Application?.ProcessName, "Unknown application"),
+                port.Reachability.ToString(),
+                port.RiskStatus.ToString(),
+                port.TrustStatus.ToString(),
+                FormatTimestamp(port.FirstSeenUtc),
+                FormatTimestamp(port.LastSeenUtc),
+                BuildApplicationIdentity(port.Application, port.Application?.ProcessName)));
+        }
+    }
+
+    private void ReplaceIncidents(
+        IReadOnlyList<Incident> incidents,
+        IReadOnlyList<NetworkDevice> devices,
+        IReadOnlyList<AppIdentity> applications)
+    {
+        Incidents.Clear();
+        foreach (var incident in incidents.Take(200))
+        {
+            var device = devices.FirstOrDefault(candidate => incident.MainDeviceId is not null && candidate.DeviceId == incident.MainDeviceId.Value);
+            var application = applications.FirstOrDefault(candidate => incident.MainApplicationId is not null && candidate.ApplicationId == incident.MainApplicationId.Value);
+            Incidents.Add(new DashboardIncidentItemViewModel(
+                FirstUseful(incident.Title, "Untitled incident"),
+                incident.RiskLevel.ToString(),
+                incident.Status.ToString(),
+                incident.EventCount,
+                BuildIncidentTarget(device, application),
+                FormatTimestamp(incident.StartedUtc),
+                FormatTimestamp(incident.LastUpdatedUtc),
+                FirstUseful(incident.Summary, "No incident summary recorded yet.")));
+        }
+    }
+
     private void ReplaceRecentActivity(
         IReadOnlyList<NetworkEvent> events,
         IReadOnlyList<AppIdentity> applications,
@@ -492,6 +594,22 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                     "Trust or block the device when device controls are enabled."));
             }
         }
+    }
+
+    private static string BuildIncidentTarget(NetworkDevice? device, AppIdentity? application)
+    {
+        var parts = new List<string>();
+        if (application is not null)
+        {
+            parts.Add(FirstUseful(application.DisplayName, application.ProcessName, "Unknown application"));
+        }
+
+        if (device is not null)
+        {
+            parts.Add(FirstUseful(device.Hostname, device.IpAddress, "Unknown device"));
+        }
+
+        return parts.Count == 0 ? "Target unavailable" : string.Join(" on ", parts);
     }
 
     private static string BuildDeviceDetail(NetworkDevice device)
