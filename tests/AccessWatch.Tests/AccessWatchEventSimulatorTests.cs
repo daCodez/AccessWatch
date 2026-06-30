@@ -11,49 +11,65 @@ namespace AccessWatch.Tests;
 public sealed class AccessWatchEventSimulatorTests
 {
     /// <summary>
-    /// Verifies the simulator persists the full scenario and delivers a toast notification.
+    /// Verifies the simulator persists varied scenarios and delivers toast notifications.
     /// </summary>
     [Fact]
-    public async Task TriggerDemoEventAsync_PersistsScenarioAndNotifies()
+    public async Task TriggerDemoEventAsync_RotatesThroughVariedScenariosAndNotifies()
     {
         var repository = new FakeRepository();
         var simulator = new AccessWatchEventSimulator(repository, new NotificationMessageFactory(), repository);
 
-        var createdEvents = await simulator.TriggerDemoEventAsync(CancellationToken.None);
+        for (var index = 0; index < 4; index++)
+        {
+            Assert.Equal(1, await simulator.TriggerDemoEventAsync(CancellationToken.None));
+        }
 
-        Assert.Equal(1, createdEvents);
         Assert.True(repository.WasInitialized);
-        var device = Assert.Single(repository.Devices);
-        Assert.Equal(101, device.DeviceId);
-        Assert.Equal("192.168.1.240", device.IpAddress);
-        Assert.Equal("simulated-nas", device.Hostname);
-        Assert.Equal(RiskStatus.Suspicious, device.RiskStatus);
-        var application = Assert.Single(repository.Applications);
-        Assert.Equal(202, application.ApplicationId);
-        Assert.Equal("Simulated Remote Admin", application.DisplayName);
-        Assert.Equal(SignatureStatus.Unsigned, application.SignatureStatus);
+        Assert.Equal(
+            ["NewListeningPort", "CameraActivated", "MicrophoneActivated", "NewDeviceObserved"],
+            repository.Events.Select(networkEvent => networkEvent.EventType));
+        Assert.Contains(repository.Applications, application => application.DisplayName == "Simulated Remote Admin");
+        Assert.Contains(repository.Applications, application => application.DisplayName == "Visual Studio");
+        Assert.Contains(repository.Applications, application => application.DisplayName == "Skype");
+        Assert.Contains(repository.Devices, device => device.Hostname == "simulated-nas");
+        Assert.Contains(repository.Devices, device => device.Hostname == "office-laptop");
+        Assert.Contains(repository.Devices, device => device.Hostname == "kitchen-tablet");
         var port = Assert.Single(repository.Ports);
         Assert.Equal(9443, port.PortNumber);
         Assert.Equal("0.0.0.0", port.LocalAddress);
         Assert.Equal(PortReachability.NetworkReachable, port.Reachability);
-        Assert.Equal(202, repository.PortApplicationIds.Single());
-        var networkEvent = Assert.Single(repository.Events);
-        Assert.Equal("NewListeningPort", networkEvent.EventType);
-        Assert.Equal(101, networkEvent.SourceDeviceId);
-        Assert.Equal(202, networkEvent.ApplicationId);
-        Assert.Equal(9443, networkEvent.DestinationPort);
-        Assert.Equal(RiskLevel.High, networkEvent.RiskLevel);
-        Assert.True(networkEvent.WasUserNotified);
-        Assert.Contains("\"simulated\":true", networkEvent.DetailsJson);
-        Assert.Contains("Simulated Remote Admin", networkEvent.DetailsJson);
-        var notification = Assert.Single(repository.Notifications);
-        Assert.Equal(RiskLevel.High, notification.RiskLevel);
-        Assert.Equal(NotificationAction.AskBeforeAllow, notification.Action);
-        Assert.Contains("Simulated Remote Admin", notification.Body);
+        Assert.All(repository.Events, networkEvent => Assert.True(networkEvent.WasUserNotified));
+        Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("\"sensor\":\"Camera\""));
+        Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("\"sensor\":\"Microphone\""));
+        Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("Kitchen tablet joined"));
+        Assert.Equal(4, repository.Notifications.Count);
+        Assert.Contains(repository.Notifications, notification => notification.Body.Contains("camera"));
+        Assert.Contains(repository.Notifications, notification => notification.Body.Contains("microphone"));
+    }
+
+    /// <summary>
+    /// Verifies the simulator repeats the scenario rotation after all demo event types have run.
+    /// </summary>
+    [Fact]
+    public async Task TriggerDemoEventAsync_RepeatsScenarioRotation()
+    {
+        var repository = new FakeRepository();
+        var simulator = new AccessWatchEventSimulator(repository, new NotificationMessageFactory(), repository);
+
+        for (var index = 0; index < 5; index++)
+        {
+            await simulator.TriggerDemoEventAsync(CancellationToken.None);
+        }
+
+        Assert.Equal("NewListeningPort", repository.Events[0].EventType);
+        Assert.Equal("NewListeningPort", repository.Events[4].EventType);
     }
 
     private sealed class FakeRepository : IAccessWatchRepository, ITrayNotificationService
     {
+        private long nextDeviceId = 100;
+        private long nextApplicationId = 200;
+
         public bool WasInitialized { get; private set; }
 
         public List<NetworkDevice> Devices { get; } = [];
@@ -76,8 +92,9 @@ public sealed class AccessWatchEventSimulatorTests
 
         public Task<long> UpsertDeviceAsync(NetworkDevice device, CancellationToken cancellationToken)
         {
-            Devices.Add(device with { DeviceId = 101 });
-            return Task.FromResult(101L);
+            var deviceId = ++nextDeviceId;
+            Devices.Add(device with { DeviceId = deviceId });
+            return Task.FromResult(deviceId);
         }
 
         public Task<IReadOnlyList<NetworkDevice>> ListRecentDevicesAsync(int limit, CancellationToken cancellationToken)
@@ -87,8 +104,9 @@ public sealed class AccessWatchEventSimulatorTests
 
         public Task<long> UpsertApplicationAsync(AppIdentity application, CancellationToken cancellationToken)
         {
-            Applications.Add(application with { ApplicationId = 202 });
-            return Task.FromResult(202L);
+            var applicationId = ++nextApplicationId;
+            Applications.Add(application with { ApplicationId = applicationId });
+            return Task.FromResult(applicationId);
         }
 
         public Task<long?> GetListeningPortApplicationIdAsync(ListeningPort port, CancellationToken cancellationToken)

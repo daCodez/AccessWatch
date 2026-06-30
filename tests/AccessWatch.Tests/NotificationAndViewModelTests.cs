@@ -436,6 +436,42 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Confirm the app is expected before trusting it.", activity.SuggestedAction);
     }
     /// <summary>
+    /// Verifies sensor events describe the app and device without showing a fake network endpoint.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_ExplainsSensorEventsWithoutEndpoint()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 9, Hostname = "office-laptop", IpAddress = "192.168.1.25" }],
+            Applications = [new AppIdentity { ApplicationId = 12, DisplayName = "Visual Studio", ProcessName = "devenv" }],
+            Events =
+            [
+                new NetworkEvent
+                {
+                    ApplicationId = 12,
+                    SourceDeviceId = 9,
+                    EventType = "CameraActivated",
+                    Protocol = "Local",
+                    Direction = "SensorAccess",
+                    RiskLevel = RiskLevel.High,
+                    Summary = "Visual Studio started using the camera.",
+                    DetailsJson = "{ \"whatHappened\": \"Visual Studio activated the camera.\", \"app\": \"Visual Studio\", \"processName\": \"devenv\", \"reachability\": \"Local sensor access\", \"whyItMatters\": \"Camera activation is sensitive.\", \"suggestedAction\": \"Confirm this was expected.\" }"
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        var activity = Assert.Single(model.RecentActivity);
+        Assert.Equal("Visual Studio", activity.ApplicationName);
+        Assert.Contains("Device office-laptop", activity.Detail);
+        Assert.Contains("Visual Studio activated the camera.", activity.Detail);
+        Assert.Contains("Local sensor access", activity.Detail);
+        Assert.DoesNotContain("local:n/a", activity.Detail);
+    }
+    /// <summary>
     /// Verifies event activity remains useful when stored detail JSON is missing or malformed.
     /// </summary>
     [Fact]
@@ -663,7 +699,9 @@ public sealed class NotificationAndViewModelTests
             Events = [new NetworkEvent { EventType = "NewListeningPort", RiskLevel = RiskLevel.Low, Summary = "Local service opened." }]
         });
         await eventModel.LoadAsync(CancellationToken.None);
-        Assert.Contains("local:n/a", Assert.Single(eventModel.RecentActivity).Detail);
+        var missingEndpointActivity = Assert.Single(eventModel.RecentActivity);
+        Assert.Contains("A new listening TCP port appeared.", missingEndpointActivity.Detail);
+        Assert.DoesNotContain("local:n/a", missingEndpointActivity.Detail);
 
         var portModel = new DashboardShellViewModel(new FakeRepository
         {

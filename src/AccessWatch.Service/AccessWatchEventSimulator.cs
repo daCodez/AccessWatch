@@ -12,6 +12,8 @@ public sealed class AccessWatchEventSimulator
     private readonly IAccessWatchRepository repository;
     private readonly NotificationMessageFactory notificationFactory;
     private readonly ITrayNotificationService trayNotificationService;
+    private readonly Func<DateTimeOffset, CancellationToken, Task<int>>[] scenarios;
+    private int nextScenarioIndex = -1;
 
     /// <summary>
     /// Initializes a new simulator that persists and notifies through the normal AccessWatch paths.
@@ -27,10 +29,17 @@ public sealed class AccessWatchEventSimulator
         this.repository = repository;
         this.notificationFactory = notificationFactory;
         this.trayNotificationService = trayNotificationService;
+        scenarios =
+        [
+            TriggerNetworkExposureAsync,
+            TriggerCameraActivationAsync,
+            TriggerMicrophoneActivationAsync,
+            TriggerNewDeviceAsync
+        ];
     }
 
     /// <summary>
-    /// Creates one simulated device, application, listening port, event, and notification.
+    /// Creates one simulated event from a rotating set of realistic AccessWatch scenarios.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The number of events created.</returns>
@@ -38,10 +47,16 @@ public sealed class AccessWatchEventSimulator
     {
         await repository.InitializeAsync(cancellationToken);
 
-        var now = DateTimeOffset.UtcNow;
-        var deviceId = await repository.UpsertDeviceAsync(CreateDevice(now), cancellationToken);
-        var applicationId = await repository.UpsertApplicationAsync(CreateApplication(now), cancellationToken);
-        var port = CreatePort(now, applicationId);
+        var scenarioIndex = Interlocked.Increment(ref nextScenarioIndex) % scenarios.Length;
+        return await scenarios[scenarioIndex](DateTimeOffset.UtcNow, cancellationToken);
+    }
+
+    private async Task<int> TriggerNetworkExposureAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var deviceId = await repository.UpsertDeviceAsync(CreateNetworkStorageDevice(now), cancellationToken);
+        var application = CreateRemoteAdminApplication(now);
+        var applicationId = await repository.UpsertApplicationAsync(application, cancellationToken);
+        var port = CreatePort(now, application with { ApplicationId = applicationId });
         await repository.UpsertPortAsync(port, applicationId, cancellationToken);
 
         var assessment = new PortRiskAssessment(
@@ -51,9 +66,8 @@ public sealed class AccessWatchEventSimulator
             "Simulated Remote Admin opened a network-reachable port.",
             "This simulated service is reachable from other devices, just like a real exposed listener would be.",
             "Use this event to verify dashboard review, toast, and inventory workflows.");
-        var notification = notificationFactory.Create(assessment);
-
-        await repository.AddNetworkEventAsync(
+        await AddEventAndNotifyAsync(
+            assessment,
             new NetworkEvent
             {
                 EventType = "NewListeningPort",
@@ -66,17 +80,144 @@ public sealed class AccessWatchEventSimulator
                 ApplicationId = applicationId,
                 RiskLevel = assessment.RiskLevel,
                 Summary = assessment.Summary,
-                DetailsJson = BuildDetailsJson(assessment),
+                DetailsJson = BuildDetailsJson(
+                    "A simulated listening TCP port appeared.",
+                    application.DisplayName,
+                    application.ProcessName,
+                    PortReachability.NetworkReachable.ToString(),
+                    assessment.WhyItMatters,
+                    assessment.SuggestedAction),
                 WasUserNotified = true,
                 CreatedUtc = now
             },
             cancellationToken);
-        await trayNotificationService.ShowAsync(notification, cancellationToken);
 
         return 1;
     }
 
-    private static NetworkDevice CreateDevice(DateTimeOffset now)
+    private async Task<int> TriggerCameraActivationAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var deviceId = await repository.UpsertDeviceAsync(CreateOfficeLaptopDevice(now), cancellationToken);
+        var application = CreateVisualStudioApplication(now);
+        var applicationId = await repository.UpsertApplicationAsync(application, cancellationToken);
+        var assessment = new PortRiskAssessment(
+            RiskLevel.High,
+            RiskStatus.Suspicious,
+            NotificationAction.AskBeforeAllow,
+            "Visual Studio started using the camera.",
+            "Camera activation is sensitive because it can capture the room around this device.",
+            "Confirm you expected Visual Studio to use the camera right now.");
+        await AddEventAndNotifyAsync(
+            assessment,
+            new NetworkEvent
+            {
+                EventType = "CameraActivated",
+                SourceIp = "192.168.1.25",
+                SourceDeviceId = deviceId,
+                Protocol = "Local",
+                Direction = "SensorAccess",
+                ApplicationId = applicationId,
+                RiskLevel = assessment.RiskLevel,
+                Summary = assessment.Summary,
+                DetailsJson = BuildDetailsJson(
+                    "Visual Studio activated the camera.",
+                    application.DisplayName,
+                    application.ProcessName,
+                    "Local sensor access",
+                    assessment.WhyItMatters,
+                    assessment.SuggestedAction,
+                    "Camera"),
+                WasUserNotified = true,
+                CreatedUtc = now
+            },
+            cancellationToken);
+
+        return 1;
+    }
+
+    private async Task<int> TriggerMicrophoneActivationAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var deviceId = await repository.UpsertDeviceAsync(CreateOfficeLaptopDevice(now), cancellationToken);
+        var application = CreateSkypeApplication(now);
+        var applicationId = await repository.UpsertApplicationAsync(application, cancellationToken);
+        var assessment = new PortRiskAssessment(
+            RiskLevel.High,
+            RiskStatus.Suspicious,
+            NotificationAction.AskBeforeAllow,
+            "Skype started using the microphone.",
+            "Microphone activation is sensitive because it can capture nearby conversations.",
+            "Confirm you expected Skype to use the microphone right now.");
+        await AddEventAndNotifyAsync(
+            assessment,
+            new NetworkEvent
+            {
+                EventType = "MicrophoneActivated",
+                SourceIp = "192.168.1.25",
+                SourceDeviceId = deviceId,
+                Protocol = "Local",
+                Direction = "SensorAccess",
+                ApplicationId = applicationId,
+                RiskLevel = assessment.RiskLevel,
+                Summary = assessment.Summary,
+                DetailsJson = BuildDetailsJson(
+                    "Skype activated the microphone.",
+                    application.DisplayName,
+                    application.ProcessName,
+                    "Local sensor access",
+                    assessment.WhyItMatters,
+                    assessment.SuggestedAction,
+                    "Microphone"),
+                WasUserNotified = true,
+                CreatedUtc = now
+            },
+            cancellationToken);
+
+        return 1;
+    }
+
+    private async Task<int> TriggerNewDeviceAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var deviceId = await repository.UpsertDeviceAsync(CreateKitchenTabletDevice(now), cancellationToken);
+        var assessment = new PortRiskAssessment(
+            RiskLevel.Medium,
+            RiskStatus.Watched,
+            NotificationAction.SoftNotify,
+            "Kitchen tablet joined the network.",
+            "A new device on the network may be expected, but it should be visible before it is trusted.",
+            "Review the device inventory and mark it trusted if you recognize it.");
+        await AddEventAndNotifyAsync(
+            assessment,
+            new NetworkEvent
+            {
+                EventType = "NewDeviceObserved",
+                SourceIp = "192.168.1.88",
+                SourceDeviceId = deviceId,
+                Protocol = "ARP",
+                Direction = "NetworkObservation",
+                RiskLevel = assessment.RiskLevel,
+                Summary = assessment.Summary,
+                DetailsJson = BuildDetailsJson(
+                    "Kitchen tablet joined the local network.",
+                    "Network device",
+                    "device-presence",
+                    "Local network",
+                    assessment.WhyItMatters,
+                    assessment.SuggestedAction),
+                WasUserNotified = true,
+                CreatedUtc = now
+            },
+            cancellationToken);
+
+        return 1;
+    }
+
+    private async Task AddEventAndNotifyAsync(PortRiskAssessment assessment, NetworkEvent networkEvent, CancellationToken cancellationToken)
+    {
+        await repository.AddNetworkEventAsync(networkEvent, cancellationToken);
+        await trayNotificationService.ShowAsync(notificationFactory.Create(assessment), cancellationToken);
+    }
+
+    private static NetworkDevice CreateNetworkStorageDevice(DateTimeOffset now)
     {
         return new NetworkDevice
         {
@@ -94,7 +235,43 @@ public sealed class AccessWatchEventSimulator
         };
     }
 
-    private static ApplicationIdentity CreateApplication(DateTimeOffset now)
+    private static NetworkDevice CreateOfficeLaptopDevice(DateTimeOffset now)
+    {
+        return new NetworkDevice
+        {
+            IpAddress = "192.168.1.25",
+            MacAddress = "02:AC:CE:55:20:25",
+            Hostname = "office-laptop",
+            Vendor = "AccessWatch Lab",
+            DeviceTypeGuess = "Windows workstation",
+            FirstSeenUtc = now,
+            LastSeenUtc = now,
+            LastConfirmedUtc = now,
+            TrustStatus = TrustStatus.KnownWatched,
+            RiskStatus = RiskStatus.Suspicious,
+            Notes = "Simulated endpoint with local sensor activity."
+        };
+    }
+
+    private static NetworkDevice CreateKitchenTabletDevice(DateTimeOffset now)
+    {
+        return new NetworkDevice
+        {
+            IpAddress = "192.168.1.88",
+            MacAddress = "02:AC:CE:55:30:88",
+            Hostname = "kitchen-tablet",
+            Vendor = "AccessWatch Lab",
+            DeviceTypeGuess = "Tablet",
+            FirstSeenUtc = now,
+            LastSeenUtc = now,
+            LastConfirmedUtc = now,
+            TrustStatus = TrustStatus.Unknown,
+            RiskStatus = RiskStatus.Watched,
+            Notes = "Simulated newly observed network device."
+        };
+    }
+
+    private static ApplicationIdentity CreateRemoteAdminApplication(DateTimeOffset now)
     {
         return new ApplicationIdentity
         {
@@ -114,7 +291,47 @@ public sealed class AccessWatchEventSimulator
         };
     }
 
-    private static ListeningPort CreatePort(DateTimeOffset now, long applicationId)
+    private static ApplicationIdentity CreateVisualStudioApplication(DateTimeOffset now)
+    {
+        return new ApplicationIdentity
+        {
+            DisplayName = "Visual Studio",
+            ProcessName = "devenv",
+            FilePath = @"C:\Program Files\Microsoft Visual Studio\Common7\IDE\devenv.exe",
+            Publisher = "Microsoft Corporation",
+            ProductName = "Visual Studio",
+            FileDescription = "Microsoft Visual Studio",
+            SignatureStatus = SignatureStatus.TrustedSigned,
+            InstallFolder = @"C:\Program Files\Microsoft Visual Studio\Common7\IDE",
+            ParentProcessName = "explorer",
+            FirstSeenUtc = now,
+            LastSeenUtc = now,
+            TrustStatus = TrustStatus.Unknown,
+            Notes = "Simulated camera access application."
+        };
+    }
+
+    private static ApplicationIdentity CreateSkypeApplication(DateTimeOffset now)
+    {
+        return new ApplicationIdentity
+        {
+            DisplayName = "Skype",
+            ProcessName = "Skype",
+            FilePath = @"C:\Program Files\WindowsApps\Microsoft.SkypeApp\Skype.exe",
+            Publisher = "Microsoft Corporation",
+            ProductName = "Skype",
+            FileDescription = "Skype communications client",
+            SignatureStatus = SignatureStatus.TrustedSigned,
+            InstallFolder = @"C:\Program Files\WindowsApps\Microsoft.SkypeApp",
+            ParentProcessName = "explorer",
+            FirstSeenUtc = now,
+            LastSeenUtc = now,
+            TrustStatus = TrustStatus.Unknown,
+            Notes = "Simulated microphone access application."
+        };
+    }
+
+    private static ListeningPort CreatePort(DateTimeOffset now, ApplicationIdentity application)
     {
         return new ListeningPort
         {
@@ -123,7 +340,7 @@ public sealed class AccessWatchEventSimulator
             LocalAddress = "0.0.0.0",
             Reachability = PortReachability.NetworkReachable,
             OwningProcessId = 9443,
-            Application = CreateApplication(now) with { ApplicationId = applicationId },
+            Application = application,
             FirstSeenUtc = now,
             LastSeenUtc = now,
             TrustStatus = TrustStatus.Unknown,
@@ -131,18 +348,30 @@ public sealed class AccessWatchEventSimulator
         };
     }
 
-    private static string BuildDetailsJson(PortRiskAssessment assessment)
+    private static string BuildDetailsJson(
+        string whatHappened,
+        string app,
+        string processName,
+        string reachability,
+        string whyItMatters,
+        string suggestedAction,
+        string? sensor = null)
     {
-        var details = new
+        var details = new Dictionary<string, object?>
         {
-            simulated = true,
-            whatHappened = "A simulated listening TCP port appeared.",
-            app = "Simulated Remote Admin",
-            processName = "sim-remote-admin",
-            reachability = PortReachability.NetworkReachable.ToString(),
-            whyItMatters = assessment.WhyItMatters,
-            suggestedAction = assessment.SuggestedAction
+            ["simulated"] = true,
+            ["whatHappened"] = whatHappened,
+            ["app"] = app,
+            ["processName"] = processName,
+            ["reachability"] = reachability,
+            ["whyItMatters"] = whyItMatters,
+            ["suggestedAction"] = suggestedAction
         };
+
+        if (!string.IsNullOrWhiteSpace(sensor))
+        {
+            details["sensor"] = sensor;
+        }
 
         return JsonSerializer.Serialize(details);
     }
