@@ -257,8 +257,8 @@
                                     <Button Content="Watch" IsEnabled="{Binding CanApplyIncidentAction}" Width="68" Height="30" Margin="0,0,8,0" Click="OnWatchIncidentClick" />
                                     <Button Content="Escalate" IsEnabled="{Binding CanApplyIncidentAction}" Width="78" Height="30" Margin="0,0,8,0" Click="OnEscalateIncidentClick" />
                                     <Button Content="Create rule" IsEnabled="{Binding CanApplyIncidentAction}" Width="92" Height="30" Margin="0,0,8,0" Click="OnCreateIncidentRuleClick" />
-                                    <Button Content="Create AI packet" IsEnabled="{Binding CanCreateIncidentAiHandoff}" Width="118" Height="30" Margin="0,0,8,0" Click="OnCreateIncidentAiHandoffClick" />
-                                    <Button Content="Copy packet" IsEnabled="{Binding HasIncidentAiHandoff}" Width="92" Height="30" Click="OnCopyIncidentAiHandoffClick" />
+                                    <Button Content="Review with AI" IsEnabled="{Binding CanReviewIncidentWithAi}" Width="112" Height="30" Margin="0,0,8,0" Click="OnReviewIncidentWithAiClick" />
+                                    <Button Content="Open in ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="116" Height="30" Click="OnOpenIncidentInChatGptClick" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -271,7 +271,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBox Grid.Column="0" Text="{Binding SelectedIncidentExplanation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontSize="12" />
-                            <TextBox Grid.Column="2" Text="{Binding SelectedIncidentAiHandoff, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
+                            <TextBox Grid.Column="2" Text="{Binding SelectedIncidentAiReview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
                             <TextBox Grid.Column="4" Text="{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
                         </Grid>
                     </Grid>
@@ -298,7 +298,7 @@
                                 <ColumnDefinition Width="220" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="AI handoff" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" VerticalAlignment="Center" />
+                            <TextBlock Text="AI review" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" VerticalAlignment="Center" />
                             <ComboBox Grid.Column="1" ItemsSource="{Binding AiModeOptions}" SelectedValue="{Binding SelectedAiMode, Mode=TwoWay}" SelectedValuePath="Value" DisplayMemberPath="Name" Height="32" MinWidth="260" HorizontalAlignment="Left" />
                         </Grid>
 
@@ -313,7 +313,7 @@
                                     <TextBlock Text="{Binding CurrentProtectionMode}" FontSize="18" FontWeight="SemiBold" Foreground="#24292F" Margin="0,4,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
-                                    <TextBlock Text="Running AI handoff" FontSize="12" Foreground="#57606A" />
+                                    <TextBlock Text="Running AI review" FontSize="12" Foreground="#57606A" />
                                     <TextBlock Text="{Binding CurrentAiMode}" FontSize="18" FontWeight="SemiBold" Foreground="#24292F" Margin="0,4,0,0" />
                                 </StackPanel>
                             </Grid>

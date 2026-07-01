@@ -118,7 +118,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private DashboardApplicationItemViewModel? selectedApplication;
     private DashboardPortItemViewModel? selectedPort;
     private DashboardIncidentItemViewModel? selectedIncident;
-    private string selectedIncidentAiHandoff = string.Empty;
+    private string selectedIncidentAiReview = string.Empty;
     private string selectedIncidentRuleSuggestion = string.Empty;
     private string selectedDeviceAlias = string.Empty;
     private bool isLoading;
@@ -141,7 +141,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <param name="scanAsync">Optional scan action that persists fresh observations.</param>
     /// <param name="simulateAsync">Optional simulator action that persists a demo event.</param>
     /// <param name="settings">Mutable settings used by dashboard actions in this app session.</param>
-    /// <param name="aiHandoffService">Optional service used to create redacted incident AI review packets.</param>
+    /// <param name="aiHandoffService">Optional service used to create redacted incident AI review briefs.</param>
     public DashboardShellViewModel(
         IAccessWatchRepository repository,
         Func<CancellationToken, Task<int>>? scanAsync = null,
@@ -174,7 +174,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         new("Applications", "Resolved app identities and trust decisions."),
         new("Ports", "Current and historical listening ports."),
         new("Incidents", "Grouped low-noise security events."),
-        new("Settings", "Protection mode and AI handoff settings.")
+        new("Settings", "Protection mode and AI review settings.")
     ];
 
     /// <summary>
@@ -430,15 +430,15 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             }
 
             selectedIncident = value;
-            selectedIncidentAiHandoff = string.Empty;
+            selectedIncidentAiReview = string.Empty;
             selectedIncidentRuleSuggestion = string.Empty;
             OnPropertyChanged(nameof(SelectedIncident));
             OnPropertyChanged(nameof(SelectedIncidentDetail));
             OnPropertyChanged(nameof(SelectedIncidentExplanation));
             OnPropertyChanged(nameof(CanApplyIncidentAction));
-            OnPropertyChanged(nameof(CanCreateIncidentAiHandoff));
-            OnPropertyChanged(nameof(SelectedIncidentAiHandoff));
-            OnPropertyChanged(nameof(HasIncidentAiHandoff));
+            OnPropertyChanged(nameof(CanReviewIncidentWithAi));
+            OnPropertyChanged(nameof(SelectedIncidentAiReview));
+            OnPropertyChanged(nameof(HasIncidentAiReview));
             OnPropertyChanged(nameof(SelectedIncidentRuleSuggestion));
             OnPropertyChanged(nameof(HasIncidentRuleSuggestion));
         }
@@ -464,22 +464,27 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public bool CanApplyIncidentAction => selectedIncident is not null && repository is not null;
 
     /// <summary>
-    /// Gets whether an incident is selected for AI handoff.
+    /// Gets whether an incident is selected for the subscription-friendly AI review workspace.
     /// </summary>
-    public bool CanCreateIncidentAiHandoff =>
+    public bool CanReviewIncidentWithAi =>
         selectedIncident is not null &&
         aiHandoffService is not null &&
         settings.AiMode != AiMode.Off;
 
     /// <summary>
-    /// Gets the redacted AI handoff packet for the selected incident.
+    /// Gets the redacted in-app AI review brief for the selected incident.
     /// </summary>
-    public string SelectedIncidentAiHandoff => selectedIncidentAiHandoff;
+    public string SelectedIncidentAiReview => selectedIncidentAiReview;
 
     /// <summary>
-    /// Gets whether the current incident has a generated handoff packet.
+    /// Gets whether the current incident has a generated AI review brief.
     /// </summary>
-    public bool HasIncidentAiHandoff => !string.IsNullOrWhiteSpace(selectedIncidentAiHandoff);
+    public bool HasIncidentAiReview => !string.IsNullOrWhiteSpace(selectedIncidentAiReview);
+
+    /// <summary>
+    /// Gets the ChatGPT web URL used for subscription-based review.
+    /// </summary>
+    public string ChatGptReviewUrl => "https://chatgpt.com/";
 
     /// <summary>
     /// Gets the structured rule suggestion created from the selected incident.
@@ -513,12 +518,12 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     ];
 
     /// <summary>
-    /// Gets AI handoff choices shown on the Settings page.
+    /// Gets AI review choices shown on the Settings page.
     /// </summary>
     public IReadOnlyList<DashboardSettingsOptionViewModel> AiModeOptions { get; } =
     [
-        new("Off", "Off", "Keep incident review fully local with no AI handoff."),
-        new("ManualChatGptCopy", "Manual ChatGPT copy", "Create redacted incident summaries for manual review."),
+        new("Off", "Off", "Keep incident review fully local without ChatGPT assistance."),
+        new("ManualChatGptCopy", "ChatGPT subscription", "Use your ChatGPT subscription with redacted in-app incident review briefs."),
         new("LocalAi", "Local AI", "Reserve local model assistance for a future release."),
         new("OpenAiApi", "OpenAI API", "Reserve connected AI assistance for a future release.")
     ];
@@ -538,7 +543,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Gets or sets the selected AI handoff mode value.
+    /// Gets or sets the selected AI review mode value.
     /// </summary>
     public string SelectedAiMode
     {
@@ -557,7 +562,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public string CurrentProtectionMode => settings.ProtectionMode.ToString();
 
     /// <summary>
-    /// Gets the AI handoff mode currently used by the dashboard.
+    /// Gets the AI review mode currently used by the dashboard.
     /// </summary>
     public string CurrentAiMode => settings.AiMode.ToString();
 
@@ -699,10 +704,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         settings.ProtectionMode = Enum.Parse<ProtectionMode>(SelectedProtectionMode);
         settings.AiMode = Enum.Parse<AiMode>(SelectedAiMode);
-        SettingsStatus = $"Settings applied. Running {CurrentProtectionMode} protection with {CurrentAiMode} AI handoff.";
+        SettingsStatus = $"Settings applied. Running {CurrentProtectionMode} protection with {CurrentAiMode} AI review.";
         OnPropertyChanged(nameof(CurrentProtectionMode));
         OnPropertyChanged(nameof(CurrentAiMode));
-        OnPropertyChanged(nameof(CanCreateIncidentAiHandoff));
+        OnPropertyChanged(nameof(CanReviewIncidentWithAi));
     }
 
     /// <summary>
@@ -830,42 +835,43 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Creates a redacted AI review packet for the selected incident.
+    /// Creates a redacted in-app AI review brief for the selected incident.
     /// </summary>
-    public void CreateSelectedIncidentAiHandoff()
+    public void CreateSelectedIncidentAiReview()
     {
         if (selectedIncident is null)
         {
-            StatusMessage = "Select an incident before creating an AI review packet.";
+            StatusMessage = "Select an incident before starting AI review.";
             return;
         }
 
         if (aiHandoffService is null)
         {
-            StatusMessage = "AI handoff is not connected for this dashboard session.";
+            StatusMessage = "AI review is not connected for this dashboard session.";
             return;
         }
 
         if (settings.AiMode == AiMode.Off)
         {
-            StatusMessage = "Turn on AI handoff in Settings before creating a review packet.";
+            StatusMessage = "Turn on AI review in Settings before reviewing with ChatGPT.";
             return;
         }
 
-        selectedIncidentAiHandoff = aiHandoffService.CreateRedactedIncidentSummary(ToIncident(selectedIncident));
-        OnPropertyChanged(nameof(SelectedIncidentAiHandoff));
-        OnPropertyChanged(nameof(HasIncidentAiHandoff));
-        StatusMessage = $"Created redacted AI review packet for {selectedIncident.Title}.";
+        var redactedIncident = aiHandoffService.CreateRedactedIncidentSummary(ToIncident(selectedIncident));
+        selectedIncidentAiReview = BuildChatGptReviewBrief(selectedIncident, redactedIncident);
+        OnPropertyChanged(nameof(SelectedIncidentAiReview));
+        OnPropertyChanged(nameof(HasIncidentAiReview));
+        StatusMessage = $"Prepared AI review brief for {selectedIncident.Title}.";
     }
 
     /// <summary>
-    /// Updates the status after copying the incident AI handoff packet.
+    /// Updates the status after opening the selected incident in ChatGPT.
     /// </summary>
-    public void MarkIncidentAiHandoffCopied()
+    public void MarkIncidentChatGptOpened()
     {
-        StatusMessage = HasIncidentAiHandoff
-            ? "Copied redacted AI review packet."
-            : "Create an AI review packet before copying it.";
+        StatusMessage = HasIncidentAiReview
+            ? "Opened ChatGPT and copied the redacted review brief. Paste it into your ChatGPT subscription chat."
+            : "Review the incident with AI before opening ChatGPT.";
     }
 
     private async Task ApplySelectedIncidentUpdateAsync(
@@ -1344,6 +1350,24 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             ? "Verify which app or device was involved before trusting or blocking anything."
             : $"Verify that {incident.MainTarget} was expected at the recorded time.";
         return $"Why: {urgency} {status} Verify: {verify} Recommended action: use Watch for expected but noisy behavior, Resolve when confirmed, or Escalate if this was unexpected.";
+    }
+
+    private static string BuildChatGptReviewBrief(DashboardIncidentItemViewModel incident, string redactedIncident)
+    {
+        return string.Join(
+            Environment.NewLine + Environment.NewLine,
+            "AccessWatch AI review workspace",
+            $"Incident: {incident.Title}",
+            $"Target: {incident.MainTarget}",
+            $"Risk: {incident.RiskLevel}; Status: {incident.Status}; Events: {incident.EventCount}",
+            "Summary: See the redacted incident context below.",
+            "What to ask ChatGPT:",
+            "1. Explain the likely cause in plain English.",
+            "2. Identify what evidence would confirm whether this is expected or suspicious.",
+            "3. Recommend whether to Resolve, Watch, Escalate, or create a rule.",
+            "4. Call out any sensitive data that should stay local.",
+            "Redacted incident context:",
+            redactedIncident);
     }
 
     private static DashboardActivityItemViewModel CreateEventActivity(

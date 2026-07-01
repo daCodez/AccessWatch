@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using AccessWatch.AI;
 using AccessWatch.App.ViewModels;
@@ -138,17 +139,18 @@ public partial class MainWindow : Window
         await viewModel.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
     }
 
-    private void OnCreateIncidentAiHandoffClick(object sender, RoutedEventArgs e)
+    private void OnReviewIncidentWithAiClick(object sender, RoutedEventArgs e)
     {
-        viewModel.CreateSelectedIncidentAiHandoff();
+        viewModel.CreateSelectedIncidentAiReview();
     }
 
-    private void OnCopyIncidentAiHandoffClick(object sender, RoutedEventArgs e)
+    private void OnOpenIncidentInChatGptClick(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(viewModel.SelectedIncidentAiHandoff))
+        if (!string.IsNullOrWhiteSpace(viewModel.SelectedIncidentAiReview))
         {
-            System.Windows.Clipboard.SetText(viewModel.SelectedIncidentAiHandoff);
-            viewModel.MarkIncidentAiHandoffCopied();
+            System.Windows.Clipboard.SetText(viewModel.SelectedIncidentAiReview);
+            Process.Start(new ProcessStartInfo(viewModel.ChatGptReviewUrl) { UseShellExecute = true });
+            viewModel.MarkIncidentChatGptOpened();
         }
     }
 

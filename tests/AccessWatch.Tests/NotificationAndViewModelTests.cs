@@ -119,15 +119,15 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Content=\"Watch\"", xaml);
         Assert.Contains("Content=\"Escalate\"", xaml);
         Assert.Contains("Content=\"Create rule\"", xaml);
-        Assert.Contains("Content=\"Create AI packet\"", xaml);
-        Assert.Contains("Content=\"Copy packet\"", xaml);
+        Assert.Contains("Content=\"Review with AI\"", xaml);
+        Assert.Contains("Content=\"Open in ChatGPT\"", xaml);
         Assert.Contains("Click=\"OnResolveIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnWatchIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnEscalateIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnCreateIncidentRuleClick\"", xaml);
-        Assert.Contains("Click=\"OnCreateIncidentAiHandoffClick\"", xaml);
-        Assert.Contains("Click=\"OnCopyIncidentAiHandoffClick\"", xaml);
-        Assert.Contains("Text=\"{Binding SelectedIncidentAiHandoff, Mode=OneWay}\"", xaml);
+        Assert.Contains("Click=\"OnReviewIncidentWithAiClick\"", xaml);
+        Assert.Contains("Click=\"OnOpenIncidentInChatGptClick\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentAiReview, Mode=OneWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}\"", xaml);
     }
 
@@ -773,7 +773,7 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
-    /// Verifies Settings exposes the running protection and AI handoff configuration.
+    /// Verifies Settings exposes the running protection and AI review configuration.
     /// </summary>
     [Fact]
     public void DashboardShellViewModel_Settings_AppliesRunningConfiguration()
@@ -943,8 +943,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Why:", model.SelectedIncidentExplanation);
         Assert.Contains("Visual Studio on office-laptop", model.SelectedIncidentExplanation);
         Assert.True(model.CanApplyIncidentAction);
-        Assert.False(model.CanCreateIncidentAiHandoff);
-        Assert.False(model.HasIncidentAiHandoff);
+        Assert.False(model.CanReviewIncidentWithAi);
+        Assert.False(model.HasIncidentAiReview);
         Assert.Contains("Loaded 0 events, 2 ports, 2 incidents, and 1 devices.", model.StatusMessage);
     }
 
@@ -1026,10 +1026,10 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
-    /// Verifies selected incidents can produce privacy-safe manual AI review packets.
+    /// Verifies selected incidents can produce privacy-safe ChatGPT subscription review briefs.
     /// </summary>
     [Fact]
-    public async Task DashboardShellViewModel_CreateSelectedIncidentAiHandoff_RedactsSelectedIncident()
+    public async Task DashboardShellViewModel_CreateSelectedIncidentAiReview_BuildsRedactedChatGptBrief()
     {
         var repository = new FakeRepository
         {
@@ -1053,45 +1053,49 @@ public sealed class NotificationAndViewModelTests
         model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
 
         await model.LoadAsync(CancellationToken.None);
-        model.CreateSelectedIncidentAiHandoff();
+        model.CreateSelectedIncidentAiReview();
 
-        Assert.True(model.HasIncidentAiHandoff);
-        Assert.DoesNotContain("10.0.0.50", model.SelectedIncidentAiHandoff);
-        Assert.DoesNotContain("02:AC:CE:55:10:01", model.SelectedIncidentAiHandoff);
-        Assert.Contains("Microphone activated", model.SelectedIncidentAiHandoff);
-        Assert.Contains("[ip-address]", model.SelectedIncidentAiHandoff);
-        Assert.Contains("[mac-address]", model.SelectedIncidentAiHandoff);
-        Assert.Contains("Created redacted AI review packet", model.StatusMessage);
-        Assert.Contains(nameof(DashboardShellViewModel.SelectedIncidentAiHandoff), changed);
-        Assert.Contains(nameof(DashboardShellViewModel.HasIncidentAiHandoff), changed);
+        Assert.True(model.HasIncidentAiReview);
+        Assert.DoesNotContain("10.0.0.50", model.SelectedIncidentAiReview);
+        Assert.DoesNotContain("02:AC:CE:55:10:01", model.SelectedIncidentAiReview);
+        Assert.Contains("AccessWatch AI review workspace", model.SelectedIncidentAiReview);
+        Assert.Contains("Summary: See the redacted incident context below.", model.SelectedIncidentAiReview);
+        Assert.Contains("What to ask ChatGPT:", model.SelectedIncidentAiReview);
+        Assert.Contains("Microphone activated", model.SelectedIncidentAiReview);
+        Assert.Contains("[ip-address]", model.SelectedIncidentAiReview);
+        Assert.Contains("[mac-address]", model.SelectedIncidentAiReview);
+        Assert.Equal("https://chatgpt.com/", model.ChatGptReviewUrl);
+        Assert.Contains("Prepared AI review brief", model.StatusMessage);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedIncidentAiReview), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.HasIncidentAiReview), changed);
 
-        model.MarkIncidentAiHandoffCopied();
-        Assert.Equal("Copied redacted AI review packet.", model.StatusMessage);
+        model.MarkIncidentChatGptOpened();
+        Assert.Equal("Opened ChatGPT and copied the redacted review brief. Paste it into your ChatGPT subscription chat.", model.StatusMessage);
     }
 
     /// <summary>
-    /// Verifies AI handoff gives actionable status when no incident or AI mode is available.
+    /// Verifies AI review gives actionable status when no incident or AI mode is available.
     /// </summary>
     [Fact]
-    public async Task DashboardShellViewModel_CreateSelectedIncidentAiHandoff_ExplainsUnavailableStates()
+    public async Task DashboardShellViewModel_CreateSelectedIncidentAiReview_ExplainsUnavailableStates()
     {
         var model = new DashboardShellViewModel(new FakeRepository(), aiHandoffService: new ManualAiHandoffService());
 
-        model.CreateSelectedIncidentAiHandoff();
+        model.CreateSelectedIncidentAiReview();
 
         Assert.Equal("Select an incident to see its target, timeline, and AI review context.", model.SelectedIncidentDetail);
         Assert.Equal("Select an incident to see why AccessWatch grouped it and what to verify next.", model.SelectedIncidentExplanation);
         Assert.Equal("Select a port to see the owning application, reachability, risk, and timing context.", model.SelectedPortDetail);
         Assert.False(model.CanApplyIncidentAction);
-        Assert.False(model.CanCreateIncidentAiHandoff);
+        Assert.False(model.CanReviewIncidentWithAi);
         await model.ResolveSelectedIncidentAsync(CancellationToken.None);
         Assert.Equal("Select an incident before applying an incident action.", model.StatusMessage);
         await model.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
         Assert.Equal("Select an incident before creating a rule suggestion.", model.StatusMessage);
-        model.CreateSelectedIncidentAiHandoff();
-        Assert.Equal("Select an incident before creating an AI review packet.", model.StatusMessage);
-        model.MarkIncidentAiHandoffCopied();
-        Assert.Equal("Create an AI review packet before copying it.", model.StatusMessage);
+        model.CreateSelectedIncidentAiReview();
+        Assert.Equal("Select an incident before starting AI review.", model.StatusMessage);
+        model.MarkIncidentChatGptOpened();
+        Assert.Equal("Review the incident with AI before opening ChatGPT.", model.StatusMessage);
 
         var noServiceModel = new DashboardShellViewModel();
         noServiceModel.SelectedIncident = new DashboardIncidentItemViewModel(
@@ -1112,13 +1116,13 @@ public sealed class NotificationAndViewModelTests
             "No sensitive details.");
 
         Assert.False(noServiceModel.CanApplyIncidentAction);
-        Assert.False(noServiceModel.CanCreateIncidentAiHandoff);
+        Assert.False(noServiceModel.CanReviewIncidentWithAi);
         await noServiceModel.ResolveSelectedIncidentAsync(CancellationToken.None);
         Assert.Equal("Incident actions are not connected for this dashboard session.", noServiceModel.StatusMessage);
         await noServiceModel.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
         Assert.Equal("Rule suggestions are not connected for this dashboard session.", noServiceModel.StatusMessage);
-        noServiceModel.CreateSelectedIncidentAiHandoff();
-        Assert.Equal("AI handoff is not connected for this dashboard session.", noServiceModel.StatusMessage);
+        noServiceModel.CreateSelectedIncidentAiReview();
+        Assert.Equal("AI review is not connected for this dashboard session.", noServiceModel.StatusMessage);
 
         var disabledSettings = new AccessWatchSettings { AiMode = AiMode.Off };
         var disabledModel = new DashboardShellViewModel(new FakeRepository(), settings: disabledSettings, aiHandoffService: new ManualAiHandoffService());
@@ -1141,11 +1145,12 @@ public sealed class NotificationAndViewModelTests
 
         Assert.Contains("worth watching", disabledModel.SelectedIncidentExplanation);
         Assert.Contains("Verify which app or device", disabledModel.SelectedIncidentExplanation);
-        Assert.False(disabledModel.CanCreateIncidentAiHandoff);
-        disabledModel.CreateSelectedIncidentAiHandoff();
+        Assert.False(disabledModel.CanReviewIncidentWithAi);
+        disabledModel.CreateSelectedIncidentAiReview();
 
-        Assert.Equal("Turn on AI handoff in Settings before creating a review packet.", disabledModel.StatusMessage);
+        Assert.Equal("Turn on AI review in Settings before reviewing with ChatGPT.", disabledModel.StatusMessage);
     }
+
     /// <summary>
     /// Verifies event activity explains the owning application and the reason AccessWatch flagged it.
     /// </summary>
