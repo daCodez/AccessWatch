@@ -139,6 +139,22 @@ public interface IAccessWatchRepository
     Task<IReadOnlyList<Incident>> ListRecentIncidentsAsync(int limit, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Saves or updates an AccessWatch rule.
+    /// </summary>
+    /// <param name="rule">The rule to save.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>The database rule identifier.</returns>
+    Task<long> UpsertRuleAsync(AccessWatchRule rule, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists stored AccessWatch rules.
+    /// </summary>
+    /// <param name="includeDisabled">Whether disabled rule suggestions should be included.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>Rules ordered for dashboard and future rule management surfaces.</returns>
+    Task<IReadOnlyList<AccessWatchRule>> ListRulesAsync(bool includeDisabled, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Lists recent applications for future UI surfaces.
     /// </summary>
     /// <param name="limit">Maximum number of rows to return.</param>

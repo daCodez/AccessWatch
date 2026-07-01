@@ -243,12 +243,24 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="{Binding SelectedIncidentDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button Content="Resolve" IsEnabled="{Binding CanApplyIncidentAction}" Width="72" Height="30" Margin="0,0,8,0" Click="OnResolveIncidentClick" />
+                                    <Button Content="Watch" IsEnabled="{Binding CanApplyIncidentAction}" Width="68" Height="30" Margin="0,0,8,0" Click="OnWatchIncidentClick" />
+                                    <Button Content="Escalate" IsEnabled="{Binding CanApplyIncidentAction}" Width="78" Height="30" Margin="0,0,8,0" Click="OnEscalateIncidentClick" />
+                                    <Button Content="Create rule" IsEnabled="{Binding CanApplyIncidentAction}" Width="92" Height="30" Margin="0,0,8,0" Click="OnCreateIncidentRuleClick" />
                                     <Button Content="Create AI packet" IsEnabled="{Binding CanCreateIncidentAiHandoff}" Width="118" Height="30" Margin="0,0,8,0" Click="OnCreateIncidentAiHandoffClick" />
                                     <Button Content="Copy packet" IsEnabled="{Binding HasIncidentAiHandoff}" Width="92" Height="30" Click="OnCopyIncidentAiHandoffClick" />
                                 </StackPanel>
                             </Grid>
                         </Border>
-                        <TextBox Grid.Row="2" Text="{Binding SelectedIncidentAiHandoff, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
+                        <Grid Grid.Row="2" Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding SelectedIncidentAiHandoff, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
+                            <TextBox Grid.Column="2" Text="{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
+                        </Grid>
                     </Grid>
                 </Border>
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding SettingsVisibility}">

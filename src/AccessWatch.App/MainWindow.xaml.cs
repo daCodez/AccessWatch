@@ -118,6 +118,26 @@ public partial class MainWindow : Window
         await viewModel.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
     }
 
+    private async void OnResolveIncidentClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ResolveSelectedIncidentAsync(CancellationToken.None);
+    }
+
+    private async void OnWatchIncidentClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.WatchSelectedIncidentAsync(CancellationToken.None);
+    }
+
+    private async void OnEscalateIncidentClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.EscalateSelectedIncidentAsync(CancellationToken.None);
+    }
+
+    private async void OnCreateIncidentRuleClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
+    }
+
     private void OnCreateIncidentAiHandoffClick(object sender, RoutedEventArgs e)
     {
         viewModel.CreateSelectedIncidentAiHandoff();

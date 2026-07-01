@@ -81,6 +81,8 @@ public sealed record DashboardIncidentItemViewModel(
     long? MainApplicationId,
     RiskLevel RawRiskLevel,
     IncidentStatus RawStatus,
+    DateTimeOffset RawStartedUtc,
+    DateTimeOffset RawLastUpdatedUtc,
     string Title,
     string RiskLevel,
     string Status,
@@ -115,6 +117,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private DashboardApplicationItemViewModel? selectedApplication;
     private DashboardIncidentItemViewModel? selectedIncident;
     private string selectedIncidentAiHandoff = string.Empty;
+    private string selectedIncidentRuleSuggestion = string.Empty;
     private string selectedDeviceAlias = string.Empty;
     private bool isLoading;
 
@@ -400,11 +403,15 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
             selectedIncident = value;
             selectedIncidentAiHandoff = string.Empty;
+            selectedIncidentRuleSuggestion = string.Empty;
             OnPropertyChanged(nameof(SelectedIncident));
             OnPropertyChanged(nameof(SelectedIncidentDetail));
+            OnPropertyChanged(nameof(CanApplyIncidentAction));
             OnPropertyChanged(nameof(CanCreateIncidentAiHandoff));
             OnPropertyChanged(nameof(SelectedIncidentAiHandoff));
             OnPropertyChanged(nameof(HasIncidentAiHandoff));
+            OnPropertyChanged(nameof(SelectedIncidentRuleSuggestion));
+            OnPropertyChanged(nameof(HasIncidentRuleSuggestion));
         }
     }
 
@@ -414,6 +421,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public string SelectedIncidentDetail => selectedIncident is null
         ? "Select an incident to see its target, timeline, and AI review context."
         : $"Incident: {selectedIncident.Title} | Target: {selectedIncident.MainTarget} | Risk: {selectedIncident.RiskLevel} | Status: {selectedIncident.Status} | Events: {selectedIncident.EventCount} | Summary: {selectedIncident.Summary}";
+
+    /// <summary>
+    /// Gets whether incident action buttons can run.
+    /// </summary>
+    public bool CanApplyIncidentAction => selectedIncident is not null && repository is not null;
 
     /// <summary>
     /// Gets whether an incident is selected for AI handoff.
@@ -432,6 +444,16 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets whether the current incident has a generated handoff packet.
     /// </summary>
     public bool HasIncidentAiHandoff => !string.IsNullOrWhiteSpace(selectedIncidentAiHandoff);
+
+    /// <summary>
+    /// Gets the structured rule suggestion created from the selected incident.
+    /// </summary>
+    public string SelectedIncidentRuleSuggestion => selectedIncidentRuleSuggestion;
+
+    /// <summary>
+    /// Gets whether the current incident has a generated rule suggestion.
+    /// </summary>
+    public bool HasIncidentRuleSuggestion => !string.IsNullOrWhiteSpace(selectedIncidentRuleSuggestion);
 
     /// <summary>
     /// Gets recent listening ports loaded from storage.
@@ -723,6 +745,55 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Marks the selected incident as resolved.
+    /// </summary>
+    public Task ResolveSelectedIncidentAsync(CancellationToken cancellationToken)
+    {
+        return ApplySelectedIncidentUpdateAsync(IncidentStatus.Resolved, null, "Resolved", cancellationToken);
+    }
+
+    /// <summary>
+    /// Marks the selected incident as watched.
+    /// </summary>
+    public Task WatchSelectedIncidentAsync(CancellationToken cancellationToken)
+    {
+        return ApplySelectedIncidentUpdateAsync(IncidentStatus.Watching, null, "Watching", cancellationToken);
+    }
+
+    /// <summary>
+    /// Escalates the selected incident to critical review.
+    /// </summary>
+    public Task EscalateSelectedIncidentAsync(CancellationToken cancellationToken)
+    {
+        return ApplySelectedIncidentUpdateAsync(IncidentStatus.Open, RiskLevel.Critical, "Escalated", cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a disabled rule suggestion from the selected incident.
+    /// </summary>
+    public async Task CreateRuleFromSelectedIncidentAsync(CancellationToken cancellationToken)
+    {
+        if (selectedIncident is null)
+        {
+            StatusMessage = "Select an incident before creating a rule suggestion.";
+            return;
+        }
+
+        if (repository is null)
+        {
+            StatusMessage = "Rule suggestions are not connected for this dashboard session.";
+            return;
+        }
+
+        var rule = CreateRuleSuggestion(selectedIncident);
+        var ruleId = await repository.UpsertRuleAsync(rule, cancellationToken);
+        selectedIncidentRuleSuggestion = rule.ConditionJson;
+        OnPropertyChanged(nameof(SelectedIncidentRuleSuggestion));
+        OnPropertyChanged(nameof(HasIncidentRuleSuggestion));
+        StatusMessage = $"Created disabled rule suggestion #{ruleId} from {selectedIncident.Title}.";
+    }
+
+    /// <summary>
     /// Creates a redacted AI review packet for the selected incident.
     /// </summary>
     public void CreateSelectedIncidentAiHandoff()
@@ -745,19 +816,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        var incident = new Incident
-        {
-            IncidentId = selectedIncident.IncidentId,
-            MainDeviceId = selectedIncident.MainDeviceId,
-            MainApplicationId = selectedIncident.MainApplicationId,
-            Title = selectedIncident.Title,
-            Summary = selectedIncident.Summary,
-            RiskLevel = selectedIncident.RawRiskLevel,
-            Status = selectedIncident.RawStatus,
-            EventCount = selectedIncident.EventCount
-        };
-
-        selectedIncidentAiHandoff = aiHandoffService.CreateRedactedIncidentSummary(incident);
+        selectedIncidentAiHandoff = aiHandoffService.CreateRedactedIncidentSummary(ToIncident(selectedIncident));
         OnPropertyChanged(nameof(SelectedIncidentAiHandoff));
         OnPropertyChanged(nameof(HasIncidentAiHandoff));
         StatusMessage = $"Created redacted AI review packet for {selectedIncident.Title}.";
@@ -771,6 +830,91 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         StatusMessage = HasIncidentAiHandoff
             ? "Copied redacted AI review packet."
             : "Create an AI review packet before copying it.";
+    }
+
+    private async Task ApplySelectedIncidentUpdateAsync(
+        IncidentStatus status,
+        RiskLevel? riskLevel,
+        string statusVerb,
+        CancellationToken cancellationToken)
+    {
+        if (selectedIncident is null)
+        {
+            StatusMessage = "Select an incident before applying an incident action.";
+            return;
+        }
+
+        if (repository is null)
+        {
+            StatusMessage = "Incident actions are not connected for this dashboard session.";
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var updatedRisk = riskLevel ?? selectedIncident.RawRiskLevel;
+        var updatedIncident = selectedIncident with
+        {
+            RawRiskLevel = updatedRisk,
+            RawStatus = status,
+            RiskLevel = updatedRisk.ToString(),
+            Status = status.ToString(),
+            LastUpdated = FormatTimestamp(now),
+            RawLastUpdatedUtc = now
+        };
+
+        var incident = ToIncident(updatedIncident, status == IncidentStatus.Resolved ? now : null);
+        await repository.UpsertIncidentAsync(incident, cancellationToken);
+        var selectedIndex = Incidents.IndexOf(selectedIncident);
+        if (selectedIndex >= 0)
+        {
+            Incidents[selectedIndex] = updatedIncident;
+        }
+
+        SelectedIncident = updatedIncident;
+        StatusMessage = $"{statusVerb} incident {updatedIncident.Title}.";
+    }
+
+    private static Incident ToIncident(DashboardIncidentItemViewModel incident, DateTimeOffset? resolvedUtc = null)
+    {
+        return new Incident
+        {
+            IncidentId = incident.IncidentId,
+            Title = incident.Title,
+            Summary = incident.Summary,
+            MainDeviceId = incident.MainDeviceId,
+            MainApplicationId = incident.MainApplicationId,
+            RiskLevel = incident.RawRiskLevel,
+            Status = incident.RawStatus,
+            EventCount = incident.EventCount,
+            StartedUtc = incident.RawStartedUtc,
+            LastUpdatedUtc = incident.RawLastUpdatedUtc,
+            ResolvedUtc = resolvedUtc
+        };
+    }
+
+    private static AccessWatchRule CreateRuleSuggestion(DashboardIncidentItemViewModel incident)
+    {
+        var condition = new
+        {
+            source = "IncidentSuggestion",
+            incidentId = incident.IncidentId,
+            title = incident.Title,
+            target = incident.MainTarget,
+            mainDeviceId = incident.MainDeviceId,
+            mainApplicationId = incident.MainApplicationId,
+            riskLevel = incident.RiskLevel,
+            eventCount = incident.EventCount
+        };
+
+        return new AccessWatchRule
+        {
+            Name = $"Review {FirstUseful(incident.Title, "incident")}",
+            Description = $"Suggested from incident {incident.IncidentId}: {incident.Summary}",
+            ConditionJson = JsonSerializer.Serialize(condition, new JsonSerializerOptions { WriteIndented = true }),
+            RiskLevel = incident.RawRiskLevel,
+            Action = incident.RawRiskLevel >= RiskLevel.High ? NotificationAction.AskBeforeAllow : NotificationAction.SoftNotify,
+            Enabled = false
+        };
     }
 
     /// <summary>
@@ -940,6 +1084,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 incident.MainApplicationId,
                 incident.RiskLevel,
                 incident.Status,
+                incident.StartedUtc,
+                incident.LastUpdatedUtc,
                 FirstUseful(incident.Title, "Untitled incident"),
                 incident.RiskLevel.ToString(),
                 incident.Status.ToString(),

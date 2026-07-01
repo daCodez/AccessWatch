@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AccessWatch.App.ViewModels;
 using AccessWatch.AI;
 using AccessWatch.Core;
@@ -110,11 +111,20 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentDetail}\"", xaml);
+        Assert.Contains("Content=\"Resolve\"", xaml);
+        Assert.Contains("Content=\"Watch\"", xaml);
+        Assert.Contains("Content=\"Escalate\"", xaml);
+        Assert.Contains("Content=\"Create rule\"", xaml);
         Assert.Contains("Content=\"Create AI packet\"", xaml);
         Assert.Contains("Content=\"Copy packet\"", xaml);
+        Assert.Contains("Click=\"OnResolveIncidentClick\"", xaml);
+        Assert.Contains("Click=\"OnWatchIncidentClick\"", xaml);
+        Assert.Contains("Click=\"OnEscalateIncidentClick\"", xaml);
+        Assert.Contains("Click=\"OnCreateIncidentRuleClick\"", xaml);
         Assert.Contains("Click=\"OnCreateIncidentAiHandoffClick\"", xaml);
         Assert.Contains("Click=\"OnCopyIncidentAiHandoffClick\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentAiHandoff, Mode=OneWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}\"", xaml);
     }
 
     /// <summary>
@@ -870,9 +880,86 @@ public sealed class NotificationAndViewModelTests
             });
         Assert.Same(model.Incidents[0], model.SelectedIncident);
         Assert.Contains("Camera activated", model.SelectedIncidentDetail);
+        Assert.True(model.CanApplyIncidentAction);
         Assert.False(model.CanCreateIncidentAiHandoff);
         Assert.False(model.HasIncidentAiHandoff);
         Assert.Contains("Loaded 0 events, 2 ports, 2 incidents, and 1 devices.", model.StatusMessage);
+    }
+
+    /// <summary>
+    /// Verifies selected incident actions persist state and create rule suggestions.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_IncidentActions_PersistStatusAndRuleSuggestion()
+    {
+        var repository = new FakeRepository
+        {
+            Incidents =
+            [
+                new Incident
+                {
+                    IncidentId = 55,
+                    Title = "Microphone activated",
+                    Summary = "Skype accessed the microphone.",
+                    MainDeviceId = 4,
+                    MainApplicationId = 9,
+                    RiskLevel = RiskLevel.Medium,
+                    Status = IncidentStatus.Open,
+                    EventCount = 4,
+                    StartedUtc = new DateTimeOffset(2026, 6, 29, 13, 0, 0, TimeSpan.Zero),
+                    LastUpdatedUtc = new DateTimeOffset(2026, 6, 29, 13, 5, 0, TimeSpan.Zero)
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.True(model.CanApplyIncidentAction);
+        Assert.False(model.HasIncidentRuleSuggestion);
+
+        await model.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
+
+        var mediumRule = Assert.Single(repository.RuleUpserts);
+        Assert.False(mediumRule.Enabled);
+        Assert.Equal(NotificationAction.SoftNotify, mediumRule.Action);
+        Assert.Contains("Skype accessed the microphone", mediumRule.Description);
+        Assert.True(model.HasIncidentRuleSuggestion);
+        Assert.Contains("IncidentSuggestion", model.SelectedIncidentRuleSuggestion);
+        using (var document = JsonDocument.Parse(model.SelectedIncidentRuleSuggestion))
+        {
+            Assert.Equal(55, document.RootElement.GetProperty("incidentId").GetInt64());
+            Assert.Equal(9, document.RootElement.GetProperty("mainApplicationId").GetInt64());
+            Assert.Equal("Medium", document.RootElement.GetProperty("riskLevel").GetString());
+        }
+
+        await model.WatchSelectedIncidentAsync(CancellationToken.None);
+
+        Assert.Equal(IncidentStatus.Watching, repository.IncidentUpserts[0].Status);
+        Assert.Equal("Watching", model.SelectedIncident!.Status);
+        Assert.Contains("Watching incident Microphone activated", model.StatusMessage);
+
+        await model.ResolveSelectedIncidentAsync(CancellationToken.None);
+
+        Assert.Equal(IncidentStatus.Resolved, repository.IncidentUpserts[1].Status);
+        Assert.NotNull(repository.IncidentUpserts[1].ResolvedUtc);
+        Assert.Equal("Resolved", model.SelectedIncident!.Status);
+
+        await model.EscalateSelectedIncidentAsync(CancellationToken.None);
+
+        Assert.Equal(RiskLevel.Critical, repository.IncidentUpserts[2].RiskLevel);
+        Assert.Equal(IncidentStatus.Open, repository.IncidentUpserts[2].Status);
+        Assert.Equal("Critical", model.SelectedIncident!.RiskLevel);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedIncidentRuleSuggestion), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.HasIncidentRuleSuggestion), changed);
+
+        await model.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
+
+        Assert.Equal(2, repository.RuleUpserts.Count);
+        Assert.Equal(NotificationAction.AskBeforeAllow, repository.RuleUpserts[1].Action);
+        Assert.Contains("Critical", model.SelectedIncidentRuleSuggestion);
     }
 
     /// <summary>
@@ -923,25 +1010,33 @@ public sealed class NotificationAndViewModelTests
     /// Verifies AI handoff gives actionable status when no incident or AI mode is available.
     /// </summary>
     [Fact]
-    public void DashboardShellViewModel_CreateSelectedIncidentAiHandoff_ExplainsUnavailableStates()
+    public async Task DashboardShellViewModel_CreateSelectedIncidentAiHandoff_ExplainsUnavailableStates()
     {
         var model = new DashboardShellViewModel(new FakeRepository(), aiHandoffService: new ManualAiHandoffService());
 
         model.CreateSelectedIncidentAiHandoff();
 
         Assert.Equal("Select an incident to see its target, timeline, and AI review context.", model.SelectedIncidentDetail);
+        Assert.False(model.CanApplyIncidentAction);
         Assert.False(model.CanCreateIncidentAiHandoff);
+        await model.ResolveSelectedIncidentAsync(CancellationToken.None);
+        Assert.Equal("Select an incident before applying an incident action.", model.StatusMessage);
+        await model.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
+        Assert.Equal("Select an incident before creating a rule suggestion.", model.StatusMessage);
+        model.CreateSelectedIncidentAiHandoff();
         Assert.Equal("Select an incident before creating an AI review packet.", model.StatusMessage);
         model.MarkIncidentAiHandoffCopied();
         Assert.Equal("Create an AI review packet before copying it.", model.StatusMessage);
 
-        var noServiceModel = new DashboardShellViewModel(new FakeRepository());
+        var noServiceModel = new DashboardShellViewModel();
         noServiceModel.SelectedIncident = new DashboardIncidentItemViewModel(
             2,
             null,
             null,
             RiskLevel.Low,
             IncidentStatus.Open,
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch,
             "Port opened",
             "Low",
             "Open",
@@ -951,7 +1046,12 @@ public sealed class NotificationAndViewModelTests
             "Not recorded",
             "No sensitive details.");
 
+        Assert.False(noServiceModel.CanApplyIncidentAction);
         Assert.False(noServiceModel.CanCreateIncidentAiHandoff);
+        await noServiceModel.ResolveSelectedIncidentAsync(CancellationToken.None);
+        Assert.Equal("Incident actions are not connected for this dashboard session.", noServiceModel.StatusMessage);
+        await noServiceModel.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
+        Assert.Equal("Rule suggestions are not connected for this dashboard session.", noServiceModel.StatusMessage);
         noServiceModel.CreateSelectedIncidentAiHandoff();
         Assert.Equal("AI handoff is not connected for this dashboard session.", noServiceModel.StatusMessage);
 
@@ -963,6 +1063,8 @@ public sealed class NotificationAndViewModelTests
             null,
             RiskLevel.Low,
             IncidentStatus.Open,
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch,
             "Port opened",
             "Low",
             "Open",
@@ -1529,6 +1631,10 @@ public sealed class NotificationAndViewModelTests
 
         public List<TrustDecision> TrustDecisions { get; } = [];
 
+        public List<Incident> IncidentUpserts { get; } = [];
+
+        public List<AccessWatchRule> RuleUpserts { get; } = [];
+
         public List<(long DeviceId, string? UserAlias)> AliasUpdates { get; } = [];
 
         public Exception? Failure { get; init; }
@@ -1601,12 +1707,14 @@ public sealed class NotificationAndViewModelTests
 
         public Task<long> UpsertIncidentAsync(Incident incident, CancellationToken cancellationToken)
         {
-            return Task.FromResult(1L);
+            IncidentUpserts.Add(incident with { IncidentId = incident.IncidentId > 0 ? incident.IncidentId : IncidentUpserts.Count + 1 });
+            return Task.FromResult(IncidentUpserts[^1].IncidentId);
         }
 
         public Task<long> UpsertRuleAsync(AccessWatchRule rule, CancellationToken cancellationToken)
         {
-            return Task.FromResult(1L);
+            RuleUpserts.Add(rule with { RuleId = RuleUpserts.Count + 1 });
+            return Task.FromResult((long)RuleUpserts.Count);
         }
 
         public Task<IReadOnlyList<Incident>> ListRecentIncidentsAsync(int limit, CancellationToken cancellationToken)
