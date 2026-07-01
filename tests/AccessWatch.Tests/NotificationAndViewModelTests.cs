@@ -89,6 +89,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Visibility=\"{Binding PortsVisibility}\"", xaml);
         Assert.Contains("Visibility=\"{Binding IncidentsVisibility}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Ports}\"", xaml);
+        Assert.Contains("SelectedItem=\"{Binding SelectedPort, Mode=TwoWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedPortDetail}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Incidents}\"", xaml);
         Assert.Contains("Visibility=\"{Binding SettingsVisibility}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding ProtectionModeOptions}\"", xaml);
@@ -98,6 +100,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click=\"OnApplySettingsClick\"", xaml);
         Assert.Contains("Click=\"OnResetSettingsClick\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedDevice, Mode=TwoWay}\"", xaml);
+        Assert.Contains("Header=\"Name source\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedDeviceDetail}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedApplication, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedApplicationDetail}\"", xaml);
@@ -111,6 +114,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentDetail}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentExplanation, Mode=OneWay}\"", xaml);
         Assert.Contains("Content=\"Resolve\"", xaml);
         Assert.Contains("Content=\"Watch\"", xaml);
         Assert.Contains("Content=\"Escalate\"", xaml);
@@ -457,6 +461,7 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("192.168.1.50", device.IpAddress);
                 Assert.Equal("AA:BB:CC:DD:EE:50", device.MacAddress);
                 Assert.Equal("Example Devices", device.Vendor);
+                Assert.Equal("Hostname", device.NameSource);
                 Assert.Equal("Trusted", device.TrustStatus);
                 Assert.Equal("Normal", device.RiskStatus);
                 Assert.NotEqual("Not recorded", device.LastSeen);
@@ -464,7 +469,8 @@ public sealed class NotificationAndViewModelTests
             },
             device =>
             {
-                Assert.Equal("Name unavailable", device.Name);
+                Assert.Equal("Device at 192.168.1.77", device.Name);
+                Assert.Equal("IP address fallback", device.NameSource);
                 Assert.Equal("MAC address unavailable", device.MacAddress);
                 Assert.Equal("Vendor unavailable", device.Vendor);
                 Assert.Equal("Not recorded", device.LastSeen);
@@ -639,6 +645,39 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies clearing an alias falls back to an honest IP-based label when discovery only found an IP address.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ClearSelectedDeviceAliasAsync_UsesIpFallbackWhenNoResolvedName()
+    {
+        var repository = new FakeRepository
+        {
+            Devices =
+            [
+                new NetworkDevice
+                {
+                    DeviceId = 101,
+                    UserAlias = "Temporary Laptop",
+                    Hostname = "192.168.1.88",
+                    IpAddress = "192.168.1.88",
+                    MacAddress = "02:AC:CE:55:88:88"
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("Temporary Laptop", model.SelectedDevice?.Name);
+        Assert.Equal("User alias", model.SelectedDevice?.NameSource);
+
+        await model.ClearSelectedDeviceAliasAsync(CancellationToken.None);
+
+        Assert.Equal("Device at 192.168.1.88", model.SelectedDevice?.Name);
+        Assert.Equal("IP address fallback", model.SelectedDevice?.NameSource);
+        Assert.Equal((101L, null), Assert.Single(repository.AliasUpdates));
+    }
+    /// <summary>
     /// Verifies alias saves require a selected device.
     /// </summary>
     [Fact]
@@ -699,9 +738,10 @@ public sealed class NotificationAndViewModelTests
         {
             Devices =
             [
-                new NetworkDevice { Hostname = "192.168.1.30", IpAddress = "192.168.1.30", MacAddress = "02:AC:CE:55:30:30" },
-                new NetworkDevice { Hostname = "printer:raw", IpAddress = "192.168.1.31", MacAddress = "02:AC:CE:55:30:31" },
-                new NetworkDevice { Hostname = "printer-den", IpAddress = "192.168.1.32", MacAddress = "02:AC:CE:55:30:32" }
+                new NetworkDevice { Hostname = "192.168.1.30", IpAddress = "192.168.1.30", MacAddress = "02:AC:CE:55:30:30", DeviceTypeGuess = "Phone" },
+                new NetworkDevice { Hostname = "printer:raw", IpAddress = "192.168.1.31", MacAddress = "02:AC:CE:55:30:31", Vendor = "Contoso" },
+                new NetworkDevice { Hostname = "printer-den", IpAddress = "192.168.1.32", MacAddress = "02:AC:CE:55:30:32" },
+                new NetworkDevice { UserAlias = "Kitchen speaker", Hostname = "192.168.1.33", IpAddress = "192.168.1.33", MacAddress = "02:AC:CE:55:30:33" }
             ]
         };
         var model = new DashboardShellViewModel(repository);
@@ -710,9 +750,26 @@ public sealed class NotificationAndViewModelTests
 
         Assert.Collection(
             model.Devices,
-            device => Assert.Equal("Name unavailable", device.Name),
-            device => Assert.Equal("Name unavailable", device.Name),
-            device => Assert.Equal("printer-den", device.Name));
+            device =>
+            {
+                Assert.Equal("Phone at 192.168.1.30", device.Name);
+                Assert.Equal("Device type", device.NameSource);
+            },
+            device =>
+            {
+                Assert.Equal("Contoso device at 192.168.1.31", device.Name);
+                Assert.Equal("Vendor", device.NameSource);
+            },
+            device =>
+            {
+                Assert.Equal("printer-den", device.Name);
+                Assert.Equal("Hostname", device.NameSource);
+            },
+            device =>
+            {
+                Assert.Equal("Kitchen speaker", device.Name);
+                Assert.Equal("User alias", device.NameSource);
+            });
     }
 
     /// <summary>
@@ -854,6 +911,9 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("Not recorded", port.FirstSeen);
                 Assert.Equal("Application identity unavailable", port.Detail);
             });
+        Assert.Same(model.Ports[0], model.SelectedPort);
+        Assert.Contains("TCP 0.0.0.0:9443", model.SelectedPortDetail);
+        Assert.Contains("Visual Studio", model.SelectedPortDetail);
         Assert.Collection(
             model.Incidents,
             incident =>
@@ -880,6 +940,8 @@ public sealed class NotificationAndViewModelTests
             });
         Assert.Same(model.Incidents[0], model.SelectedIncident);
         Assert.Contains("Camera activated", model.SelectedIncidentDetail);
+        Assert.Contains("Why:", model.SelectedIncidentExplanation);
+        Assert.Contains("Visual Studio on office-laptop", model.SelectedIncidentExplanation);
         Assert.True(model.CanApplyIncidentAction);
         Assert.False(model.CanCreateIncidentAiHandoff);
         Assert.False(model.HasIncidentAiHandoff);
@@ -946,6 +1008,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal(IncidentStatus.Resolved, repository.IncidentUpserts[1].Status);
         Assert.NotNull(repository.IncidentUpserts[1].ResolvedUtc);
         Assert.Equal("Resolved", model.SelectedIncident!.Status);
+        Assert.Contains("marked resolved", model.SelectedIncidentExplanation);
 
         await model.EscalateSelectedIncidentAsync(CancellationToken.None);
 
@@ -1017,6 +1080,8 @@ public sealed class NotificationAndViewModelTests
         model.CreateSelectedIncidentAiHandoff();
 
         Assert.Equal("Select an incident to see its target, timeline, and AI review context.", model.SelectedIncidentDetail);
+        Assert.Equal("Select an incident to see why AccessWatch grouped it and what to verify next.", model.SelectedIncidentExplanation);
+        Assert.Equal("Select a port to see the owning application, reachability, risk, and timing context.", model.SelectedPortDetail);
         Assert.False(model.CanApplyIncidentAction);
         Assert.False(model.CanCreateIncidentAiHandoff);
         await model.ResolveSelectedIncidentAsync(CancellationToken.None);
@@ -1074,6 +1139,8 @@ public sealed class NotificationAndViewModelTests
             "Not recorded",
             "No sensitive details.");
 
+        Assert.Contains("worth watching", disabledModel.SelectedIncidentExplanation);
+        Assert.Contains("Verify which app or device", disabledModel.SelectedIncidentExplanation);
         Assert.False(disabledModel.CanCreateIncidentAiHandoff);
         disabledModel.CreateSelectedIncidentAiHandoff();
 
@@ -1378,7 +1445,7 @@ public sealed class NotificationAndViewModelTests
         var activity = Assert.Single(model.RecentActivity);
         Assert.Equal("Unknown", activity.Kind);
         Assert.Contains("192.168.1.10", activity.Summary);
-        Assert.Equal("Name unavailable", activity.ApplicationName);
+        Assert.Equal("Device at 192.168.1.10", activity.ApplicationName);
         Assert.Equal("AA:BB:CC:DD:EE:FF", activity.Detail);
     }
 
@@ -1743,4 +1810,3 @@ public sealed class NotificationAndViewModelTests
         }
     }
 }
-

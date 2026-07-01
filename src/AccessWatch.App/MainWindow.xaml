@@ -131,6 +131,7 @@
                         <DataGrid ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Device" Binding="{Binding Name}" Width="220" MinWidth="180" />
+                                <DataGridTextColumn Header="Name source" Binding="{Binding NameSource}" Width="130" />
                                 <DataGridTextColumn Header="IP address" Binding="{Binding IpAddress}" Width="130" />
                                 <DataGridTextColumn Header="MAC" Binding="{Binding MacAddress}" Width="150" />
                                 <DataGridTextColumn Header="Vendor" Binding="{Binding Vendor}" Width="150" />
@@ -202,18 +203,27 @@
                 </Border>
 
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding PortsVisibility}">
-                    <DataGrid ItemsSource="{Binding Ports}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Endpoint" Binding="{Binding Endpoint}" Width="150" />
-                            <DataGridTextColumn Header="Application" Binding="{Binding ApplicationName}" Width="1.5*" />
-                            <DataGridTextColumn Header="Reachability" Binding="{Binding Reachability}" Width="130" />
-                            <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
-                            <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
-                            <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="130" />
-                            <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
-                            <DataGridTextColumn Header="Identity" Binding="{Binding Detail}" Width="2*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <DataGrid Grid.Row="0" ItemsSource="{Binding Ports}" SelectedItem="{Binding SelectedPort, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Endpoint" Binding="{Binding Endpoint}" Width="150" />
+                                <DataGridTextColumn Header="Application" Binding="{Binding ApplicationName}" Width="1.5*" />
+                                <DataGridTextColumn Header="Reachability" Binding="{Binding Reachability}" Width="130" />
+                                <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
+                                <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
+                                <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="130" />
+                                <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
+                                <DataGridTextColumn Header="Identity" Binding="{Binding Detail}" Width="2*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
+                            <TextBlock Text="{Binding SelectedPortDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" />
+                        </Border>
+                    </Grid>
                 </Border>
 
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding IncidentsVisibility}">
@@ -257,9 +267,12 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="12" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Text="{Binding SelectedIncidentAiHandoff, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
-                            <TextBox Grid.Column="2" Text="{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
+                            <TextBox Grid.Column="0" Text="{Binding SelectedIncidentExplanation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontSize="12" />
+                            <TextBox Grid.Column="2" Text="{Binding SelectedIncidentAiHandoff, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
+                            <TextBox Grid.Column="4" Text="{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
                         </Grid>
                     </Grid>
                 </Border>

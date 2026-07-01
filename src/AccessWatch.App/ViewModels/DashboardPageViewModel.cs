@@ -38,6 +38,7 @@ public sealed record DashboardDeviceItemViewModel(
     string Name,
     string UserAlias,
     string ResolvedName,
+    string NameSource,
     string IpAddress,
     string MacAddress,
     string Vendor,
@@ -115,6 +116,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private string activeOperation = string.Empty;
     private DashboardDeviceItemViewModel? selectedDevice;
     private DashboardApplicationItemViewModel? selectedApplication;
+    private DashboardPortItemViewModel? selectedPort;
     private DashboardIncidentItemViewModel? selectedIncident;
     private string selectedIncidentAiHandoff = string.Empty;
     private string selectedIncidentRuleSuggestion = string.Empty;
@@ -389,6 +391,32 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public bool CanApplyApplicationTrustDecision => selectedApplication is not null;
 
     /// <summary>
+    /// Gets or sets the selected port shown in the detail panel.
+    /// </summary>
+    public DashboardPortItemViewModel? SelectedPort
+    {
+        get => selectedPort;
+        set
+        {
+            if (Equals(selectedPort, value))
+            {
+                return;
+            }
+
+            selectedPort = value;
+            OnPropertyChanged(nameof(SelectedPort));
+            OnPropertyChanged(nameof(SelectedPortDetail));
+        }
+    }
+
+    /// <summary>
+    /// Gets plain-English details for the selected listening port.
+    /// </summary>
+    public string SelectedPortDetail => selectedPort is null
+        ? "Select a port to see the owning application, reachability, risk, and timing context."
+        : $"Port: {selectedPort.Endpoint} | Application: {selectedPort.ApplicationName} | Reachability: {selectedPort.Reachability} | Risk: {selectedPort.RiskStatus} | Trust: {selectedPort.TrustStatus} | First seen: {selectedPort.FirstSeen} | Last seen: {selectedPort.LastSeen} | Identity: {selectedPort.Detail}";
+
+    /// <summary>
     /// Gets or sets the selected incident shown in the detail panel.
     /// </summary>
     public DashboardIncidentItemViewModel? SelectedIncident
@@ -406,6 +434,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             selectedIncidentRuleSuggestion = string.Empty;
             OnPropertyChanged(nameof(SelectedIncident));
             OnPropertyChanged(nameof(SelectedIncidentDetail));
+            OnPropertyChanged(nameof(SelectedIncidentExplanation));
             OnPropertyChanged(nameof(CanApplyIncidentAction));
             OnPropertyChanged(nameof(CanCreateIncidentAiHandoff));
             OnPropertyChanged(nameof(SelectedIncidentAiHandoff));
@@ -421,6 +450,13 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public string SelectedIncidentDetail => selectedIncident is null
         ? "Select an incident to see its target, timeline, and AI review context."
         : $"Incident: {selectedIncident.Title} | Target: {selectedIncident.MainTarget} | Risk: {selectedIncident.RiskLevel} | Status: {selectedIncident.Status} | Events: {selectedIncident.EventCount} | Summary: {selectedIncident.Summary}";
+
+    /// <summary>
+    /// Gets a local explanation of the selected incident and what to verify next.
+    /// </summary>
+    public string SelectedIncidentExplanation => selectedIncident is null
+        ? "Select an incident to see why AccessWatch grouped it and what to verify next."
+        : BuildIncidentExplanation(selectedIncident);
 
     /// <summary>
     /// Gets whether incident action buttons can run.
@@ -1020,6 +1056,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 DisplayDeviceName(device),
                 FirstUseful(device.UserAlias),
                 ResolvedDeviceName(device),
+                DeviceNameSource(device),
                 device.IpAddress,
                 FirstUseful(device.MacAddress, "MAC address unavailable"),
                 FirstUseful(device.Vendor, "Vendor unavailable"),
@@ -1066,6 +1103,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 FormatTimestamp(port.LastSeenUtc),
                 BuildApplicationIdentity(port.Application, port.Application?.ProcessName)));
         }
+
+        SelectedPort = Ports.FirstOrDefault();
     }
 
     private void ReplaceIncidents(
@@ -1166,8 +1205,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         var currentDevice = selectedDevice!;
         var updatedDevice = currentDevice with
         {
-            Name = FirstUseful(alias, currentDevice.ResolvedName, "Name unavailable"),
-            UserAlias = alias ?? string.Empty
+            Name = FirstUseful(alias, currentDevice.ResolvedName, $"Device at {currentDevice.IpAddress}"),
+            UserAlias = alias ?? string.Empty,
+            NameSource = string.IsNullOrWhiteSpace(alias)
+                ? (string.IsNullOrWhiteSpace(currentDevice.ResolvedName) ? "IP address fallback" : "Hostname")
+                : "User alias"
         };
         Devices[Devices.IndexOf(currentDevice)] = updatedDevice;
         SelectedDevice = updatedDevice;
@@ -1198,12 +1240,57 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private static string DisplayDeviceName(NetworkDevice device)
     {
-        return FirstUseful(device.UserAlias, ResolvedDeviceName(device), "Name unavailable");
+        var resolvedName = ResolvedDeviceName(device);
+        return FirstUseful(
+            device.UserAlias,
+            resolvedName,
+            DeviceTypeName(device),
+            VendorDeviceName(device),
+            $"Device at {device.IpAddress}");
     }
 
     private static string ResolvedDeviceName(NetworkDevice device)
     {
         return IsUsefulDeviceName(device.Hostname) ? device.Hostname!.Trim() : string.Empty;
+    }
+
+    private static string DeviceNameSource(NetworkDevice device)
+    {
+        if (!string.IsNullOrWhiteSpace(device.UserAlias))
+        {
+            return "User alias";
+        }
+
+        if (!string.IsNullOrWhiteSpace(ResolvedDeviceName(device)))
+        {
+            return "Hostname";
+        }
+
+        if (!string.IsNullOrWhiteSpace(device.DeviceTypeGuess))
+        {
+            return "Device type";
+        }
+
+        if (!string.IsNullOrWhiteSpace(device.Vendor))
+        {
+            return "Vendor";
+        }
+
+        return "IP address fallback";
+    }
+
+    private static string DeviceTypeName(NetworkDevice device)
+    {
+        return string.IsNullOrWhiteSpace(device.DeviceTypeGuess)
+            ? string.Empty
+            : $"{device.DeviceTypeGuess.Trim()} at {device.IpAddress}";
+    }
+
+    private static string VendorDeviceName(NetworkDevice device)
+    {
+        return string.IsNullOrWhiteSpace(device.Vendor)
+            ? string.Empty
+            : $"{device.Vendor.Trim()} device at {device.IpAddress}";
     }
 
     private static bool IsUsefulDeviceName(string? value)
@@ -1243,6 +1330,20 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         return timestamp == default
             ? "Not recorded"
             : timestamp.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
+    }
+
+    private static string BuildIncidentExplanation(DashboardIncidentItemViewModel incident)
+    {
+        var urgency = incident.RawRiskLevel >= RiskLevel.High
+            ? "This deserves prompt review because the incident risk is high enough to interrupt normal workflow."
+            : "This is worth watching, but it does not currently look severe enough for immediate blocking.";
+        var status = incident.RawStatus == IncidentStatus.Resolved
+            ? "It is marked resolved, so keep it as history unless it repeats."
+            : "It is still active for review or monitoring.";
+        var verify = incident.MainTarget == "Target unavailable"
+            ? "Verify which app or device was involved before trusting or blocking anything."
+            : $"Verify that {incident.MainTarget} was expected at the recorded time.";
+        return $"Why: {urgency} {status} Verify: {verify} Recommended action: use Watch for expected but noisy behavior, Resolve when confirmed, or Escalate if this was unexpected.";
     }
 
     private static DashboardActivityItemViewModel CreateEventActivity(
