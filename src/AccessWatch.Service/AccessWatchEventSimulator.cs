@@ -218,6 +218,12 @@ public sealed class AccessWatchEventSimulator
     private async Task AddEventAndNotifyAsync(PortRiskAssessment assessment, NetworkEvent networkEvent, CancellationToken cancellationToken)
     {
         await repository.AddNetworkEventAsync(networkEvent, cancellationToken);
+        var incident = IncidentFactory.CreateReviewIncident(networkEvent, networkEvent.CreatedUtc);
+        if (incident is not null)
+        {
+            await repository.UpsertIncidentAsync(incident, cancellationToken);
+        }
+
         await trayNotificationService.ShowAsync(notificationFactory.Create(assessment), cancellationToken);
     }
 

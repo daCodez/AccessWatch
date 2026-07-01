@@ -45,6 +45,11 @@ public sealed class AccessWatchEventSimulatorTests
         Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("\"deviceName\":\"office-laptop\""));
         Assert.Contains(repository.Events, networkEvent => networkEvent.DetailsJson.Contains("\"deviceName\":\"kitchen-tablet\""));
         Assert.Equal(4, repository.Notifications.Count);
+        Assert.Equal(4, repository.Incidents.Count);
+        Assert.Contains(repository.Incidents, incident => incident.Title.Contains("Network port opened"));
+        Assert.Contains(repository.Incidents, incident => incident.Title.Contains("Camera access: Visual Studio on office-laptop"));
+        Assert.Contains(repository.Incidents, incident => incident.Title.Contains("Microphone access: Skype on office-laptop"));
+        Assert.Contains(repository.Incidents, incident => incident.Title.Contains("New device observed: kitchen-tablet"));
         Assert.Contains(repository.Notifications, notification => notification.Body.Contains("camera"));
         Assert.Contains(repository.Notifications, notification => notification.Body.Contains("microphone"));
     }
@@ -85,6 +90,8 @@ public sealed class AccessWatchEventSimulatorTests
         public List<NetworkEvent> Events { get; } = [];
 
         public List<NotificationMessage> Notifications { get; } = [];
+
+        public List<Incident> Incidents { get; } = [];
 
         public Task InitializeAsync(CancellationToken cancellationToken)
         {
@@ -161,7 +168,9 @@ public sealed class AccessWatchEventSimulatorTests
 
         public Task<long> UpsertIncidentAsync(Incident incident, CancellationToken cancellationToken)
         {
-            return Task.FromResult(1L);
+            var incidentId = Incidents.Count + 1L;
+            Incidents.Add(incident with { IncidentId = incidentId });
+            return Task.FromResult(incidentId);
         }
 
         public Task<long> UpsertRuleAsync(AccessWatchRule rule, CancellationToken cancellationToken)
@@ -171,7 +180,7 @@ public sealed class AccessWatchEventSimulatorTests
 
         public Task<IReadOnlyList<Incident>> ListRecentIncidentsAsync(int limit, CancellationToken cancellationToken)
         {
-            return Task.FromResult<IReadOnlyList<Incident>>([]);
+            return Task.FromResult<IReadOnlyList<Incident>>(Incidents);
         }
 
         public Task<IReadOnlyList<AccessWatchRule>> ListRulesAsync(bool includeDisabled, CancellationToken cancellationToken)

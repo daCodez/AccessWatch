@@ -110,6 +110,12 @@ public sealed class ServiceScanCoordinator
             var eventType = isNewPort ? "NewListeningPort" : "ListeningPortApplicationChanged";
             var networkEvent = CreateListeningPortEvent(port, applicationId, assessment, eventType, notification.Action != NotificationAction.SilentLog);
             await repository.AddNetworkEventAsync(networkEvent, cancellationToken);
+            var incident = IncidentFactory.CreateReviewIncident(networkEvent, DateTimeOffset.UtcNow);
+            if (incident is not null)
+            {
+                await repository.UpsertIncidentAsync(incident, cancellationToken);
+            }
+
             if (notification.Action != NotificationAction.SilentLog)
             {
                 await trayNotificationService.ShowAsync(notification, cancellationToken);

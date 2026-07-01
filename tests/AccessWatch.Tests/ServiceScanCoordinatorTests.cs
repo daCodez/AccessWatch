@@ -80,6 +80,11 @@ public sealed class ServiceScanCoordinatorTests
         Assert.Equal(3389, networkEvent.DestinationPort);
         Assert.True(networkEvent.WasUserNotified);
         Assert.Contains("Remote Desktop", networkEvent.DetailsJson);
+        var incident = Assert.Single(repository.Incidents);
+        Assert.Contains("Network port opened: Remote Desktop", incident.Title);
+        Assert.Equal(RiskLevel.High, incident.RiskLevel);
+        Assert.Equal(99, incident.MainApplicationId);
+        Assert.Contains("Why:", incident.Summary);
         var notification = Assert.Single(repository.Notifications);
         Assert.Equal(RiskLevel.High, notification.RiskLevel);
         Assert.Equal(NotificationAction.AskBeforeAllow, notification.Action);
@@ -130,6 +135,7 @@ public sealed class ServiceScanCoordinatorTests
         Assert.False(networkEvent.WasUserNotified);
         Assert.Null(networkEvent.ApplicationId);
         Assert.Contains("Unknown application", networkEvent.DetailsJson);
+        Assert.Empty(repository.Incidents);
         Assert.Empty(repository.Notifications);
     }
 
@@ -193,6 +199,8 @@ public sealed class ServiceScanCoordinatorTests
         Assert.Equal("ListeningPortApplicationChanged", networkEvent.EventType);
         Assert.Equal(99, networkEvent.ApplicationId);
         Assert.Contains("different application", networkEvent.DetailsJson);
+        var incident = Assert.Single(repository.Incidents);
+        Assert.Contains("Port ownership changed: New owner", incident.Title);
     }
     private static ServiceScanCoordinator CreateCoordinator(FakeRepository repository, FakeScanner scanner, IReadOnlyList<NetworkDevice>? devices = null)
     {
@@ -253,6 +261,8 @@ public sealed class ServiceScanCoordinatorTests
         public List<NotificationMessage> Notifications { get; } = [];
 
         public List<NetworkDevice> Devices { get; } = [];
+
+        public List<Incident> Incidents { get; } = [];
 
         public Task ShowAsync(NotificationMessage message, CancellationToken cancellationToken)
         {
@@ -317,7 +327,9 @@ public sealed class ServiceScanCoordinatorTests
 
         public Task<long> UpsertIncidentAsync(Incident incident, CancellationToken cancellationToken)
         {
-            return Task.FromResult(1L);
+            var incidentId = Incidents.Count + 1L;
+            Incidents.Add(incident with { IncidentId = incidentId });
+            return Task.FromResult(incidentId);
         }
 
         public Task<long> UpsertRuleAsync(AccessWatchRule rule, CancellationToken cancellationToken)
@@ -327,7 +339,7 @@ public sealed class ServiceScanCoordinatorTests
 
         public Task<IReadOnlyList<Incident>> ListRecentIncidentsAsync(int limit, CancellationToken cancellationToken)
         {
-            return Task.FromResult<IReadOnlyList<Incident>>([]);
+            return Task.FromResult<IReadOnlyList<Incident>>(Incidents);
         }
 
         public Task<IReadOnlyList<AccessWatchRule>> ListRulesAsync(bool includeDisabled, CancellationToken cancellationToken)
