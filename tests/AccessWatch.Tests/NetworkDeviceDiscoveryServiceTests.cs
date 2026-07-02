@@ -54,6 +54,26 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         Assert.Equal("02:AC:CE:55:20:25", device.MacAddress);
     }
 
+
+    /// <summary>
+    /// Verifies malformed MAC addresses are ignored without allocating normalized device rows.
+    /// </summary>
+    [Fact]
+    public void ParseArpOutput_SkipsMalformedMacAddresses()
+    {
+        var service = new NetworkDeviceDiscoveryService(new FakeArpTableRunner(string.Empty), new FakeHostnameResolver());
+        var output = string.Join(Environment.NewLine,
+            "  192.168.1.20          00-11                 dynamic",
+            "  192.168.1.21          00:11:22:33:44:55     dynamic",
+            "  192.168.1.22          0g-11-22-33-44-55     dynamic",
+            "  192.168.1.23          00-11-22-33-44-55     dynamic");
+
+        var devices = service.ParseArpOutput(output, DateTimeOffset.UnixEpoch);
+
+        var device = Assert.Single(devices);
+        Assert.Equal("192.168.1.23", device.IpAddress);
+        Assert.Equal("00:11:22:33:44:55", device.MacAddress);
+    }
     /// <summary>
     /// Verifies discovery delegates to the ARP runner and sorts devices consistently.
     /// </summary>
@@ -144,4 +164,3 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         }
     }
 }
-

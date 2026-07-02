@@ -95,6 +95,26 @@ public sealed class ListeningPortScannerTests
             second => Assert.Equal(9000, second.PortNumber));
     }
 
+
+    /// <summary>
+    /// Verifies the span parser handles bracketed IPv6 endpoints and short malformed TCP lines.
+    /// </summary>
+    [Fact]
+    public void ParseNetstatOutput_HandlesBracketedIpv6AndShortTcpLines()
+    {
+        var scanner = new ListeningPortScanner(new FakeIdentityResolver(), new FakeNetstatRunner(""));
+        var output = string.Join(Environment.NewLine,
+            string.Empty,
+            "  TCP",
+            "  TCP    [::]:9001             [::]:0                 LISTENING       104");
+
+        var ports = scanner.ParseNetstatOutput(output, DateTimeOffset.UnixEpoch);
+
+        var port = Assert.Single(ports);
+        Assert.Equal("::", port.LocalAddress);
+        Assert.Equal(9001, port.PortNumber);
+        Assert.Equal(PortReachability.NetworkReachable, port.Reachability);
+    }
     /// <summary>
     /// Verifies the default scanner constructor can be created.
     /// </summary>

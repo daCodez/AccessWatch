@@ -398,6 +398,50 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("192.168.1.25", device.IpAddress);
         Assert.Equal("Loaded 0 events, 0 ports, 0 incidents, and 1 devices.", model.StatusMessage);
     }
+
+    /// <summary>
+    /// Verifies dashboard device filtering preserves usable rows before and after stored noise rows.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_FiltersNoiseDevicesAfterUsableRows()
+    {
+        var repository = new FakeRepository
+        {
+            Devices =
+            [
+                new NetworkDevice { DeviceId = 1, Hostname = "office-laptop", IpAddress = "192.168.1.25", MacAddress = "02:AC:CE:55:20:25", DeviceTypeGuess = "Windows workstation", Notes = "Owned laptop" },
+                new NetworkDevice { IpAddress = "224.0.0.251", MacAddress = "01:00:5E:00:00:FB" },
+                new NetworkDevice { Hostname = "office-printer", IpAddress = "192.168.1.44", MacAddress = "02:AC:CE:55:44:44", Notes = "Shared printer" }
+            ],
+            Applications = [new AppIdentity { ApplicationId = 88, DisplayName = "Visual Studio", ProcessName = "devenv" }],
+            Incidents =
+            [
+                new Incident { IncidentId = 88, Title = "Application-only event", MainApplicationId = 88, RiskLevel = RiskLevel.Medium, Status = IncidentStatus.Open },
+                new Incident { IncidentId = 89, Title = "Device-only event", MainDeviceId = 1, RiskLevel = RiskLevel.Medium, Status = IncidentStatus.Open }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.Devices,
+            device =>
+            {
+                Assert.Equal("office-laptop", device.Name);
+                Assert.Equal("Windows workstation; Owned laptop", device.Detail);
+            },
+            device =>
+            {
+                Assert.Equal("office-printer", device.Name);
+                Assert.Equal("Shared printer", device.Detail);
+            });
+        Assert.Collection(
+            model.Incidents,
+            incident => Assert.Equal("Visual Studio", incident.MainTarget),
+            incident => Assert.Equal("office-laptop", incident.MainTarget));
+        Assert.Equal("Loaded 0 events, 0 ports, 2 incidents, and 2 devices.", model.StatusMessage);
+    }
     /// <summary>
     /// Verifies devices and applications are exposed as first-class dashboard inventories.
     /// </summary>

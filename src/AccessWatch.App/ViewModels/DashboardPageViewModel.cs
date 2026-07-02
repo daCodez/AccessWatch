@@ -664,7 +664,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         {
             await repository.InitializeAsync(cancellationToken);
             var storedDevices = await repository.ListRecentDevicesAsync(500, cancellationToken);
-            var devices = storedDevices.Where(device => DeviceAddressClassifier.IsUsableDeviceAddress(device.IpAddress, device.MacAddress)).ToList();
+            var devices = FilterUsableDevices(storedDevices);
             var applications = await repository.ListRecentApplicationsAsync(500, cancellationToken);
             var ports = await repository.ListRecentPortsAsync(500, cancellationToken);
             var events = await repository.ListRecentNetworkEventsAsync(50, cancellationToken);
@@ -1188,18 +1188,44 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private static string BuildIncidentTarget(NetworkDevice? device, AppIdentity? application)
     {
-        var parts = new List<string>();
-        if (application is not null)
+        if (application is null)
         {
-            parts.Add(FirstUseful(application.DisplayName, application.ProcessName, "Unknown application"));
+            return device is null ? "Target unavailable" : DisplayDeviceName(device);
         }
 
-        if (device is not null)
+        var applicationName = FirstUseful(application.DisplayName, application.ProcessName, "Unknown application");
+        return device is null
+            ? applicationName
+            : string.Concat(applicationName, " on ", DisplayDeviceName(device));
+    }
+
+    private static IReadOnlyList<NetworkDevice> FilterUsableDevices(IReadOnlyList<NetworkDevice> devices)
+    {
+        List<NetworkDevice>? filteredDevices = null;
+        for (var index = 0; index < devices.Count; index++)
         {
-            parts.Add(DisplayDeviceName(device));
+            var device = devices[index];
+            if (DeviceAddressClassifier.IsUsableDeviceAddress(device.IpAddress, device.MacAddress))
+            {
+                filteredDevices?.Add(device);
+                continue;
+            }
+
+            filteredDevices ??= CopyDevicePrefix(devices, index);
         }
 
-        return parts.Count == 0 ? "Target unavailable" : string.Join(" on ", parts);
+        return filteredDevices ?? devices;
+    }
+
+    private static List<NetworkDevice> CopyDevicePrefix(IReadOnlyList<NetworkDevice> devices, int length)
+    {
+        var filteredDevices = new List<NetworkDevice>(devices.Count);
+        for (var index = 0; index < length; index++)
+        {
+            filteredDevices.Add(devices[index]);
+        }
+
+        return filteredDevices;
     }
 
     private void UpdateSelectedDeviceAlias(string? alias)
@@ -1308,23 +1334,15 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private static string BuildDeviceDetail(NetworkDevice device)
     {
-        var details = new List<string>();
-        if (!string.IsNullOrWhiteSpace(device.DeviceTypeGuess))
+        var deviceType = string.IsNullOrWhiteSpace(device.DeviceTypeGuess) ? null : device.DeviceTypeGuess;
+        var notes = string.IsNullOrWhiteSpace(device.Notes) ? null : device.Notes;
+        return (deviceType, notes) switch
         {
-            details.Add(device.DeviceTypeGuess);
-        }
-
-        if (!string.IsNullOrWhiteSpace(device.Notes))
-        {
-            details.Add(device.Notes);
-        }
-
-        if (details.Count == 0)
-        {
-            details.Add("No extra device details recorded yet.");
-        }
-
-        return string.Join("; ", details);
+            (not null, not null) => string.Concat(deviceType, "; ", notes),
+            (not null, null) => deviceType,
+            (null, not null) => notes,
+            _ => "No extra device details recorded yet."
+        };
     }
 
     private static string FormatTimestamp(DateTimeOffset timestamp)
@@ -1462,35 +1480,29 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 : $"Process {processName}; stored app identity unavailable";
         }
 
-        var parts = new List<string>();
         var resolvedProcessName = FirstUseful(application.ProcessName, processName, string.Empty);
-        if (!string.IsNullOrWhiteSpace(resolvedProcessName))
-        {
-            parts.Add($"Process {resolvedProcessName}");
-        }
-
+        var processPart = string.IsNullOrWhiteSpace(resolvedProcessName)
+            ? string.Empty
+            : $"Process {resolvedProcessName}";
+        string publisherPart;
         if (!string.IsNullOrWhiteSpace(application.Publisher))
         {
             var publisherPrefix = application.SignatureStatus is SignatureStatus.TrustedSigned or SignatureStatus.SignedUnknown
                 ? "Signed by"
                 : "Publisher";
-            parts.Add($"{publisherPrefix} {application.Publisher}");
+            publisherPart = $"{publisherPrefix} {application.Publisher}";
         }
         else
         {
-            parts.Add(SignatureLabel(application.SignatureStatus));
+            publisherPart = SignatureLabel(application.SignatureStatus);
         }
 
-        if (!string.IsNullOrWhiteSpace(application.FilePath))
-        {
-            parts.Add(application.FilePath);
-        }
-        else
-        {
-            parts.Add("Executable path unavailable");
-        }
-
-        return string.Join("; ", parts);
+        var pathPart = string.IsNullOrWhiteSpace(application.FilePath)
+            ? "Executable path unavailable"
+            : application.FilePath;
+        return string.IsNullOrWhiteSpace(processPart)
+            ? string.Concat(publisherPart, "; ", pathPart)
+            : string.Concat(processPart, "; ", publisherPart, "; ", pathPart);
     }
 
     private static string SignatureLabel(SignatureStatus signatureStatus)
@@ -1539,7 +1551,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
-    private static string FirstUseful(params string?[] values)
+    private static string FirstUseful(params ReadOnlySpan<string?> values)
     {
         foreach (var value in values)
         {
@@ -1573,4 +1585,3 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         string? WhyItMatters = null,
         string? SuggestedAction = null);
 }
-

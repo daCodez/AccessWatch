@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
-using System.Text.RegularExpressions;
 using AccessWatch.Core;
 
 namespace AccessWatch.Detection;
@@ -11,10 +10,6 @@ namespace AccessWatch.Detection;
 /// </summary>
 public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryService
 {
-    private static readonly Regex ArpLine = new(
-        @"^\s*(?<ip>\d{1,3}(?:\.\d{1,3}){3})\s+(?<mac>[0-9a-f]{2}(?:-[0-9a-f]{2}){5})\s+\S+\s*$",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
     private readonly IArpTableRunner arpTableRunner;
     private readonly IDeviceHostnameResolver hostnameResolver;
 
@@ -63,16 +58,13 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
     public IReadOnlyList<NetworkDevice> ParseArpOutput(string output, DateTimeOffset observedAtUtc)
     {
         var devices = new List<NetworkDevice>();
-        foreach (var line in output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var rawLine in output.AsSpan().EnumerateLines())
         {
-            var match = ArpLine.Match(line);
-            if (!match.Success)
+            if (!TryReadArpLine(rawLine.Trim(), out var ipAddress, out var macAddress))
             {
                 continue;
             }
 
-            var ipAddress = match.Groups["ip"].Value;
-            var macAddress = match.Groups["mac"].Value.Replace('-', ':').ToUpperInvariant();
             if (!DeviceAddressClassifier.IsUsableDeviceAddress(ipAddress, macAddress))
             {
                 continue;
@@ -94,6 +86,102 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
         return devices
             .OrderBy(device => device.IpAddress, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static bool TryReadArpLine(ReadOnlySpan<char> line, out string ipAddress, out string macAddress)
+    {
+        ipAddress = string.Empty;
+        macAddress = string.Empty;
+        if (!TryReadToken(ref line, out var ipAddressToken) ||
+            !TryReadToken(ref line, out var macAddressToken) ||
+            !TryReadToken(ref line, out _))
+        {
+            return false;
+        }
+
+        if (!LooksLikeIpv4Address(ipAddressToken) || !TryNormalizeMacAddress(macAddressToken, out macAddress))
+        {
+            return false;
+        }
+
+        ipAddress = ipAddressToken.ToString();
+        return true;
+    }
+
+    private static bool LooksLikeIpv4Address(ReadOnlySpan<char> value)
+    {
+        var dots = 0;
+        foreach (var character in value)
+        {
+            if (character == '.')
+            {
+                dots++;
+                continue;
+            }
+
+            if (!char.IsAsciiDigit(character))
+            {
+                return false;
+            }
+        }
+
+        return dots == 3;
+    }
+
+    private static bool TryNormalizeMacAddress(ReadOnlySpan<char> value, out string macAddress)
+    {
+        macAddress = string.Empty;
+        if (value.Length != 17)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            if ((index + 1) % 3 == 0)
+            {
+                if (character != '-')
+                {
+                    return false;
+                }
+            }
+            else if (!char.IsAsciiHexDigit(character))
+            {
+                return false;
+            }
+        }
+
+        macAddress = string.Create(17, value, static (destination, source) =>
+        {
+            for (var index = 0; index < source.Length; index++)
+            {
+                destination[index] = source[index] == '-'
+                    ? ':'
+                    : char.ToUpperInvariant(source[index]);
+            }
+        });
+        return true;
+    }
+
+    private static bool TryReadToken(ref ReadOnlySpan<char> value, out ReadOnlySpan<char> token)
+    {
+        value = value.TrimStart();
+        if (value.IsEmpty)
+        {
+            token = default;
+            return false;
+        }
+
+        var tokenLength = 0;
+        while (tokenLength < value.Length && !char.IsWhiteSpace(value[tokenLength]))
+        {
+            tokenLength++;
+        }
+
+        token = value[..tokenLength];
+        value = value[tokenLength..];
+        return true;
     }
 
     private async Task<IReadOnlyList<NetworkDevice>> AddHostnamesAsync(IReadOnlyList<NetworkDevice> devices, CancellationToken cancellationToken)
@@ -189,4 +277,3 @@ public sealed class ArpTableRunner : IArpTableRunner
         return await outputTask;
     }
 }
-

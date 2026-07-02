@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Net;
-using System.Text.RegularExpressions;
 using AccessWatch.Core;
 
 namespace AccessWatch.Detection;
@@ -11,10 +11,6 @@ namespace AccessWatch.Detection;
 /// </summary>
 public sealed class ListeningPortScanner : IListeningPortScanner
 {
-    private static readonly Regex NetstatTcpLine = new(
-        @"^\s*TCP\s+(?<local>\S+)\s+\S+\s+(?<state>LISTENING)\s+(?<pid>\d+)\s*$",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
     private readonly IAppIdentityResolver identityResolver;
     private readonly INetstatRunner netstatRunner;
 
@@ -50,20 +46,14 @@ public sealed class ListeningPortScanner : IListeningPortScanner
     {
         var ports = new List<ListeningPort>();
 
-        foreach (var line in output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var rawLine in output.AsSpan().EnumerateLines())
         {
-            var match = NetstatTcpLine.Match(line);
-            if (!match.Success || !line.Contains("LISTENING", StringComparison.OrdinalIgnoreCase))
+            var line = rawLine.Trim();
+            if (!TryReadNetstatLine(line, out var localAddress, out var portNumber, out var processId))
             {
                 continue;
             }
 
-            if (!TrySplitEndpoint(match.Groups["local"].Value, out var localAddress, out var portNumber))
-            {
-                continue;
-            }
-
-            var processId = int.Parse(match.Groups["pid"].Value);
             ports.Add(new ListeningPort
             {
                 PortNumber = portNumber,
@@ -80,7 +70,50 @@ public sealed class ListeningPortScanner : IListeningPortScanner
         return ports;
     }
 
-    private static bool TrySplitEndpoint(string endpoint, out string address, out int port)
+    private static bool TryReadNetstatLine(ReadOnlySpan<char> line, out string localAddress, out int portNumber, out int processId)
+    {
+        localAddress = string.Empty;
+        portNumber = 0;
+        processId = 0;
+        if (!TryReadToken(ref line, out var protocol) || !protocol.Equals("TCP", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!TryReadToken(ref line, out var localEndpoint) ||
+            !TryReadToken(ref line, out _) ||
+            !TryReadToken(ref line, out var state) ||
+            !state.Equals("LISTENING", StringComparison.OrdinalIgnoreCase) ||
+            !TryReadToken(ref line, out var pid) ||
+            !TrySplitEndpoint(localEndpoint, out localAddress, out portNumber))
+        {
+            return false;
+        }
+
+        return int.TryParse(pid, NumberStyles.None, CultureInfo.InvariantCulture, out processId);
+    }
+
+    private static bool TryReadToken(ref ReadOnlySpan<char> value, out ReadOnlySpan<char> token)
+    {
+        value = value.TrimStart();
+        if (value.IsEmpty)
+        {
+            token = default;
+            return false;
+        }
+
+        var tokenLength = 0;
+        while (tokenLength < value.Length && !char.IsWhiteSpace(value[tokenLength]))
+        {
+            tokenLength++;
+        }
+
+        token = value[..tokenLength];
+        value = value[tokenLength..];
+        return true;
+    }
+
+    private static bool TrySplitEndpoint(ReadOnlySpan<char> endpoint, out string address, out int port)
     {
         address = string.Empty;
         port = 0;
@@ -90,8 +123,14 @@ public sealed class ListeningPortScanner : IListeningPortScanner
             return false;
         }
 
-        address = endpoint[..lastColon].Trim('[', ']');
-        return int.TryParse(endpoint[(lastColon + 1)..], out port);
+        var addressSpan = endpoint[..lastColon];
+        if (addressSpan is ['[', .., ']'])
+        {
+            addressSpan = addressSpan[1..^1];
+        }
+
+        address = addressSpan.ToString();
+        return int.TryParse(endpoint[(lastColon + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out port);
     }
 
     private static PortReachability ClassifyReachability(string localAddress)
