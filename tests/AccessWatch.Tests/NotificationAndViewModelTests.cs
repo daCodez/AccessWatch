@@ -1059,8 +1059,11 @@ public sealed class NotificationAndViewModelTests
         Assert.DoesNotContain("10.0.0.50", model.SelectedIncidentAiReview);
         Assert.DoesNotContain("02:AC:CE:55:10:01", model.SelectedIncidentAiReview);
         Assert.Contains("AccessWatch AI review workspace", model.SelectedIncidentAiReview);
-        Assert.Contains("Summary: See the redacted incident context below.", model.SelectedIncidentAiReview);
-        Assert.Contains("What to ask ChatGPT:", model.SelectedIncidentAiReview);
+        Assert.Contains("Recommended AccessWatch action: Watch", model.SelectedIncidentAiReview);
+        Assert.Contains("Evidence checklist:", model.SelectedIncidentAiReview);
+        Assert.Contains("Action shortcuts in AccessWatch:", model.SelectedIncidentAiReview);
+        Assert.Contains("ChatGPT prompt:", model.SelectedIncidentAiReview);
+        Assert.Contains("Redacted incident context:", model.SelectedIncidentAiReview);
         Assert.Contains("Microphone activated", model.SelectedIncidentAiReview);
         Assert.Contains("[ip-address]", model.SelectedIncidentAiReview);
         Assert.Contains("[mac-address]", model.SelectedIncidentAiReview);
@@ -1072,6 +1075,49 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Copied the redacted review brief. Paste it into ChatGPT when you are ready.", model.StatusMessage);
     }
 
+    /// <summary>
+    /// Verifies the AI review workspace recommends the matching AccessWatch action for each incident state.
+    /// </summary>
+    [Theory]
+    [InlineData(RiskLevel.Critical, IncidentStatus.Open, "Target unavailable", "Recommended AccessWatch action: Escalate", "Identify the app or device")]
+    [InlineData(RiskLevel.High, IncidentStatus.Open, "Visual Studio on office-laptop", "Recommended AccessWatch action: Escalate", "Confirm Visual Studio on office-laptop")]
+    [InlineData(RiskLevel.Medium, IncidentStatus.Open, "Visual Studio on office-laptop", "Recommended AccessWatch action: Watch", "Confirm Visual Studio on office-laptop")]
+    [InlineData(RiskLevel.Low, IncidentStatus.Open, "Visual Studio on office-laptop", "Recommended AccessWatch action: Resolve or Watch", "Confirm Visual Studio on office-laptop")]
+    [InlineData(RiskLevel.Critical, IncidentStatus.Resolved, "Visual Studio on office-laptop", "Recommended AccessWatch action: Resolve", "Confirm Visual Studio on office-laptop")]
+    public void DashboardShellViewModel_CreateSelectedIncidentAiReview_RecommendsAccessWatchAction(
+        RiskLevel riskLevel,
+        IncidentStatus status,
+        string target,
+        string expectedAction,
+        string expectedChecklist)
+    {
+        var model = new DashboardShellViewModel(new FakeRepository(), aiHandoffService: new ManualAiHandoffService())
+        {
+            SelectedIncident = new DashboardIncidentItemViewModel(
+                500,
+                null,
+                null,
+                riskLevel,
+                status,
+                DateTimeOffset.UnixEpoch,
+                DateTimeOffset.UnixEpoch,
+                "Review candidate",
+                riskLevel.ToString(),
+                status.ToString(),
+                2,
+                target,
+                "Not recorded",
+                "Not recorded",
+                "Safe summary.")
+        };
+
+        model.CreateSelectedIncidentAiReview();
+
+        Assert.Contains(expectedAction, model.SelectedIncidentAiReview);
+        Assert.Contains(expectedChecklist, model.SelectedIncidentAiReview);
+        Assert.Contains("Use Resolve when confirmed expected", model.SelectedIncidentAiReview);
+        Assert.Contains("recommend Resolve/Watch/Escalate/Create rule", model.SelectedIncidentAiReview);
+    }
     /// <summary>
     /// Verifies AI review gives actionable status when no incident or AI mode is available.
     /// </summary>

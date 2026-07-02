@@ -1350,20 +1350,52 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private static string BuildChatGptReviewBrief(DashboardIncidentItemViewModel incident, string redactedIncident)
     {
+        var recommendation = BuildReviewRecommendation(incident);
         return string.Join(
             Environment.NewLine + Environment.NewLine,
             "AccessWatch AI review workspace",
             $"Incident: {incident.Title}",
             $"Target: {incident.MainTarget}",
             $"Risk: {incident.RiskLevel}; Status: {incident.Status}; Events: {incident.EventCount}",
-            "Summary: See the redacted incident context below.",
-            "What to ask ChatGPT:",
-            "1. Explain the likely cause in plain English.",
-            "2. Identify what evidence would confirm whether this is expected or suspicious.",
-            "3. Recommend whether to Resolve, Watch, Escalate, or create a rule.",
-            "4. Call out any sensitive data that should stay local.",
+            $"Recommended AccessWatch action: {recommendation.Action}",
+            $"Why: {recommendation.Reason}",
+            "Evidence checklist:",
+            BuildEvidenceChecklist(incident),
+            "Action shortcuts in AccessWatch:",
+            "Use Resolve when confirmed expected, Watch when expected but noisy, Escalate when unexpected or sensitive, and Create rule after you know the pattern is safe to automate.",
+            "ChatGPT prompt:",
+            "Explain the likely cause, identify evidence that would confirm whether this is expected or suspicious, recommend Resolve/Watch/Escalate/Create rule, and call out any sensitive data that should stay local.",
             "Redacted incident context:",
             redactedIncident);
+    }
+
+    private static (string Action, string Reason) BuildReviewRecommendation(DashboardIncidentItemViewModel incident)
+    {
+        if (incident.RawStatus == IncidentStatus.Resolved)
+        {
+            return ("Resolve", "The incident is already resolved; keep it as history unless it repeats.");
+        }
+
+        return incident.RawRiskLevel switch
+        {
+            >= RiskLevel.Critical => ("Escalate", "Critical incidents should be treated as unexpected until you confirm the app, device, and timing."),
+            RiskLevel.High => ("Escalate", "High-risk activity deserves prompt review, especially for reachable ports or sensitive device access."),
+            RiskLevel.Medium => ("Watch", "Medium-risk activity is worth monitoring while you confirm whether the target was expected."),
+            _ => ("Resolve or Watch", "Low-risk activity can usually be resolved once expected, or watched if it keeps repeating.")
+        };
+    }
+
+    private static string BuildEvidenceChecklist(DashboardIncidentItemViewModel incident)
+    {
+        var targetCheck = incident.MainTarget == "Target unavailable"
+            ? "- Identify the app or device involved before trusting or blocking anything."
+            : $"- Confirm {incident.MainTarget} was expected at the recorded time.";
+        return string.Join(
+            Environment.NewLine,
+            targetCheck,
+            "- Check whether the publisher, signature, and path match what you recognize.",
+            "- Confirm whether this was triggered by your own activity or a scheduled service.",
+            "- If this repeats, decide whether a disabled rule suggestion should become an enabled rule.");
     }
 
     private static DashboardActivityItemViewModel CreateEventActivity(
