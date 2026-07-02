@@ -123,6 +123,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private DashboardDeviceItemViewModel? selectedDevice;
     private DashboardApplicationItemViewModel? selectedApplication;
     private DashboardPortItemViewModel? selectedPort;
+    private string selectedPortInvestigation = string.Empty;
     private DashboardIncidentItemViewModel? selectedIncident;
     private string selectedIncidentAiReview = string.Empty;
     private string selectedIncidentRuleSuggestion = string.Empty;
@@ -410,10 +411,12 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             }
 
             selectedPort = value;
+            selectedPortInvestigation = string.Empty;
             OnPropertyChanged(nameof(SelectedPort));
             OnPropertyChanged(nameof(SelectedPortDetail));
             OnPropertyChanged(nameof(SelectedPortInvestigation));
             OnPropertyChanged(nameof(CanInvestigateSelectedPort));
+            OnPropertyChanged(nameof(PortInvestigationButtonText));
         }
     }
 
@@ -428,8 +431,17 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets the selected port investigation guidance.
     /// </summary>
     public string SelectedPortInvestigation => selectedPort is null
-        ? "Select a port, then investigate to see what it usually means and what to check next."
-        : selectedPort.Investigation;
+        ? "Select a port, then click Investigate port to generate a report."
+        : string.IsNullOrWhiteSpace(selectedPortInvestigation)
+            ? "Click Investigate port to generate a focused report for the selected endpoint."
+            : selectedPortInvestigation;
+
+    /// <summary>
+    /// Gets the port investigation button label.
+    /// </summary>
+    public string PortInvestigationButtonText => string.IsNullOrWhiteSpace(selectedPortInvestigation)
+        ? "Investigate port"
+        : "Refresh investigation";
 
     /// <summary>
     /// Gets whether a selected port can be investigated.
@@ -806,10 +818,19 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public void InvestigateSelectedPort()
     {
-        StatusMessage = selectedPort is null
-            ? "Select a port before investigating it."
-            : $"Investigating {selectedPort.Endpoint}: {selectedPort.SuggestedAction}";
+        if (selectedPort is null)
+        {
+            selectedPortInvestigation = string.Empty;
+            StatusMessage = "Select a port before investigating it.";
+        }
+        else
+        {
+            selectedPortInvestigation = BuildPortInvestigationReport(selectedPort);
+            StatusMessage = $"Investigation ready for {selectedPort.Endpoint}.";
+        }
+
         OnPropertyChanged(nameof(SelectedPortInvestigation));
+        OnPropertyChanged(nameof(PortInvestigationButtonText));
     }
 
     /// <summary>
@@ -1246,6 +1267,22 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             $"Next step: {SuggestPortAction(port)}");
     }
 
+    private static string BuildPortInvestigationReport(DashboardPortItemViewModel port)
+    {
+        return string.Join(
+            Environment.NewLine,
+            "Investigation report",
+            $"Endpoint: {port.Endpoint}",
+            $"Application: {port.ApplicationName}",
+            $"Meaning: {port.Meaning}",
+            $"Exposure: {port.Exposure}",
+            $"Identity: {port.Detail}",
+            "What to check:",
+            $"- Confirm {port.ApplicationName} is expected to own {port.Endpoint}.",
+            "- Confirm the bind address matches the network adapter you expect.",
+            "- If this is unexpected, close the app or service and run another scan.",
+            $"Recommended decision: {port.SuggestedAction}");
+    }
     private static string DescribePortMeaning(int portNumber)
     {
         return KnownPortMeanings.TryGetValue(portNumber, out var meaning)

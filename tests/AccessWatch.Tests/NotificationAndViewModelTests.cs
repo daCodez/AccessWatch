@@ -93,7 +93,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Text=\"{Binding SelectedPortDetail}\"", xaml);
         Assert.Contains("Header=\"Meaning\"", xaml);
         Assert.Contains("Header=\"Next step\"", xaml);
-        Assert.Contains("Content=\"Investigate port\"", xaml);
+        Assert.Contains("Content=\"{Binding PortInvestigationButtonText}\"", xaml);
         Assert.Contains("Click=\"OnInvestigatePortClick\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedPortInvestigation, Mode=OneWay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Incidents}\"", xaml);
@@ -1004,7 +1004,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("TCP 0.0.0.0:9443", model.SelectedPortDetail);
         Assert.Contains("Visual Studio", model.SelectedPortDetail);
         Assert.True(model.CanInvestigateSelectedPort);
-        Assert.Contains("Alternate HTTPS", model.SelectedPortInvestigation);
+        Assert.Equal("Investigate port", model.PortInvestigationButtonText);
+        Assert.Contains("Click Investigate port", model.SelectedPortInvestigation);
         Assert.Collection(
             model.Incidents,
             incident =>
@@ -1039,7 +1040,16 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Loaded 0 events, 4 ports, 2 incidents, and 1 devices.", model.StatusMessage);
 
         model.InvestigateSelectedPort();
-        Assert.Contains("Investigating TCP 0.0.0.0:9443", model.StatusMessage);
+        Assert.Contains("Investigation ready for TCP 0.0.0.0:9443", model.StatusMessage);
+        Assert.Equal("Refresh investigation", model.PortInvestigationButtonText);
+        Assert.Contains("Investigation report", model.SelectedPortInvestigation);
+        Assert.Contains("Endpoint: TCP 0.0.0.0:9443", model.SelectedPortInvestigation);
+        Assert.Contains("What to check:", model.SelectedPortInvestigation);
+        Assert.Contains("Recommended decision: Confirm this application", model.SelectedPortInvestigation);
+
+        model.SelectedPort = model.Ports[1];
+        Assert.Equal("Investigate port", model.PortInvestigationButtonText);
+        Assert.Contains("Click Investigate port", model.SelectedPortInvestigation);
     }
 
     /// <summary>
@@ -1051,10 +1061,12 @@ public sealed class NotificationAndViewModelTests
         var model = new DashboardShellViewModel();
 
         Assert.False(model.CanInvestigateSelectedPort);
+        Assert.Equal("Investigate port", model.PortInvestigationButtonText);
         Assert.Contains("Select a port", model.SelectedPortInvestigation);
 
         model.InvestigateSelectedPort();
 
+        Assert.Equal("Investigate port", model.PortInvestigationButtonText);
         Assert.Contains("Select a port before investigating it.", model.StatusMessage);
     }
     /// <summary>

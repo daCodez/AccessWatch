@@ -233,7 +233,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="{Binding SelectedPortDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
-                                <Button Grid.Column="1" Content="Investigate port" IsEnabled="{Binding CanInvestigateSelectedPort}" Width="112" Height="30" Click="OnInvestigatePortClick" />
+                                <Button Grid.Column="1" Content="{Binding PortInvestigationButtonText}" IsEnabled="{Binding CanInvestigateSelectedPort}" Width="112" Height="30" Click="OnInvestigatePortClick" />
                                 <TextBox Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SelectedPortInvestigation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="96" FontSize="12" Margin="0,12,0,0" />
                             </Grid>
                         </Border>
