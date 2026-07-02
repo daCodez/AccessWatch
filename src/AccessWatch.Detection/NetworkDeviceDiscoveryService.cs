@@ -6,18 +6,20 @@ using AccessWatch.Core;
 namespace AccessWatch.Detection;
 
 /// <summary>
-/// Discovers local-network devices from the Windows ARP cache.
+/// Discovers local-network devices from Windows network tables.
 /// </summary>
 public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryService
 {
+    private const string NeighborTableNote = "Seen in Windows neighbor table; useful for phones, Phone Link devices, and quiet Wi-Fi devices.";
     private readonly IArpTableRunner arpTableRunner;
     private readonly IDeviceHostnameResolver hostnameResolver;
+    private readonly INeighborTableRunner? neighborTableRunner;
 
     /// <summary>
-    /// Initializes a new device discovery service using the default ARP runner.
+    /// Initializes a new device discovery service using the default Windows runners.
     /// </summary>
     public NetworkDeviceDiscoveryService()
-        : this(new ArpTableRunner())
+        : this(new ArpTableRunner(), new DnsDeviceHostnameResolver(), new NetshNeighborTableRunner())
     {
     }
 
@@ -36,16 +38,38 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
     /// <param name="arpTableRunner">Runner used to collect ARP output.</param>
     /// <param name="hostnameResolver">Resolver used to label devices by hostname.</param>
     public NetworkDeviceDiscoveryService(IArpTableRunner arpTableRunner, IDeviceHostnameResolver hostnameResolver)
+        : this(arpTableRunner, hostnameResolver, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new device discovery service with supplied ARP, hostname, and neighbor table readers.
+    /// </summary>
+    /// <param name="arpTableRunner">Runner used to collect ARP output.</param>
+    /// <param name="hostnameResolver">Resolver used to label devices by hostname.</param>
+    /// <param name="neighborTableRunner">Optional runner used to collect Windows neighbor table output.</param>
+    public NetworkDeviceDiscoveryService(
+        IArpTableRunner arpTableRunner,
+        IDeviceHostnameResolver hostnameResolver,
+        INeighborTableRunner? neighborTableRunner)
     {
         this.arpTableRunner = arpTableRunner;
         this.hostnameResolver = hostnameResolver;
+        this.neighborTableRunner = neighborTableRunner;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<NetworkDevice>> DiscoverAsync(CancellationToken cancellationToken)
     {
-        var output = await arpTableRunner.RunAsync(cancellationToken);
-        var devices = ParseArpOutput(output, DateTimeOffset.UtcNow);
+        var observedAtUtc = DateTimeOffset.UtcNow;
+        var arpOutput = await arpTableRunner.RunAsync(cancellationToken);
+        var devices = ParseArpOutput(arpOutput, observedAtUtc);
+        if (neighborTableRunner is not null)
+        {
+            var neighborOutput = await neighborTableRunner.RunAsync(cancellationToken);
+            devices = MergeDeviceObservations(devices, ParseNeighborOutput(neighborOutput, observedAtUtc));
+        }
+
         return await AddHostnamesAsync(devices, cancellationToken);
     }
 
@@ -60,7 +84,7 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
         var devices = new List<NetworkDevice>();
         foreach (var rawLine in output.AsSpan().EnumerateLines())
         {
-            if (!TryReadArpLine(rawLine.Trim(), out var ipAddress, out var macAddress))
+            if (!TryReadAddressAndMacLine(rawLine.Trim(), out var ipAddress, out var macAddress))
             {
                 continue;
             }
@@ -83,12 +107,83 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
             });
         }
 
+        return SortDevices(devices);
+    }
+
+    /// <summary>
+    /// Parses Windows neighbor table output into device observations.
+    /// </summary>
+    /// <param name="output">Raw neighbor table output.</param>
+    /// <param name="observedAtUtc">Observation time.</param>
+    /// <returns>Parsed device observations.</returns>
+    public IReadOnlyList<NetworkDevice> ParseNeighborOutput(string output, DateTimeOffset observedAtUtc)
+    {
+        var devices = new List<NetworkDevice>();
+        foreach (var rawLine in output.AsSpan().EnumerateLines())
+        {
+            if (!TryReadAddressAndMacLine(rawLine.Trim(), out var ipAddress, out var macAddress))
+            {
+                continue;
+            }
+
+            if (!DeviceAddressClassifier.IsUsableDeviceAddress(ipAddress, macAddress))
+            {
+                continue;
+            }
+
+            devices.Add(new NetworkDevice
+            {
+                IpAddress = ipAddress,
+                MacAddress = macAddress,
+                DeviceTypeGuess = "Network neighbor",
+                TrustStatus = TrustStatus.Unknown,
+                RiskStatus = RiskStatus.Normal,
+                Notes = NeighborTableNote,
+                FirstSeenUtc = observedAtUtc,
+                LastSeenUtc = observedAtUtc,
+                LastConfirmedUtc = observedAtUtc
+            });
+        }
+
+        return SortDevices(devices);
+    }
+
+    private static IReadOnlyList<NetworkDevice> MergeDeviceObservations(IReadOnlyList<NetworkDevice> primary, IReadOnlyList<NetworkDevice> secondary)
+    {
+        if (secondary.Count == 0)
+        {
+            return primary;
+        }
+
+        var devices = new List<NetworkDevice>(primary.Count + secondary.Count);
+        devices.AddRange(primary);
+        foreach (var candidate in secondary)
+        {
+            if (devices.Any(device => SameDevice(device, candidate)))
+            {
+                continue;
+            }
+
+            devices.Add(candidate);
+        }
+
+        return SortDevices(devices);
+    }
+
+    private static bool SameDevice(NetworkDevice left, NetworkDevice right)
+    {
+        return string.Equals(left.IpAddress, right.IpAddress, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(left.MacAddress, right.MacAddress, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<NetworkDevice> SortDevices(List<NetworkDevice> devices)
+    {
         return devices
             .OrderBy(device => device.IpAddress, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
-    private static bool TryReadArpLine(ReadOnlySpan<char> line, out string ipAddress, out string macAddress)
+    private static bool TryReadAddressAndMacLine(ReadOnlySpan<char> line, out string ipAddress, out string macAddress)
     {
         ipAddress = string.Empty;
         macAddress = string.Empty;
@@ -246,23 +341,58 @@ public interface IArpTableRunner
 }
 
 /// <summary>
+/// Runs a Windows neighbor table command and returns its output.
+/// </summary>
+public interface INeighborTableRunner
+{
+    /// <summary>
+    /// Runs the local neighbor table command.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Raw neighbor table output.</returns>
+    Task<string> RunAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Windows process-backed ARP table runner.
 /// </summary>
 [ExcludeFromCodeCoverage(Justification = "Thin Windows process boundary; parser behavior is covered with deterministic runner fakes.")]
 public sealed class ArpTableRunner : IArpTableRunner
 {
     /// <inheritdoc />
-    public async Task<string> RunAsync(CancellationToken cancellationToken)
+    public Task<string> RunAsync(CancellationToken cancellationToken)
+    {
+        return WindowsNetworkCommandRunner.RunAsync("arp.exe", "-a", cancellationToken, "ARP");
+    }
+}
+
+/// <summary>
+/// Windows process-backed neighbor table runner.
+/// </summary>
+[ExcludeFromCodeCoverage(Justification = "Thin Windows process boundary; parser behavior is covered with deterministic runner fakes.")]
+public sealed class NetshNeighborTableRunner : INeighborTableRunner
+{
+    /// <inheritdoc />
+    public Task<string> RunAsync(CancellationToken cancellationToken)
+    {
+        return WindowsNetworkCommandRunner.RunAsync("netsh.exe", "interface ip show neighbors", cancellationToken, "neighbor table");
+    }
+}
+
+[ExcludeFromCodeCoverage(Justification = "Thin Windows process boundary; parser behavior is covered with deterministic runner fakes.")]
+internal static class WindowsNetworkCommandRunner
+{
+    public static async Task<string> RunAsync(string fileName, string arguments, CancellationToken cancellationToken, string label)
     {
         using var process = Process.Start(new ProcessStartInfo
         {
-            FileName = "arp.exe",
-            Arguments = "-a",
+            FileName = fileName,
+            Arguments = arguments,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
-        }) ?? throw new InvalidOperationException("Unable to start arp.exe.");
+        }) ?? throw new InvalidOperationException($"Unable to start {fileName}.");
 
         var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
@@ -271,7 +401,7 @@ public sealed class ArpTableRunner : IArpTableRunner
         if (process.ExitCode != 0)
         {
             var error = await errorTask;
-            throw new InvalidOperationException($"arp.exe failed with exit code {process.ExitCode}: {error}");
+            throw new InvalidOperationException($"{label} command failed with exit code {process.ExitCode}: {error}");
         }
 
         return await outputTask;

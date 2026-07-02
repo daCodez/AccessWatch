@@ -91,6 +91,11 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("ItemsSource=\"{Binding Ports}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedPort, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedPortDetail}\"", xaml);
+        Assert.Contains("Header=\"Meaning\"", xaml);
+        Assert.Contains("Header=\"Next step\"", xaml);
+        Assert.Contains("Content=\"Investigate port\"", xaml);
+        Assert.Contains("Click=\"OnInvestigatePortClick\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedPortInvestigation, Mode=OneWay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Incidents}\"", xaml);
         Assert.Contains("Visibility=\"{Binding SettingsVisibility}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding ProtectionModeOptions}\"", xaml);
@@ -910,6 +915,23 @@ public sealed class NotificationAndViewModelTests
                     LocalAddress = "127.0.0.1",
                     Reachability = PortReachability.LocalOnly,
                     RiskStatus = RiskStatus.Normal
+                },
+                new ListeningPort
+                {
+                    PortNumber = 139,
+                    Protocol = "TCP",
+                    LocalAddress = "172.22.96.1",
+                    Reachability = PortReachability.NetworkReachable,
+                    RiskStatus = RiskStatus.HighRisk
+                },
+                new ListeningPort
+                {
+                    PortNumber = 80,
+                    Protocol = "TCP",
+                    LocalAddress = "127.0.0.1",
+                    Reachability = PortReachability.LocalOnly,
+                    RiskStatus = RiskStatus.Normal,
+                    Application = application
                 }
             ],
             Incidents =
@@ -946,6 +968,12 @@ public sealed class NotificationAndViewModelTests
                 Assert.NotEqual("Not recorded", port.FirstSeen);
                 Assert.NotEqual("Not recorded", port.LastSeen);
                 Assert.Contains("Signed by Microsoft", port.Detail);
+                Assert.Equal(9443, port.PortNumber);
+                Assert.Equal("0.0.0.0", port.LocalAddress);
+                Assert.Contains("Alternate HTTPS", port.Meaning);
+                Assert.Contains("all network adapters", port.Exposure);
+                Assert.Contains("Confirm this application", port.SuggestedAction);
+                Assert.Contains("Next step:", port.Investigation);
             },
             port =>
             {
@@ -954,10 +982,29 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("LocalOnly", port.Reachability);
                 Assert.Equal("Not recorded", port.FirstSeen);
                 Assert.Equal("Application identity unavailable", port.Detail);
+                Assert.Contains("No common profile", port.Meaning);
+                Assert.Contains("Local-only listener", port.Exposure);
+                Assert.Contains("Run a fresh scan", port.SuggestedAction);
+            },
+            port =>
+            {
+                Assert.Equal("TCP 172.22.96.1:139", port.Endpoint);
+                Assert.Contains("NetBIOS", port.Meaning);
+                Assert.Contains("private address 172.22.96.1", port.Exposure);
+                Assert.Contains("Run a fresh scan", port.SuggestedAction);
+            },
+            port =>
+            {
+                Assert.Equal("TCP 127.0.0.1:80", port.Endpoint);
+                Assert.Contains("HTTP web service", port.Meaning);
+                Assert.Contains("Local-only listener", port.Exposure);
+                Assert.Contains("No action needed", port.SuggestedAction);
             });
         Assert.Same(model.Ports[0], model.SelectedPort);
         Assert.Contains("TCP 0.0.0.0:9443", model.SelectedPortDetail);
         Assert.Contains("Visual Studio", model.SelectedPortDetail);
+        Assert.True(model.CanInvestigateSelectedPort);
+        Assert.Contains("Alternate HTTPS", model.SelectedPortInvestigation);
         Assert.Collection(
             model.Incidents,
             incident =>
@@ -989,9 +1036,27 @@ public sealed class NotificationAndViewModelTests
         Assert.True(model.CanApplyIncidentAction);
         Assert.False(model.CanReviewIncidentWithAi);
         Assert.False(model.HasIncidentAiReview);
-        Assert.Contains("Loaded 0 events, 2 ports, 2 incidents, and 1 devices.", model.StatusMessage);
+        Assert.Contains("Loaded 0 events, 4 ports, 2 incidents, and 1 devices.", model.StatusMessage);
+
+        model.InvestigateSelectedPort();
+        Assert.Contains("Investigating TCP 0.0.0.0:9443", model.StatusMessage);
     }
 
+    /// <summary>
+    /// Verifies port investigation guidance explains the empty-selection state.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_InvestigateSelectedPortWithoutSelection_ShowsSelectionPrompt()
+    {
+        var model = new DashboardShellViewModel();
+
+        Assert.False(model.CanInvestigateSelectedPort);
+        Assert.Contains("Select a port", model.SelectedPortInvestigation);
+
+        model.InvestigateSelectedPort();
+
+        Assert.Contains("Select a port before investigating it.", model.StatusMessage);
+    }
     /// <summary>
     /// Verifies selected incident actions persist state and create rule suggestions.
     /// </summary>

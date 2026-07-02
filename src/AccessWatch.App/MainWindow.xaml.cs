@@ -118,6 +118,11 @@ public partial class MainWindow : Window
         await viewModel.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
     }
 
+
+    private void OnInvestigatePortClick(object sender, RoutedEventArgs e)
+    {
+        viewModel.InvestigateSelectedPort();
+    }
     private async void OnResolveIncidentClick(object sender, RoutedEventArgs e)
     {
         await viewModel.ResolveSelectedIncidentAsync(CancellationToken.None);
@@ -162,4 +167,3 @@ public partial class MainWindow : Window
         viewModel.ResetSettingsSelections();
     }
 }
-

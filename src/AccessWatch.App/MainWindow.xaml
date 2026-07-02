@@ -217,11 +217,25 @@
                                 <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
                                 <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="130" />
                                 <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
+                                <DataGridTextColumn Header="Meaning" Binding="{Binding Meaning}" Width="1.8*" />
+                                <DataGridTextColumn Header="Next step" Binding="{Binding SuggestedAction}" Width="2*" />
                                 <DataGridTextColumn Header="Identity" Binding="{Binding Detail}" Width="2*" />
                             </DataGrid.Columns>
                         </DataGrid>
                         <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
-                            <TextBlock Text="{Binding SelectedPortDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" />
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding SelectedPortDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
+                                <Button Grid.Column="1" Content="Investigate port" IsEnabled="{Binding CanInvestigateSelectedPort}" Width="112" Height="30" Click="OnInvestigatePortClick" />
+                                <TextBox Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SelectedPortInvestigation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="96" FontSize="12" Margin="0,12,0,0" />
+                            </Grid>
                         </Border>
                     </Grid>
                 </Border>
@@ -335,4 +349,3 @@
         </Grid>
     </Grid>
 </Window>
-

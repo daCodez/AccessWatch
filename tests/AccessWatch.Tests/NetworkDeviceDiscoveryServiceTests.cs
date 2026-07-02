@@ -123,6 +123,93 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         Assert.Null(Assert.Single(devices).Hostname);
     }
 
+
+    /// <summary>
+    /// Verifies Windows neighbor table output can surface quiet phone-like devices.
+    /// </summary>
+    [Fact]
+    public void ParseNeighborOutput_ReturnsPhoneFriendlyNeighborDevices()
+    {
+        var service = new NetworkDeviceDiscoveryService(new FakeArpTableRunner(string.Empty), new FakeHostnameResolver());
+        var output = string.Join(Environment.NewLine,
+            "Interface 12: Wi-Fi",
+            "Internet Address                              Physical Address   Type",
+            "192.168.1.72                                  aa-bb-cc-dd-ee-12  Reachable",
+            "fe80::1                                       aa-bb-cc-dd-ee-13  Reachable",
+            "192.168.1.255                                 ff-ff-ff-ff-ff-ff  Permanent");
+
+        var devices = service.ParseNeighborOutput(output, DateTimeOffset.UnixEpoch);
+
+        var device = Assert.Single(devices);
+        Assert.Equal("192.168.1.72", device.IpAddress);
+        Assert.Equal("AA:BB:CC:DD:EE:12", device.MacAddress);
+        Assert.Equal("Network neighbor", device.DeviceTypeGuess);
+        Assert.Contains("Phone Link", device.Notes);
+    }
+
+    /// <summary>
+    /// Verifies discovery merges ARP and neighbor-table observations without duplicate devices.
+    /// </summary>
+    [Fact]
+    public async Task DiscoverAsync_MergesNeighborTableDevices()
+    {
+        var arpOutput = string.Join(Environment.NewLine,
+            "  192.168.1.10          00-11-22-33-44-55     dynamic",
+            "  192.168.1.11          00-11-22-33-44-66     dynamic");
+        var neighborOutput = string.Join(Environment.NewLine,
+            "  192.168.1.11          00-11-22-33-44-66     Reachable",
+            "  192.168.1.99          00-11-22-33-44-55     Reachable",
+            "  192.168.1.72          aa-bb-cc-dd-ee-12     Reachable");
+        var service = new NetworkDeviceDiscoveryService(
+            new FakeArpTableRunner(arpOutput),
+            new FakeHostnameResolver(new Dictionary<string, string> { ["192.168.1.72"] = "pixel-phone.local" }),
+            new FakeNeighborTableRunner(neighborOutput));
+
+        var devices = await service.DiscoverAsync(CancellationToken.None);
+
+        Assert.Collection(
+            devices,
+            first => Assert.Equal("192.168.1.10", first.IpAddress),
+            second => Assert.Equal("192.168.1.11", second.IpAddress),
+            third =>
+            {
+                Assert.Equal("192.168.1.72", third.IpAddress);
+                Assert.Equal("pixel-phone.local", third.Hostname);
+                Assert.Contains("neighbor table", third.Notes);
+            });
+    }
+    /// <summary>
+    /// Verifies discovery keeps ARP devices when the neighbor table has no usable devices.
+    /// </summary>
+    [Fact]
+    public async Task DiscoverAsync_KeepsArpDevicesWhenNeighborTableIsEmpty()
+    {
+        var arpOutput = "  192.168.1.30          00-11-22-33-44-77     dynamic";
+        var neighborOutput = string.Join(Environment.NewLine,
+            "Internet Address                              Physical Address   Type",
+            "192.168.1.255                                 ff-ff-ff-ff-ff-ff  Permanent");
+        var service = new NetworkDeviceDiscoveryService(
+            new FakeArpTableRunner(arpOutput),
+            new FakeHostnameResolver(),
+            new FakeNeighborTableRunner(neighborOutput));
+
+        var device = Assert.Single(await service.DiscoverAsync(CancellationToken.None));
+
+        Assert.Equal("192.168.1.30", device.IpAddress);
+    }
+    /// <summary>
+    /// Verifies the ARP-only constructor remains available for tests and simple callers.
+    /// </summary>
+    [Fact]
+    public async Task DiscoverAsync_WithArpOnlyConstructor_UsesProvidedRunner()
+    {
+        var output = "  192.168.1.31          00-11-22-33-44-88     dynamic";
+        var service = new NetworkDeviceDiscoveryService(new FakeArpTableRunner(output));
+
+        var device = Assert.Single(await service.DiscoverAsync(CancellationToken.None));
+
+        Assert.Equal("192.168.1.31", device.IpAddress);
+    }
     /// <summary>
     /// Verifies the default constructor can be created for service registration.
     /// </summary>
@@ -149,6 +236,21 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         }
     }
 
+
+    private sealed class FakeNeighborTableRunner : INeighborTableRunner
+    {
+        private readonly string output;
+
+        public FakeNeighborTableRunner(string output)
+        {
+            this.output = output;
+        }
+
+        public Task<string> RunAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(output);
+        }
+    }
     private sealed class FakeArpTableRunner : IArpTableRunner
     {
         private readonly string output;

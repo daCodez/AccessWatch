@@ -71,7 +71,13 @@ public sealed record DashboardPortItemViewModel(
     string TrustStatus,
     string FirstSeen,
     string LastSeen,
-    string Detail);
+    string Detail,
+    int PortNumber,
+    string LocalAddress,
+    string Meaning,
+    string Exposure,
+    string SuggestedAction,
+    string Investigation);
 
 /// <summary>
 /// Represents an incident row shown in the dashboard.
@@ -406,6 +412,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             selectedPort = value;
             OnPropertyChanged(nameof(SelectedPort));
             OnPropertyChanged(nameof(SelectedPortDetail));
+            OnPropertyChanged(nameof(SelectedPortInvestigation));
+            OnPropertyChanged(nameof(CanInvestigateSelectedPort));
         }
     }
 
@@ -414,7 +422,19 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public string SelectedPortDetail => selectedPort is null
         ? "Select a port to see the owning application, reachability, risk, and timing context."
-        : $"Port: {selectedPort.Endpoint} | Application: {selectedPort.ApplicationName} | Reachability: {selectedPort.Reachability} | Risk: {selectedPort.RiskStatus} | Trust: {selectedPort.TrustStatus} | First seen: {selectedPort.FirstSeen} | Last seen: {selectedPort.LastSeen} | Identity: {selectedPort.Detail}";
+        : $"Port: {selectedPort.Endpoint} | Meaning: {selectedPort.Meaning} | Exposure: {selectedPort.Exposure} | Application: {selectedPort.ApplicationName} | Risk: {selectedPort.RiskStatus} | Trust: {selectedPort.TrustStatus} | First seen: {selectedPort.FirstSeen} | Last seen: {selectedPort.LastSeen} | Identity: {selectedPort.Detail}";
+
+    /// <summary>
+    /// Gets the selected port investigation guidance.
+    /// </summary>
+    public string SelectedPortInvestigation => selectedPort is null
+        ? "Select a port, then investigate to see what it usually means and what to check next."
+        : selectedPort.Investigation;
+
+    /// <summary>
+    /// Gets whether a selected port can be investigated.
+    /// </summary>
+    public bool CanInvestigateSelectedPort => selectedPort is not null;
 
     /// <summary>
     /// Gets or sets the selected incident shown in the detail panel.
@@ -782,6 +802,17 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Highlights the selected port investigation guidance.
+    /// </summary>
+    public void InvestigateSelectedPort()
+    {
+        StatusMessage = selectedPort is null
+            ? "Select a port before investigating it."
+            : $"Investigating {selectedPort.Endpoint}: {selectedPort.SuggestedAction}";
+        OnPropertyChanged(nameof(SelectedPortInvestigation));
+    }
+
+    /// <summary>
     /// Marks the selected incident as resolved.
     /// </summary>
     public Task ResolveSelectedIncidentAsync(CancellationToken cancellationToken)
@@ -1103,7 +1134,13 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 port.TrustStatus.ToString(),
                 FormatTimestamp(port.FirstSeenUtc),
                 FormatTimestamp(port.LastSeenUtc),
-                BuildApplicationIdentity(port.Application, port.Application?.ProcessName)));
+                BuildApplicationIdentity(port.Application, port.Application?.ProcessName),
+                port.PortNumber,
+                port.LocalAddress,
+                DescribePortMeaning(port.PortNumber),
+                DescribePortExposure(port),
+                SuggestPortAction(port),
+                BuildPortInvestigation(port)));
         }
 
         SelectedPort = Ports.FirstOrDefault();
@@ -1186,6 +1223,77 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
     }
 
+
+    private static readonly IReadOnlyDictionary<int, string> KnownPortMeanings = new Dictionary<int, string>
+    {
+        [80] = "HTTP web service. This may be IIS, a local web app, a router/admin page, or development tooling.",
+        [139] = "NetBIOS session service. This is usually legacy Windows file/printer sharing discovery.",
+        [445] = "SMB file sharing. This is Windows file sharing and should normally be limited to trusted private networks.",
+        [3389] = "Remote Desktop. This allows remote sign-in when enabled and deserves careful review.",
+        [9443] = "Alternate HTTPS/admin service. Many tools use this for local dashboards, admin consoles, or development servers.",
+        [47001] = "Windows remote management helper service. Often related to local Windows service management.",
+        [60000] = "High dynamic/private port. Often assigned by an app, device sync tool, VM, container, or local service."
+    };
+
+    private static string BuildPortInvestigation(ListeningPort port)
+    {
+        return string.Join(
+            Environment.NewLine,
+            $"Meaning: {DescribePortMeaning(port.PortNumber)}",
+            $"Exposure: {DescribePortExposure(port)}",
+            $"Application: {FirstUseful(port.Application?.DisplayName, port.Application?.ProcessName, "Unknown application")}",
+            $"Identity: {BuildApplicationIdentity(port.Application, port.Application?.ProcessName)}",
+            $"Next step: {SuggestPortAction(port)}");
+    }
+
+    private static string DescribePortMeaning(int portNumber)
+    {
+        return KnownPortMeanings.TryGetValue(portNumber, out var meaning)
+            ? meaning
+            : "No common profile is built in for this port yet. Investigate the owning process before trusting it.";
+    }
+
+    private static string DescribePortExposure(ListeningPort port)
+    {
+        if (port.Reachability == PortReachability.LocalOnly)
+        {
+            return "Local-only listener. Other devices should not be able to connect to this bind address.";
+        }
+
+        if (port.LocalAddress is "0.0.0.0" or "::" or "[::]")
+        {
+            return "Listening on all network adapters. This can include Wi-Fi, Ethernet, VPN, WSL, Docker, and virtual adapters.";
+        }
+
+        if (IsPrivateOrVirtualAddress(port.LocalAddress))
+        {
+            return $"Listening on private address {port.LocalAddress}. Confirm which adapter owns this address before treating it as real LAN exposure.";
+        }
+
+        return $"Listening on {port.LocalAddress}. Confirm whether this address is reachable from another device.";
+    }
+
+    private static bool IsPrivateOrVirtualAddress(string localAddress)
+    {
+        return localAddress.StartsWith("10.", StringComparison.Ordinal) ||
+            localAddress.StartsWith("172.", StringComparison.Ordinal) ||
+            localAddress.StartsWith("192.168.", StringComparison.Ordinal);
+    }
+
+    private static string SuggestPortAction(ListeningPort port)
+    {
+        if (port.Application is null || port.Application.DisplayName == "Unknown application")
+        {
+            return "Run a fresh scan and confirm the owning process, executable path, publisher, and adapter before trusting it.";
+        }
+
+        if (port.Reachability == PortReachability.NetworkReachable)
+        {
+            return "Confirm this application is expected to accept connections, then trust or watch the app if it is normal for your workflow.";
+        }
+
+        return "No action needed if you recognize the app; watch it if the listener keeps reappearing unexpectedly.";
+    }
     private static string BuildIncidentTarget(NetworkDevice? device, AppIdentity? application)
     {
         if (application is null)
