@@ -481,10 +481,6 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public bool HasIncidentAiReview => !string.IsNullOrWhiteSpace(selectedIncidentAiReview);
 
-    /// <summary>
-    /// Gets the ChatGPT web URL used for subscription-based review.
-    /// </summary>
-    public string ChatGptReviewUrl => "https://chatgpt.com/";
 
     /// <summary>
     /// Gets the structured rule suggestion created from the selected incident.
@@ -865,13 +861,13 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Updates the status after opening the selected incident in ChatGPT.
+    /// Updates the status after copying the selected incident review brief for ChatGPT.
     /// </summary>
-    public void MarkIncidentChatGptOpened()
+    public void MarkIncidentChatGptCopied()
     {
         StatusMessage = HasIncidentAiReview
-            ? "Opened ChatGPT and copied the redacted review brief. Paste it into your ChatGPT subscription chat."
-            : "Review the incident with AI before opening ChatGPT.";
+            ? "Copied the redacted review brief. Paste it into ChatGPT when you are ready."
+            : "Review the incident with AI before copying it for ChatGPT.";
     }
 
     private async Task ApplySelectedIncidentUpdateAsync(

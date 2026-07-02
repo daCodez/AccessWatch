@@ -120,13 +120,13 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Content=\"Escalate\"", xaml);
         Assert.Contains("Content=\"Create rule\"", xaml);
         Assert.Contains("Content=\"Review with AI\"", xaml);
-        Assert.Contains("Content=\"Open in ChatGPT\"", xaml);
+        Assert.Contains("Content=\"Copy for ChatGPT\"", xaml);
         Assert.Contains("Click=\"OnResolveIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnWatchIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnEscalateIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnCreateIncidentRuleClick\"", xaml);
         Assert.Contains("Click=\"OnReviewIncidentWithAiClick\"", xaml);
-        Assert.Contains("Click=\"OnOpenIncidentInChatGptClick\"", xaml);
+        Assert.Contains("Click=\"OnCopyIncidentForChatGptClick\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentAiReview, Mode=OneWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}\"", xaml);
     }
@@ -1064,13 +1064,12 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Microphone activated", model.SelectedIncidentAiReview);
         Assert.Contains("[ip-address]", model.SelectedIncidentAiReview);
         Assert.Contains("[mac-address]", model.SelectedIncidentAiReview);
-        Assert.Equal("https://chatgpt.com/", model.ChatGptReviewUrl);
         Assert.Contains("Prepared AI review brief", model.StatusMessage);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedIncidentAiReview), changed);
         Assert.Contains(nameof(DashboardShellViewModel.HasIncidentAiReview), changed);
 
-        model.MarkIncidentChatGptOpened();
-        Assert.Equal("Opened ChatGPT and copied the redacted review brief. Paste it into your ChatGPT subscription chat.", model.StatusMessage);
+        model.MarkIncidentChatGptCopied();
+        Assert.Equal("Copied the redacted review brief. Paste it into ChatGPT when you are ready.", model.StatusMessage);
     }
 
     /// <summary>
@@ -1094,8 +1093,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Select an incident before creating a rule suggestion.", model.StatusMessage);
         model.CreateSelectedIncidentAiReview();
         Assert.Equal("Select an incident before starting AI review.", model.StatusMessage);
-        model.MarkIncidentChatGptOpened();
-        Assert.Equal("Review the incident with AI before opening ChatGPT.", model.StatusMessage);
+        model.MarkIncidentChatGptCopied();
+        Assert.Equal("Review the incident with AI before copying it for ChatGPT.", model.StatusMessage);
 
         var noServiceModel = new DashboardShellViewModel();
         noServiceModel.SelectedIncident = new DashboardIncidentItemViewModel(

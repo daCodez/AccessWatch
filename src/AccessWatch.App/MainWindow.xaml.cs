@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows;
 using AccessWatch.AI;
 using AccessWatch.App.ViewModels;
@@ -144,13 +143,12 @@ public partial class MainWindow : Window
         viewModel.CreateSelectedIncidentAiReview();
     }
 
-    private void OnOpenIncidentInChatGptClick(object sender, RoutedEventArgs e)
+    private void OnCopyIncidentForChatGptClick(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrWhiteSpace(viewModel.SelectedIncidentAiReview))
         {
             System.Windows.Clipboard.SetText(viewModel.SelectedIncidentAiReview);
-            Process.Start(new ProcessStartInfo(viewModel.ChatGptReviewUrl) { UseShellExecute = true });
-            viewModel.MarkIncidentChatGptOpened();
+            viewModel.MarkIncidentChatGptCopied();
         }
     }
 

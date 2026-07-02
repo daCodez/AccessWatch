@@ -258,7 +258,7 @@
                                     <Button Content="Escalate" IsEnabled="{Binding CanApplyIncidentAction}" Width="78" Height="30" Margin="0,0,8,0" Click="OnEscalateIncidentClick" />
                                     <Button Content="Create rule" IsEnabled="{Binding CanApplyIncidentAction}" Width="92" Height="30" Margin="0,0,8,0" Click="OnCreateIncidentRuleClick" />
                                     <Button Content="Review with AI" IsEnabled="{Binding CanReviewIncidentWithAi}" Width="112" Height="30" Margin="0,0,8,0" Click="OnReviewIncidentWithAiClick" />
-                                    <Button Content="Open in ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="116" Height="30" Click="OnOpenIncidentInChatGptClick" />
+                                    <Button Content="Copy for ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="116" Height="30" Click="OnCopyIncidentForChatGptClick" />
                                 </StackPanel>
                             </Grid>
                         </Border>
