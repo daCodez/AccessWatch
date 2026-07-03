@@ -21,21 +21,32 @@ public static class DeviceAddressClassifier
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(macAddress) && macAddress.StartsWith("01:00:5E:", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(macAddress) &&
+            (macAddress.StartsWith("01:00:5E:", StringComparison.OrdinalIgnoreCase) ||
+            macAddress.StartsWith("33:33:", StringComparison.OrdinalIgnoreCase)))
         {
             return false;
         }
 
-        if (!IPAddress.TryParse(ipAddress, out var parsedAddress) || parsedAddress.AddressFamily != AddressFamily.InterNetwork)
+        if (!IPAddress.TryParse(ipAddress, out var parsedAddress))
         {
             return false;
         }
 
-        var bytes = parsedAddress.GetAddressBytes();
-        return !IPAddress.IsLoopback(parsedAddress)
-            && !parsedAddress.Equals(IPAddress.Any)
-            && !parsedAddress.Equals(IPAddress.None)
-            && bytes[0] < 224
-            && bytes[3] != 255;
+        if (parsedAddress.AddressFamily == AddressFamily.InterNetwork)
+        {
+            var bytes = parsedAddress.GetAddressBytes();
+            return !IPAddress.IsLoopback(parsedAddress)
+                && !parsedAddress.Equals(IPAddress.Any)
+                && !parsedAddress.Equals(IPAddress.None)
+                && bytes[0] < 224
+                && bytes[3] != 255;
+        }
+
+        return parsedAddress.AddressFamily == AddressFamily.InterNetworkV6
+            && !IPAddress.IsLoopback(parsedAddress)
+            && !parsedAddress.Equals(IPAddress.IPv6Any)
+            && !parsedAddress.Equals(IPAddress.IPv6None)
+            && !parsedAddress.IsIPv6Multicast;
     }
 }

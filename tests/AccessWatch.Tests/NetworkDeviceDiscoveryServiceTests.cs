@@ -217,8 +217,40 @@ public sealed class NetworkDeviceDiscoveryServiceTests
 
         var devices = service.ParseNeighborOutput(output, DateTimeOffset.UnixEpoch);
 
+        Assert.Collection(
+            devices,
+            device =>
+            {
+                Assert.Equal("192.168.1.72", device.IpAddress);
+                Assert.Equal("AA:BB:CC:DD:EE:12", device.MacAddress);
+                Assert.Equal("Network neighbor", device.DeviceTypeGuess);
+                Assert.Contains("Phone Link", device.Notes);
+            },
+            device =>
+            {
+                Assert.Equal("fe80::1", device.IpAddress);
+                Assert.Equal("AA:BB:CC:DD:EE:13", device.MacAddress);
+                Assert.Equal("Network neighbor", device.DeviceTypeGuess);
+            });
+    }
+
+    /// <summary>
+    /// Verifies IPv6 neighbor table entries are kept for quiet phones.
+    /// </summary>
+    [Fact]
+    public void ParseNeighborOutput_ReturnsIpv6PhoneNeighborDevices()
+    {
+        var service = new NetworkDeviceDiscoveryService(new FakeArpTableRunner(string.Empty), new FakeHostnameResolver());
+        var output = string.Join(Environment.NewLine,
+            "Interface 12: Wi-Fi",
+            "Internet Address                              Physical Address   Type",
+            "fe80::1234:abcd                               aa-bb-cc-dd-ee-12  Reachable",
+            "ff02::fb                                      33-33-00-00-00-fb  Permanent");
+
+        var devices = service.ParseNeighborOutput(output, DateTimeOffset.UnixEpoch);
+
         var device = Assert.Single(devices);
-        Assert.Equal("192.168.1.72", device.IpAddress);
+        Assert.Equal("fe80::1234:abcd", device.IpAddress);
         Assert.Equal("AA:BB:CC:DD:EE:12", device.MacAddress);
         Assert.Equal("Network neighbor", device.DeviceTypeGuess);
         Assert.Contains("Phone Link", device.Notes);

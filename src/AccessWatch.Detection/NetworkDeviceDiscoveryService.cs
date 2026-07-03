@@ -221,33 +221,24 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
             return false;
         }
 
-        if (!LooksLikeIpv4Address(ipAddressToken) || !TryNormalizeMacAddress(macAddressToken, out macAddress))
+        if (!TryNormalizeIpAddress(ipAddressToken, out ipAddress) || !TryNormalizeMacAddress(macAddressToken, out macAddress))
         {
             return false;
         }
 
-        ipAddress = ipAddressToken.ToString();
         return true;
     }
 
-    private static bool LooksLikeIpv4Address(ReadOnlySpan<char> value)
+    private static bool TryNormalizeIpAddress(ReadOnlySpan<char> value, out string ipAddress)
     {
-        var dots = 0;
-        foreach (var character in value)
+        ipAddress = string.Empty;
+        if (!IPAddress.TryParse(value, out var parsedAddress))
         {
-            if (character == '.')
-            {
-                dots++;
-                continue;
-            }
-
-            if (!char.IsAsciiDigit(character))
-            {
-                return false;
-            }
+            return false;
         }
 
-        return dots == 3;
+        ipAddress = parsedAddress.ToString();
+        return true;
     }
 
     private static bool TryNormalizeMacAddress(ReadOnlySpan<char> value, out string macAddress)
@@ -475,9 +466,11 @@ public sealed class ArpTableRunner : IArpTableRunner
 public sealed class NetshNeighborTableRunner : INeighborTableRunner
 {
     /// <inheritdoc />
-    public Task<string> RunAsync(CancellationToken cancellationToken)
+    public async Task<string> RunAsync(CancellationToken cancellationToken)
     {
-        return WindowsNetworkCommandRunner.RunAsync("netsh.exe", "interface ip show neighbors", cancellationToken, "neighbor table");
+        var ipv4Output = await WindowsNetworkCommandRunner.RunAsync("netsh.exe", "interface ip show neighbors", cancellationToken, "IPv4 neighbor table");
+        var ipv6Output = await WindowsNetworkCommandRunner.RunAsync("netsh.exe", "interface ipv6 show neighbors", cancellationToken, "IPv6 neighbor table");
+        return string.Concat(ipv4Output, Environment.NewLine, ipv6Output);
     }
 }
 
