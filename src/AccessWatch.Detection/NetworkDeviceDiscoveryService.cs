@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using AccessWatch.Core;
 
 namespace AccessWatch.Detection;
@@ -10,16 +12,18 @@ namespace AccessWatch.Detection;
 /// </summary>
 public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryService
 {
+    private const string ArpTableNote = "Seen in ARP table; active subnet probing can refresh this entry when quiet devices respond.";
     private const string NeighborTableNote = "Seen in Windows neighbor table; useful for phones, Phone Link devices, and quiet Wi-Fi devices.";
     private readonly IArpTableRunner arpTableRunner;
     private readonly IDeviceHostnameResolver hostnameResolver;
     private readonly INeighborTableRunner? neighborTableRunner;
+    private readonly ISubnetProbeRunner? subnetProbeRunner;
 
     /// <summary>
     /// Initializes a new device discovery service using the default Windows runners.
     /// </summary>
     public NetworkDeviceDiscoveryService()
-        : this(new ArpTableRunner(), new DnsDeviceHostnameResolver(), new NetshNeighborTableRunner())
+        : this(new ArpTableRunner(), new DnsDeviceHostnameResolver(), new NetshNeighborTableRunner(), new WindowsSubnetProbeRunner())
     {
     }
 
@@ -52,16 +56,38 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
         IArpTableRunner arpTableRunner,
         IDeviceHostnameResolver hostnameResolver,
         INeighborTableRunner? neighborTableRunner)
+        : this(arpTableRunner, hostnameResolver, neighborTableRunner, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new device discovery service with supplied ARP, hostname, neighbor table, and active subnet probe readers.
+    /// </summary>
+    /// <param name="arpTableRunner">Runner used to collect ARP output.</param>
+    /// <param name="hostnameResolver">Resolver used to label devices by hostname.</param>
+    /// <param name="neighborTableRunner">Optional runner used to collect Windows neighbor table output.</param>
+    /// <param name="subnetProbeRunner">Optional runner used to wake quiet local devices before table reads.</param>
+    public NetworkDeviceDiscoveryService(
+        IArpTableRunner arpTableRunner,
+        IDeviceHostnameResolver hostnameResolver,
+        INeighborTableRunner? neighborTableRunner,
+        ISubnetProbeRunner? subnetProbeRunner)
     {
         this.arpTableRunner = arpTableRunner;
         this.hostnameResolver = hostnameResolver;
         this.neighborTableRunner = neighborTableRunner;
+        this.subnetProbeRunner = subnetProbeRunner;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<NetworkDevice>> DiscoverAsync(CancellationToken cancellationToken)
     {
         var observedAtUtc = DateTimeOffset.UtcNow;
+        if (subnetProbeRunner is not null)
+        {
+            await subnetProbeRunner.ProbeAsync(cancellationToken);
+        }
+
         var arpOutput = await arpTableRunner.RunAsync(cancellationToken);
         var devices = ParseArpOutput(arpOutput, observedAtUtc);
         if (neighborTableRunner is not null)
@@ -98,9 +124,10 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
             {
                 IpAddress = ipAddress,
                 MacAddress = macAddress,
-                DeviceTypeGuess = "Unknown",
+                DeviceTypeGuess = GuessDeviceType(ipAddress, null, null),
                 TrustStatus = TrustStatus.Unknown,
                 RiskStatus = RiskStatus.Normal,
+                Notes = ArpTableNote,
                 FirstSeenUtc = observedAtUtc,
                 LastSeenUtc = observedAtUtc,
                 LastConfirmedUtc = observedAtUtc
@@ -135,7 +162,7 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
             {
                 IpAddress = ipAddress,
                 MacAddress = macAddress,
-                DeviceTypeGuess = "Network neighbor",
+                DeviceTypeGuess = GuessDeviceType(ipAddress, null, "Network neighbor"),
                 TrustStatus = TrustStatus.Unknown,
                 RiskStatus = RiskStatus.Normal,
                 Notes = NeighborTableNote,
@@ -279,13 +306,76 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
         return true;
     }
 
+    private static string GuessDeviceType(string ipAddress, string? hostname, string? fallback)
+    {
+        var normalizedName = hostname?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (normalizedName.Contains("iphone", StringComparison.Ordinal) ||
+            normalizedName.Contains("android", StringComparison.Ordinal) ||
+            normalizedName.Contains("pixel", StringComparison.Ordinal) ||
+            normalizedName.Contains("galaxy", StringComparison.Ordinal) ||
+            normalizedName.Contains("phone", StringComparison.Ordinal))
+        {
+            return "Phone";
+        }
+
+        if (normalizedName.Contains("ipad", StringComparison.Ordinal) || normalizedName.Contains("tablet", StringComparison.Ordinal))
+        {
+            return "Tablet";
+        }
+
+        if (normalizedName.Contains("printer", StringComparison.Ordinal) || normalizedName.Contains("print", StringComparison.Ordinal))
+        {
+            return "Printer";
+        }
+
+        if (normalizedName.Contains("nas", StringComparison.Ordinal) || normalizedName.Contains("storage", StringComparison.Ordinal))
+        {
+            return "Network storage";
+        }
+
+        if (normalizedName.Contains("router", StringComparison.Ordinal) || normalizedName.Contains("gateway", StringComparison.Ordinal) || ipAddress.EndsWith(".1", StringComparison.Ordinal))
+        {
+            return "Router / gateway";
+        }
+
+        if (normalizedName.Contains("tv", StringComparison.Ordinal) || normalizedName.Contains("roku", StringComparison.Ordinal) || normalizedName.Contains("chromecast", StringComparison.Ordinal))
+        {
+            return "Media device";
+        }
+
+        if (normalizedName.Contains("speaker", StringComparison.Ordinal) || normalizedName.Contains("echo", StringComparison.Ordinal))
+        {
+            return "Smart speaker";
+        }
+
+        return string.IsNullOrWhiteSpace(fallback) ? "Unknown" : fallback;
+    }
+
+    private static string MergeDeviceNotes(string? notes, string deviceTypeGuess)
+    {
+        if (deviceTypeGuess == "Router / gateway")
+        {
+            var routerNote = "Likely router or default gateway based on address pattern.";
+            return string.Concat(notes, " ", routerNote).Trim();
+        }
+
+        return string.Concat(notes);
+    }
+
     private async Task<IReadOnlyList<NetworkDevice>> AddHostnamesAsync(IReadOnlyList<NetworkDevice> devices, CancellationToken cancellationToken)
     {
         var namedDevices = new List<NetworkDevice>(devices.Count);
         foreach (var device in devices)
         {
             var hostname = await hostnameResolver.ResolveHostnameAsync(device.IpAddress, cancellationToken);
-            namedDevices.Add(string.IsNullOrWhiteSpace(hostname) ? device : device with { Hostname = hostname.Trim().TrimEnd('.') });
+            var normalizedHostname = string.IsNullOrWhiteSpace(hostname) ? null : hostname.Trim().TrimEnd('.');
+            var deviceTypeGuess = GuessDeviceType(device.IpAddress, normalizedHostname, device.DeviceTypeGuess);
+            namedDevices.Add(device with
+            {
+                Hostname = normalizedHostname,
+                DeviceTypeGuess = deviceTypeGuess,
+                Notes = MergeDeviceNotes(device.Notes, deviceTypeGuess)
+            });
         }
 
         return namedDevices;
@@ -354,6 +444,18 @@ public interface INeighborTableRunner
 }
 
 /// <summary>
+/// Actively probes local subnets before passive Windows table reads.
+/// </summary>
+public interface ISubnetProbeRunner
+{
+    /// <summary>
+    /// Sends low-cost probes to local subnet addresses.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task ProbeAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Windows process-backed ARP table runner.
 /// </summary>
 [ExcludeFromCodeCoverage(Justification = "Thin Windows process boundary; parser behavior is covered with deterministic runner fakes.")]
@@ -376,6 +478,108 @@ public sealed class NetshNeighborTableRunner : INeighborTableRunner
     public Task<string> RunAsync(CancellationToken cancellationToken)
     {
         return WindowsNetworkCommandRunner.RunAsync("netsh.exe", "interface ip show neighbors", cancellationToken, "neighbor table");
+    }
+}
+
+/// <summary>
+/// Ping-backed subnet probe that encourages Windows to populate ARP and neighbor tables.
+/// </summary>
+[ExcludeFromCodeCoverage(Justification = "Thin network boundary; discovery orchestration is covered with deterministic probe fakes.")]
+public sealed class WindowsSubnetProbeRunner : ISubnetProbeRunner
+{
+    private const int ProbeTimeoutMilliseconds = 120;
+    private const int MaxConcurrentProbes = 32;
+
+    /// <inheritdoc />
+    public async Task ProbeAsync(CancellationToken cancellationToken)
+    {
+        var addresses = EnumerateLocalSubnetAddresses().Distinct().ToArray();
+        using var throttle = new SemaphoreSlim(MaxConcurrentProbes);
+        var probes = new List<Task>(addresses.Length);
+        foreach (var address in addresses)
+        {
+            await throttle.WaitAsync(cancellationToken);
+            probes.Add(ProbeAddressAsync(address, throttle, cancellationToken));
+        }
+
+        await Task.WhenAll(probes);
+    }
+
+    private static async Task ProbeAddressAsync(string address, SemaphoreSlim throttle, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var ping = new Ping();
+            await ping.SendPingAsync(address, ProbeTimeoutMilliseconds);
+        }
+        catch when (!cancellationToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            throttle.Release();
+        }
+    }
+
+    private static IEnumerable<string> EnumerateLocalSubnetAddresses()
+    {
+        foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (networkInterface.OperationalStatus != OperationalStatus.Up ||
+                networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+            {
+                continue;
+            }
+
+            foreach (var unicast in networkInterface.GetIPProperties().UnicastAddresses)
+            {
+                if (unicast.Address.AddressFamily != AddressFamily.InterNetwork || unicast.IPv4Mask is null)
+                {
+                    continue;
+                }
+
+                foreach (var address in EnumerateSubnet(unicast.Address, unicast.IPv4Mask))
+                {
+                    yield return address;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateSubnet(IPAddress address, IPAddress mask)
+    {
+        var addressBytes = address.GetAddressBytes();
+        var maskBytes = mask.GetAddressBytes();
+        var network = ToUInt32(addressBytes) & ToUInt32(maskBytes);
+        var broadcast = network | ~ToUInt32(maskBytes);
+        var hostCount = broadcast > network ? broadcast - network - 1 : 0;
+        if (hostCount == 0 || hostCount > 254)
+        {
+            yield break;
+        }
+
+        for (var current = network + 1; current < broadcast; current++)
+        {
+            var candidate = FromUInt32(current);
+            if (!candidate.Equals(address))
+            {
+                yield return candidate.ToString();
+            }
+        }
+    }
+
+    private static uint ToUInt32(byte[] bytes)
+    {
+        return ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3];
+    }
+
+    private static IPAddress FromUInt32(uint value)
+    {
+        return new IPAddress([
+            (byte)(value >> 24),
+            (byte)(value >> 16),
+            (byte)(value >> 8),
+            (byte)value]);
     }
 }
 

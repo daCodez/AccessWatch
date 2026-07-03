@@ -18,18 +18,33 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         var output = string.Join(Environment.NewLine,
             "Interface: 192.168.1.10 --- 0x7",
             "  Internet Address      Physical Address      Type",
-            "  192.168.1.1           aa-bb-cc-dd-ee-ff     dynamic",
+            "  192.168.1.20          aa-bb-cc-dd-ee-ff     dynamic",
             "  not-a-device-line");
 
         var devices = service.ParseArpOutput(output, DateTimeOffset.UnixEpoch);
 
         var device = Assert.Single(devices);
-        Assert.Equal("192.168.1.1", device.IpAddress);
+        Assert.Equal("192.168.1.20", device.IpAddress);
         Assert.Equal("AA:BB:CC:DD:EE:FF", device.MacAddress);
         Assert.Equal("Unknown", device.DeviceTypeGuess);
         Assert.Equal(TrustStatus.Unknown, device.TrustStatus);
         Assert.Equal(RiskStatus.Normal, device.RiskStatus);
         Assert.Equal(DateTimeOffset.UnixEpoch, device.LastConfirmedUtc);
+        Assert.Contains("ARP table", device.Notes);
+    }
+
+    /// <summary>
+    /// Verifies ARP output labels likely gateway addresses with useful context.
+    /// </summary>
+    [Fact]
+    public void ParseArpOutput_LabelsLikelyRouterGateway()
+    {
+        var service = new NetworkDeviceDiscoveryService(new FakeArpTableRunner(string.Empty), new FakeHostnameResolver());
+        var output = "  192.168.1.1           aa-bb-cc-dd-ee-ff     dynamic";
+
+        var device = Assert.Single(service.ParseArpOutput(output, DateTimeOffset.UnixEpoch));
+
+        Assert.Equal("Router / gateway", device.DeviceTypeGuess);
     }
 
     /// <summary>
@@ -54,7 +69,6 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         Assert.Equal("02:AC:CE:55:20:25", device.MacAddress);
     }
 
-
     /// <summary>
     /// Verifies malformed MAC addresses are ignored without allocating normalized device rows.
     /// </summary>
@@ -74,6 +88,7 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         Assert.Equal("192.168.1.23", device.IpAddress);
         Assert.Equal("00:11:22:33:44:55", device.MacAddress);
     }
+
     /// <summary>
     /// Verifies discovery delegates to the ARP runner and sorts devices consistently.
     /// </summary>
@@ -94,6 +109,22 @@ public sealed class NetworkDeviceDiscoveryServiceTests
     }
 
     /// <summary>
+    /// Verifies active subnet probing runs before passive table reads.
+    /// </summary>
+    [Fact]
+    public async Task DiscoverAsync_RunsActiveSubnetProbeBeforeReadingTables()
+    {
+        var output = "  192.168.1.30          00-11-22-33-44-55     dynamic";
+        var probeRunner = new FakeSubnetProbeRunner();
+        var service = new NetworkDeviceDiscoveryService(new FakeArpTableRunner(output), new FakeHostnameResolver(), null, probeRunner);
+
+        var device = Assert.Single(await service.DiscoverAsync(CancellationToken.None));
+
+        Assert.True(probeRunner.WasCalled);
+        Assert.Equal("192.168.1.30", device.IpAddress);
+    }
+
+    /// <summary>
     /// Verifies discovery includes reverse-DNS hostnames when they can be resolved.
     /// </summary>
     [Fact]
@@ -110,6 +141,53 @@ public sealed class NetworkDeviceDiscoveryServiceTests
     }
 
     /// <summary>
+    /// Verifies hostnames are used to fingerprint common device types.
+    /// </summary>
+    /// <param name="hostname">Resolved hostname.</param>
+    /// <param name="expectedType">Expected device type label.</param>
+    [Theory]
+    [InlineData("pixel-phone.local", "Phone")]
+    [InlineData("family-ipad.local", "Tablet")]
+    [InlineData("office-printer.local", "Printer")]
+    [InlineData("media-nas.local", "Network storage")]
+    [InlineData("home-router.local", "Router / gateway")]
+    [InlineData("wifi-gateway.local", "Router / gateway")]
+    [InlineData("bedroom-roku.local", "Media device")]
+    [InlineData("office-chromecast.local", "Media device")]
+    [InlineData("office-echo.local", "Smart speaker")]
+    [InlineData("living-room-tv.local", "Media device")]
+    [InlineData("kitchen-speaker.local", "Smart speaker")]
+    [InlineData("unknown-host.local", "Unknown")]
+    public async Task DiscoverAsync_InfersDeviceTypeFromResolvedHostname(string hostname, string expectedType)
+    {
+        var output = "  192.168.1.44          00-11-22-33-44-55     dynamic";
+        var service = new NetworkDeviceDiscoveryService(
+            new FakeArpTableRunner(output),
+            new FakeHostnameResolver(new Dictionary<string, string> { ["192.168.1.44"] = hostname }));
+
+        var device = Assert.Single(await service.DiscoverAsync(CancellationToken.None));
+
+        Assert.Equal(expectedType, device.DeviceTypeGuess);
+    }
+
+    /// <summary>
+    /// Verifies router fingerprinting adds context to resolved device notes.
+    /// </summary>
+    [Fact]
+    public async Task DiscoverAsync_AddsRouterContextToResolvedGatewayNotes()
+    {
+        var output = "  192.168.1.2           00-11-22-33-44-55     dynamic";
+        var service = new NetworkDeviceDiscoveryService(
+            new FakeArpTableRunner(output),
+            new FakeHostnameResolver(new Dictionary<string, string> { ["192.168.1.2"] = "home-router.local" }));
+
+        var device = Assert.Single(await service.DiscoverAsync(CancellationToken.None));
+
+        Assert.Equal("Router / gateway", device.DeviceTypeGuess);
+        Assert.Contains("router or default gateway", device.Notes);
+    }
+
+    /// <summary>
     /// Verifies discovery keeps devices visible when reverse-DNS lookup has no name.
     /// </summary>
     [Fact]
@@ -122,7 +200,6 @@ public sealed class NetworkDeviceDiscoveryServiceTests
 
         Assert.Null(Assert.Single(devices).Hostname);
     }
-
 
     /// <summary>
     /// Verifies Windows neighbor table output can surface quiet phone-like devices.
@@ -175,9 +252,11 @@ public sealed class NetworkDeviceDiscoveryServiceTests
             {
                 Assert.Equal("192.168.1.72", third.IpAddress);
                 Assert.Equal("pixel-phone.local", third.Hostname);
+                Assert.Equal("Phone", third.DeviceTypeGuess);
                 Assert.Contains("neighbor table", third.Notes);
             });
     }
+
     /// <summary>
     /// Verifies discovery keeps ARP devices when the neighbor table has no usable devices.
     /// </summary>
@@ -197,6 +276,7 @@ public sealed class NetworkDeviceDiscoveryServiceTests
 
         Assert.Equal("192.168.1.30", device.IpAddress);
     }
+
     /// <summary>
     /// Verifies the ARP-only constructor remains available for tests and simple callers.
     /// </summary>
@@ -210,6 +290,7 @@ public sealed class NetworkDeviceDiscoveryServiceTests
 
         Assert.Equal("192.168.1.31", device.IpAddress);
     }
+
     /// <summary>
     /// Verifies the default constructor can be created for service registration.
     /// </summary>
@@ -236,6 +317,16 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         }
     }
 
+    private sealed class FakeSubnetProbeRunner : ISubnetProbeRunner
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task ProbeAsync(CancellationToken cancellationToken)
+        {
+            WasCalled = true;
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class FakeNeighborTableRunner : INeighborTableRunner
     {
@@ -251,6 +342,7 @@ public sealed class NetworkDeviceDiscoveryServiceTests
             return Task.FromResult(output);
         }
     }
+
     private sealed class FakeArpTableRunner : IArpTableRunner
     {
         private readonly string output;

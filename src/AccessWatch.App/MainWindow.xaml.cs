@@ -98,6 +98,11 @@ public partial class MainWindow : Window
         await viewModel.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.KnownWatched, CancellationToken.None);
     }
 
+    private async void OnGuestDeviceClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Guest, CancellationToken.None);
+    }
+
     private async void OnBlockDeviceClick(object sender, RoutedEventArgs e)
     {
         await viewModel.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);

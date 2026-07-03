@@ -51,6 +51,41 @@ public sealed class ServiceScanCoordinatorTests
     }
 
     /// <summary>
+    /// Verifies scan-time device observations preserve saved device trust decisions.
+    /// </summary>
+    /// <param name="decision">Saved device trust decision.</param>
+    /// <param name="expectedRisk">Expected inventory risk status.</param>
+    [Theory]
+    [InlineData(TrustStatus.Trusted, RiskStatus.Normal)]
+    [InlineData(TrustStatus.Guest, RiskStatus.Watched)]
+    [InlineData(TrustStatus.KnownWatched, RiskStatus.Watched)]
+    [InlineData(TrustStatus.Blocked, RiskStatus.Critical)]
+    public async Task RunListeningPortScanAsync_PreservesDeviceTrustDecision(TrustStatus decision, RiskStatus expectedRisk)
+    {
+        var repository = new FakeRepository { TrustDecision = decision };
+        var device = new NetworkDevice
+        {
+            IpAddress = "192.168.1.25",
+            MacAddress = "AA:BB:CC:DD:EE:25",
+            TrustStatus = TrustStatus.Unknown,
+            RiskStatus = RiskStatus.Normal
+        };
+        var coordinator = CreateCoordinator(repository, new FakeScanner([]), [device]);
+
+        var count = await coordinator.RunListeningPortScanAsync(CancellationToken.None);
+
+        Assert.Equal(0, count);
+        Assert.Collection(
+            repository.Devices,
+            first => Assert.Equal(TrustStatus.Unknown, first.TrustStatus),
+            second =>
+            {
+                Assert.Equal(decision, second.TrustStatus);
+                Assert.Equal(expectedRisk, second.RiskStatus);
+            });
+    }
+
+    /// <summary>
     /// Verifies a newly observed port creates a new listening port event.
     /// </summary>
     [Fact]

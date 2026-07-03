@@ -44,7 +44,11 @@ public sealed record DashboardDeviceItemViewModel(
     string Vendor,
     string TrustStatus,
     string RiskStatus,
+    string InventoryState,
+    string FirstSeen,
     string LastSeen,
+    string LastConfirmed,
+    string RecommendedAction,
     string Detail);
 
 /// <summary>
@@ -345,7 +349,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public string SelectedDeviceDetail => selectedDevice is null
         ? "Select a device to see its name, address, trust, and risk context."
-        : $"Device: {selectedDevice.Name} | IP: {selectedDevice.IpAddress} | MAC: {selectedDevice.MacAddress} | Vendor: {selectedDevice.Vendor} | Trust: {selectedDevice.TrustStatus} | Risk: {selectedDevice.RiskStatus} | Details: {selectedDevice.Detail}";
+        : $"Device: {selectedDevice.Name} | State: {selectedDevice.InventoryState} | IP: {selectedDevice.IpAddress} | MAC: {selectedDevice.MacAddress} | Vendor: {selectedDevice.Vendor} | Trust: {selectedDevice.TrustStatus} | Risk: {selectedDevice.RiskStatus} | First seen: {selectedDevice.FirstSeen} | Last seen: {selectedDevice.LastSeen} | Last confirmed: {selectedDevice.LastConfirmed} | Next: {selectedDevice.RecommendedAction} | Details: {selectedDevice.Detail}";
 
     /// <summary>
     /// Gets whether device trust action buttons can run.
@@ -1116,7 +1120,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 FirstUseful(device.Vendor, "Vendor unavailable"),
                 device.TrustStatus.ToString(),
                 device.RiskStatus.ToString(),
+                DeviceInventoryState(device),
+                FormatTimestamp(device.FirstSeenUtc),
                 FormatTimestamp(device.LastSeenUtc),
+                FormatOptionalTimestamp(device.LastConfirmedUtc),
+                DeviceRecommendedAction(device),
                 BuildDeviceDetail(device)));
         }
 
@@ -1378,7 +1386,9 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         var currentDevice = selectedDevice!;
         var updatedDevice = currentDevice with
         {
-            Name = FirstUseful(alias, currentDevice.ResolvedName, $"Device at {currentDevice.IpAddress}"),
+            Name = string.IsNullOrWhiteSpace(alias)
+                ? FirstUseful(currentDevice.ResolvedName, $"Device at {currentDevice.IpAddress}")
+                : alias,
             UserAlias = alias ?? string.Empty,
             NameSource = string.IsNullOrWhiteSpace(alias)
                 ? (string.IsNullOrWhiteSpace(currentDevice.ResolvedName) ? "IP address fallback" : "Hostname")
@@ -1406,6 +1416,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         {
             TrustStatus.Trusted => "Trusted",
             TrustStatus.KnownWatched => "Watching",
+            TrustStatus.Guest => "Marked guest",
             TrustStatus.Blocked => "Blocked",
             _ => "Updated"
         };
@@ -1475,6 +1486,41 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
         var trimmed = value.Trim();
         return !IPAddress.TryParse(trimmed, out _) && !trimmed.Contains(":", StringComparison.Ordinal);
+    }
+
+    private static string DeviceInventoryState(NetworkDevice device)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (device.FirstSeenUtc != default && now - device.FirstSeenUtc <= TimeSpan.FromHours(24))
+        {
+            return "New device";
+        }
+
+        if (device.LastConfirmedUtc is null)
+        {
+            return "Unconfirmed";
+        }
+
+        return now - device.LastConfirmedUtc.Value > TimeSpan.FromDays(7)
+            ? "Not seen lately"
+            : "Recently confirmed";
+    }
+
+    private static string DeviceRecommendedAction(NetworkDevice device)
+    {
+        return device.TrustStatus switch
+        {
+            TrustStatus.Trusted => "No action needed unless the device identity changes.",
+            TrustStatus.KnownWatched => "Keep watching for repeated or unexpected activity.",
+            TrustStatus.Guest => "Keep guest access limited and review if it exposes services.",
+            TrustStatus.Blocked => "Keep blocked; investigate if it reappears.",
+            _ => "Assign an alias, then trust, watch, guest-mark, or block this device."
+        };
+    }
+
+    private static string FormatOptionalTimestamp(DateTimeOffset? timestamp)
+    {
+        return timestamp is null ? "Not confirmed" : FormatTimestamp(timestamp.Value);
     }
 
     private static string BuildDeviceDetail(NetworkDevice device)

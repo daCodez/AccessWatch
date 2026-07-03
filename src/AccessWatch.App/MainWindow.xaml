@@ -137,7 +137,11 @@
                                 <DataGridTextColumn Header="Vendor" Binding="{Binding Vendor}" Width="150" />
                                 <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
                                 <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
+                                <DataGridTextColumn Header="State" Binding="{Binding InventoryState}" Width="130" />
+                                <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="130" />
                                 <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
+                                <DataGridTextColumn Header="Confirmed" Binding="{Binding LastConfirmed}" Width="130" />
+                                <DataGridTextColumn Header="Next step" Binding="{Binding RecommendedAction}" Width="2*" />
                                 <DataGridTextColumn Header="Details" Binding="{Binding Detail}" Width="2*" />
                             </DataGrid.Columns>
                         </DataGrid>
@@ -155,6 +159,7 @@
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
                                     <Button Content="Trust device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,0" Click="OnTrustDeviceClick" />
                                     <Button Content="Watch device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="98" Height="30" Margin="0,0,8,0" Click="OnWatchDeviceClick" />
+                                    <Button Content="Guest device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="98" Height="30" Margin="0,0,8,0" Click="OnGuestDeviceClick" />
                                     <Button Content="Block device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Click="OnBlockDeviceClick" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">

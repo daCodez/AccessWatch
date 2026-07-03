@@ -68,7 +68,17 @@ public sealed class ServiceScanCoordinator
         var devices = await deviceDiscoveryService.DiscoverAsync(cancellationToken);
         foreach (var device in devices)
         {
-            await repository.UpsertDeviceAsync(device, cancellationToken);
+            var deviceId = await repository.UpsertDeviceAsync(device, cancellationToken);
+            var trustStatus = await repository.GetActiveTrustDecisionAsync("Device", deviceId, cancellationToken);
+            if (trustStatus is not null)
+            {
+                await repository.UpsertDeviceAsync(device with
+                {
+                    DeviceId = deviceId,
+                    TrustStatus = trustStatus.Value,
+                    RiskStatus = RiskStatusForDeviceTrust(trustStatus.Value)
+                }, cancellationToken);
+            }
         }
 
         logger.LogInformation(
@@ -132,6 +142,16 @@ public sealed class ServiceScanCoordinator
         }
 
         return createdEvents;
+    }
+
+    private static RiskStatus RiskStatusForDeviceTrust(TrustStatus trustStatus)
+    {
+        return trustStatus switch
+        {
+            TrustStatus.KnownWatched or TrustStatus.Guest => RiskStatus.Watched,
+            TrustStatus.Blocked => RiskStatus.Critical,
+            _ => RiskStatus.Normal
+        };
     }
 
     private static NetworkEvent CreateListeningPortEvent(

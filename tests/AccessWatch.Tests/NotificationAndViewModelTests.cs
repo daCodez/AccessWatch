@@ -109,16 +109,22 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click=\"OnResetSettingsClick\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedDevice, Mode=TwoWay}\"", xaml);
         Assert.Contains("Header=\"Name source\"", xaml);
+        Assert.Contains("Header=\"State\"", xaml);
+        Assert.Contains("Header=\"First seen\"", xaml);
+        Assert.Contains("Header=\"Confirmed\"", xaml);
+        Assert.Contains("Header=\"Next step\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedDeviceDetail}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedApplication, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedApplicationDetail}\"", xaml);
         Assert.Contains("Content=\"Trust device\"", xaml);
         Assert.Contains("Content=\"Watch device\"", xaml);
+        Assert.Contains("Content=\"Guest device\"", xaml);
         Assert.Contains("Content=\"Block device\"", xaml);
         Assert.Contains("Content=\"Trust app\"", xaml);
         Assert.Contains("Content=\"Watch app\"", xaml);
         Assert.Contains("Content=\"Block app\"", xaml);
         Assert.Contains("Click=\"OnTrustDeviceClick\"", xaml);
+        Assert.Contains("Click=\"OnGuestDeviceClick\"", xaml);
         Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentDetail}\"", xaml);
@@ -560,6 +566,97 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies device inventory rows explain state and recommended next action.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_LabelsDeviceInventoryStatesAndActions()
+    {
+        var repository = new FakeRepository
+        {
+            Devices =
+            [
+                new NetworkDevice
+                {
+                    Hostname = "trusted-tv",
+                    IpAddress = "192.168.1.50",
+                    TrustStatus = TrustStatus.Trusted,
+                    FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-30),
+                    LastConfirmedUtc = DateTimeOffset.UtcNow.AddMinutes(-30)
+                },
+                new NetworkDevice
+                {
+                    IpAddress = "192.168.1.77",
+                    FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-30),
+                    LastConfirmedUtc = null
+                },
+                new NetworkDevice
+                {
+                    Hostname = "guest-phone",
+                    IpAddress = "192.168.1.78",
+                    TrustStatus = TrustStatus.Guest,
+                    FirstSeenUtc = DateTimeOffset.UtcNow.AddHours(-1),
+                    LastConfirmedUtc = DateTimeOffset.UtcNow.AddMinutes(-5)
+                },
+                new NetworkDevice
+                {
+                    Hostname = "watched-camera",
+                    IpAddress = "192.168.1.79",
+                    TrustStatus = TrustStatus.KnownWatched,
+                    FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-30),
+                    LastConfirmedUtc = DateTimeOffset.UtcNow.AddDays(-8)
+                },
+                new NetworkDevice
+                {
+                    Hostname = "blocked-device",
+                    IpAddress = "192.168.1.80",
+                    TrustStatus = TrustStatus.Blocked,
+                    FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-30),
+                    LastConfirmedUtc = DateTimeOffset.UtcNow.AddDays(-2)
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.Devices,
+            device =>
+            {
+                Assert.Equal("trusted-tv", device.Name);
+                Assert.Equal("Recently confirmed", device.InventoryState);
+                Assert.Equal("No action needed unless the device identity changes.", device.RecommendedAction);
+                Assert.NotEqual("Not recorded", device.FirstSeen);
+                Assert.NotEqual("Not confirmed", device.LastConfirmed);
+            },
+            device =>
+            {
+                Assert.Equal("Device at 192.168.1.77", device.Name);
+                Assert.Equal("Unconfirmed", device.InventoryState);
+                Assert.Equal("Assign an alias, then trust, watch, guest-mark, or block this device.", device.RecommendedAction);
+                Assert.Equal("Not confirmed", device.LastConfirmed);
+            },
+            device =>
+            {
+                Assert.Equal("guest-phone", device.Name);
+                Assert.Equal("New device", device.InventoryState);
+                Assert.Equal("Keep guest access limited and review if it exposes services.", device.RecommendedAction);
+            },
+            device =>
+            {
+                Assert.Equal("watched-camera", device.Name);
+                Assert.Equal("Not seen lately", device.InventoryState);
+                Assert.Equal("Keep watching for repeated or unexpected activity.", device.RecommendedAction);
+            },
+            device =>
+            {
+                Assert.Equal("blocked-device", device.Name);
+                Assert.Equal("Recently confirmed", device.InventoryState);
+                Assert.Equal("Keep blocked; investigate if it reappears.", device.RecommendedAction);
+            });
+    }
+
+    /// <summary>
     /// Verifies selected inventory rows expose a plain-English detail panel.
     /// </summary>
     [Fact]
@@ -759,6 +856,10 @@ public sealed class NotificationAndViewModelTests
         await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.KnownWatched, CancellationToken.None);
 
         Assert.Contains("Watching office-laptop", model.StatusMessage);
+
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Guest, CancellationToken.None);
+
+        Assert.Contains("Marked guest office-laptop", model.StatusMessage);
 
         await model.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Unknown, CancellationToken.None);
 
