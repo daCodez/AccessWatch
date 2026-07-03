@@ -8,6 +8,7 @@
     <ProjectReference Include="..\AccessWatch.Rules\AccessWatch.Rules.csproj" />
     <ProjectReference Include="..\AccessWatch.Notifications\AccessWatch.Notifications.csproj" />
     <ProjectReference Include="..\AccessWatch.Detection\AccessWatch.Detection.csproj" />
+    <ProjectReference Include="..\AccessWatch.Enforcement\AccessWatch.Enforcement.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

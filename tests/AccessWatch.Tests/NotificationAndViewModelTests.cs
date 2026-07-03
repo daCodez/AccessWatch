@@ -2,6 +2,7 @@ using System.Text.Json;
 using AccessWatch.App.ViewModels;
 using AccessWatch.AI;
 using AccessWatch.Core;
+using AccessWatch.Enforcement;
 using AccessWatch.Notifications;
 using AccessWatch.Tray;
 using AppIdentity = AccessWatch.Core.ApplicationIdentity;
@@ -126,6 +127,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click=\"OnTrustDeviceClick\"", xaml);
         Assert.Contains("Click=\"OnGuestDeviceClick\"", xaml);
         Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedEnforcementPlan, Mode=OneWay}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentDetail}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentExplanation, Mode=OneWay}\"", xaml);
@@ -757,6 +759,108 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal(84, decision.TargetId);
                 Assert.Equal(TrustStatus.Blocked, decision.Decision);
             });
+    }
+
+    /// <summary>
+    /// Verifies blocked inventory decisions prepare reviewed firewall protection plans.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_BlockTrustDecision_PreparesFirewallPlan()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 42, Hostname = "guest-phone", IpAddress = "192.168.1.55", MacAddress = "02:AC:CE:55:20:25" }],
+            Applications =
+            [
+                new AppIdentity
+                {
+                    ApplicationId = 84,
+                    DisplayName = "Visual Studio",
+                    ProcessName = "devenv",
+                    FilePath = "C:\\Program Files\\Microsoft Visual Studio\\devenv.exe"
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(
+            repository,
+            firewallEnforcementPlanner: new WindowsFirewallEnforcementPlanner());
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+
+        Assert.Contains("protection plan prepared", model.StatusMessage);
+        Assert.Contains("Block all traffic to and from guest-phone", model.SelectedEnforcementPlan);
+        Assert.Contains("New-NetFirewallRule", model.SelectedEnforcementPlan);
+        Assert.Contains("-RemoteAddress '192.168.1.55'", model.SelectedEnforcementPlan);
+        Assert.True(model.HasEnforcementPlan);
+
+        await model.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+
+        Assert.Contains("protection plan prepared", model.StatusMessage);
+        Assert.Contains("Block network traffic for Visual Studio", model.SelectedEnforcementPlan);
+        Assert.Contains("-Program 'C:\\Program Files\\Microsoft Visual Studio\\devenv.exe'", model.SelectedEnforcementPlan);
+    }
+
+    /// <summary>
+    /// Verifies non-block decisions reset the reviewed firewall protection plan.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_NonBlockTrustDecision_ResetsFirewallPlan()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 43, Hostname = "office-laptop", IpAddress = "192.168.1.25" }]
+        };
+        var model = new DashboardShellViewModel(
+            repository,
+            firewallEnforcementPlanner: new WindowsFirewallEnforcementPlanner());
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Trusted, CancellationToken.None);
+
+        Assert.Contains("Block a device or app", model.SelectedEnforcementPlan);
+        Assert.Equal("Trusted office-laptop.", model.StatusMessage);
+    }
+    /// <summary>
+    /// Verifies blocked device decisions explain when firewall protection planning is not connected.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_BlockDeviceTrustDecisionWithoutPlanner_ExplainsMissingProtectionPlanning()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 44, Hostname = "guest-tablet", IpAddress = "192.168.1.56" }]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+
+        Assert.Equal("Firewall protection planning is not connected for this dashboard session.", model.SelectedEnforcementPlan);
+        Assert.Equal("Blocked guest-tablet.", model.StatusMessage);
+        Assert.True(model.HasEnforcementPlan);
+    }
+
+    /// <summary>
+    /// Verifies protection plans can explain a review-only action without administrator commands.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_BlockDeviceTrustDecisionWithReviewOnlyPlan_ShowsNoAdminCopy()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 45, Hostname = "lab-sensor", IpAddress = "192.168.1.57" }]
+        };
+        var model = new DashboardShellViewModel(
+            repository,
+            firewallEnforcementPlanner: new ReviewOnlyFirewallPlanner());
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+
+        Assert.Contains("Does not require administrator approval.", model.SelectedEnforcementPlan);
+        Assert.Contains("No firewall command is ready yet.", model.SelectedEnforcementPlan);
     }
 
     /// <summary>
@@ -1955,6 +2059,31 @@ public sealed class NotificationAndViewModelTests
         }
 
         throw new FileNotFoundException("Could not locate src/AccessWatch.App/MainWindow.xaml from the test output folder.");
+    }
+
+    private sealed class ReviewOnlyFirewallPlanner : IFirewallEnforcementPlanner
+    {
+        public FirewallEnforcementPlan CreateBlockDevicePlan(NetworkDevice device)
+        {
+            return new FirewallEnforcementPlan(
+                "Device",
+                device.Hostname ?? "Device",
+                "Review the device before enforcement.",
+                "This plan intentionally has no command yet.",
+                [],
+                false);
+        }
+
+        public FirewallEnforcementPlan CreateBlockApplicationPlan(AppIdentity application)
+        {
+            return new FirewallEnforcementPlan(
+                "Application",
+                application.DisplayName ?? "Application",
+                "Review the application before enforcement.",
+                "This plan intentionally has no command yet.",
+                [],
+                false);
+        }
     }
 
     private sealed class FakeRepository : IAccessWatchRepository

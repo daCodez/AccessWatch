@@ -150,6 +150,7 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -168,6 +169,7 @@
                                     <Button Content="Save alias" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="88" Height="30" Margin="0,0,8,0" Click="OnSaveDeviceAliasClick" />
                                     <Button Content="Clear" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="64" Height="30" Click="OnClearDeviceAliasClick" />
                                 </StackPanel>
+                                <TextBox Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
                             </Grid>
                         </Border>
                     </Grid>
@@ -192,6 +194,10 @@
                         </DataGrid>
                         <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -202,6 +208,7 @@
                                     <Button Content="Watch app" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="86" Height="30" Margin="0,0,8,0" Click="OnWatchApplicationClick" />
                                     <Button Content="Block app" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="84" Height="30" Click="OnBlockApplicationClick" />
                                 </StackPanel>
+                                <TextBox Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
                             </Grid>
                         </Border>
                     </Grid>
@@ -230,6 +237,7 @@
                         <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
                                 <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>

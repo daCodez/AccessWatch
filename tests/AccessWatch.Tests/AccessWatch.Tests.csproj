@@ -39,6 +39,7 @@
     <ProjectReference Include="..\..\src\AccessWatch.Service\AccessWatch.Service.csproj" />
     <ProjectReference Include="..\..\src\AccessWatch.App\AccessWatch.App.csproj" />
     <ProjectReference Include="..\..\src\AccessWatch.Tray\AccessWatch.Tray.csproj" />
+    <ProjectReference Include="..\..\src\AccessWatch.Enforcement\AccessWatch.Enforcement.csproj" />
   </ItemGroup>
 
 </Project>

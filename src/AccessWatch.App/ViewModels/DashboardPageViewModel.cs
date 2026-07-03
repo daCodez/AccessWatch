@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using AccessWatch.Core;
+using AccessWatch.Enforcement;
 using AppIdentity = AccessWatch.Core.ApplicationIdentity;
 
 namespace AccessWatch.App.ViewModels;
@@ -62,6 +63,7 @@ public sealed record DashboardApplicationItemViewModel(
     string SignatureStatus,
     string TrustStatus,
     string LastSeen,
+    string ExecutablePath,
     string Detail);
 
 /// <summary>
@@ -117,6 +119,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private readonly Func<CancellationToken, Task<int>>? scanAsync;
     private readonly Func<CancellationToken, Task<int>>? simulateAsync;
     private readonly IAiHandoffService? aiHandoffService;
+    private readonly IFirewallEnforcementPlanner? firewallEnforcementPlanner;
     private readonly AccessWatchSettings settings;
     private DashboardPageViewModel selectedPage;
     private string selectedProtectionMode;
@@ -131,6 +134,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private DashboardIncidentItemViewModel? selectedIncident;
     private string selectedIncidentAiReview = string.Empty;
     private string selectedIncidentRuleSuggestion = string.Empty;
+    private string selectedEnforcementPlan = "Block a device or app to prepare a reviewed Windows Firewall protection plan.";
     private string selectedDeviceAlias = string.Empty;
     private bool isLoading;
 
@@ -153,17 +157,20 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <param name="simulateAsync">Optional simulator action that persists a demo event.</param>
     /// <param name="settings">Mutable settings used by dashboard actions in this app session.</param>
     /// <param name="aiHandoffService">Optional service used to create redacted incident AI review briefs.</param>
+    /// <param name="firewallEnforcementPlanner">Optional planner used to prepare reviewed Windows Firewall actions.</param>
     public DashboardShellViewModel(
         IAccessWatchRepository repository,
         Func<CancellationToken, Task<int>>? scanAsync = null,
         Func<CancellationToken, Task<int>>? simulateAsync = null,
         AccessWatchSettings? settings = null,
-        IAiHandoffService? aiHandoffService = null)
+        IAiHandoffService? aiHandoffService = null,
+        IFirewallEnforcementPlanner? firewallEnforcementPlanner = null)
     {
         this.repository = repository;
         this.scanAsync = scanAsync;
         this.simulateAsync = simulateAsync;
         this.aiHandoffService = aiHandoffService;
+        this.firewallEnforcementPlanner = firewallEnforcementPlanner;
         this.settings = settings ?? new AccessWatchSettings();
         selectedProtectionMode = this.settings.ProtectionMode.ToString();
         selectedAiMode = this.settings.AiMode.ToString();
@@ -519,6 +526,16 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
 
     /// <summary>
+    /// Gets the current reviewed Windows Firewall protection plan.
+    /// </summary>
+    public string SelectedEnforcementPlan => selectedEnforcementPlan;
+
+    /// <summary>
+    /// Gets whether a protection plan is available for review.
+    /// </summary>
+    public bool HasEnforcementPlan => !string.IsNullOrWhiteSpace(selectedEnforcementPlan);
+
+    /// <summary>
     /// Gets the structured rule suggestion created from the selected incident.
     /// </summary>
     public string SelectedIncidentRuleSuggestion => selectedIncidentRuleSuggestion;
@@ -796,7 +813,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         await repository!.AddTrustDecisionAsync(CreateTrustDecision("Device", selectedDevice.DeviceId, decision), cancellationToken);
         Devices[Devices.IndexOf(selectedDevice)] = updatedDevice;
         SelectedDevice = updatedDevice;
-        StatusMessage = $"{TrustDecisionVerb(decision)} {updatedDevice.Name}.";
+        UpdateDeviceEnforcementPlan(decision, updatedDevice);
+        StatusMessage = decision == TrustStatus.Blocked && firewallEnforcementPlanner is not null
+            ? $"Blocked {updatedDevice.Name}; protection plan prepared."
+            : $"{TrustDecisionVerb(decision)} {updatedDevice.Name}.";
     }
 
     /// <summary>
@@ -814,7 +834,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         await repository!.AddTrustDecisionAsync(CreateTrustDecision("Application", selectedApplication.ApplicationId, decision), cancellationToken);
         Applications[Applications.IndexOf(selectedApplication)] = updatedApplication;
         SelectedApplication = updatedApplication;
-        StatusMessage = $"{TrustDecisionVerb(decision)} {updatedApplication.Name}.";
+        UpdateApplicationEnforcementPlan(decision, updatedApplication);
+        StatusMessage = decision == TrustStatus.Blocked && firewallEnforcementPlanner is not null
+            ? $"Blocked {updatedApplication.Name}; protection plan prepared."
+            : $"{TrustDecisionVerb(decision)} {updatedApplication.Name}.";
     }
 
     /// <summary>
@@ -1144,6 +1167,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 SignatureLabel(application.SignatureStatus),
                 application.TrustStatus.ToString(),
                 FormatTimestamp(application.LastSeenUtc),
+                application.FilePath ?? string.Empty,
                 BuildApplicationIdentity(application, application.ProcessName)));
         }
 
@@ -1398,6 +1422,80 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         SelectedDevice = updatedDevice;
     }
 
+    private void UpdateDeviceEnforcementPlan(TrustStatus decision, DashboardDeviceItemViewModel device)
+    {
+        if (decision != TrustStatus.Blocked)
+        {
+            ResetEnforcementPlan();
+            return;
+        }
+
+        if (firewallEnforcementPlanner is null)
+        {
+            selectedEnforcementPlan = "Firewall protection planning is not connected for this dashboard session.";
+            OnPropertyChanged(nameof(SelectedEnforcementPlan));
+            OnPropertyChanged(nameof(HasEnforcementPlan));
+            return;
+        }
+
+        var plan = firewallEnforcementPlanner.CreateBlockDevicePlan(new NetworkDevice
+        {
+            DeviceId = device.DeviceId,
+            IpAddress = device.IpAddress,
+            MacAddress = device.MacAddress == "MAC address unavailable" ? null : device.MacAddress,
+            Hostname = device.ResolvedName,
+            UserAlias = device.UserAlias
+        });
+        SetEnforcementPlan(plan);
+    }
+
+    private void UpdateApplicationEnforcementPlan(TrustStatus decision, DashboardApplicationItemViewModel application)
+    {
+        if (decision != TrustStatus.Blocked)
+        {
+            ResetEnforcementPlan();
+            return;
+        }
+
+        if (firewallEnforcementPlanner is null)
+        {
+            selectedEnforcementPlan = "Firewall protection planning is not connected for this dashboard session.";
+            OnPropertyChanged(nameof(SelectedEnforcementPlan));
+            OnPropertyChanged(nameof(HasEnforcementPlan));
+            return;
+        }
+
+        var plan = firewallEnforcementPlanner.CreateBlockApplicationPlan(new AppIdentity
+        {
+            ApplicationId = application.ApplicationId,
+            DisplayName = application.Name,
+            ProcessName = application.ProcessName,
+            FilePath = application.ExecutablePath
+        });
+        SetEnforcementPlan(plan);
+    }
+
+    private void SetEnforcementPlan(FirewallEnforcementPlan plan)
+    {
+        var commands = plan.PowerShellCommands.Count == 0
+            ? "No firewall command is ready yet."
+            : string.Join(Environment.NewLine, plan.PowerShellCommands);
+        selectedEnforcementPlan = string.Join(
+            Environment.NewLine,
+            plan.Summary,
+            plan.Explanation,
+            plan.RequiresAdministrator ? "Requires administrator approval before applying." : "Does not require administrator approval.",
+            commands);
+        OnPropertyChanged(nameof(SelectedEnforcementPlan));
+        OnPropertyChanged(nameof(HasEnforcementPlan));
+    }
+
+    private void ResetEnforcementPlan()
+    {
+        selectedEnforcementPlan = "Block a device or app to prepare a reviewed Windows Firewall protection plan.";
+        OnPropertyChanged(nameof(SelectedEnforcementPlan));
+        OnPropertyChanged(nameof(HasEnforcementPlan));
+    }
     private static TrustDecision CreateTrustDecision(string targetType, long targetId, TrustStatus decision)
     {
         return new TrustDecision

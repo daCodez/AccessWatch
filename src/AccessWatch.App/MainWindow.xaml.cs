@@ -4,6 +4,7 @@ using AccessWatch.App.ViewModels;
 using AccessWatch.Core;
 using AccessWatch.Data;
 using AccessWatch.Detection;
+using AccessWatch.Enforcement;
 using AccessWatch.Notifications;
 using AccessWatch.Rules;
 using AccessWatch.Service;
@@ -48,7 +49,8 @@ public partial class MainWindow : Window
             },
             simulator.TriggerDemoEventAsync,
             settings,
-            new ManualAiHandoffService());
+            new ManualAiHandoffService(),
+            new WindowsFirewallEnforcementPlanner());
         DataContext = viewModel;
         Loaded += OnLoaded;
         Closed += OnClosed;
