@@ -170,6 +170,35 @@ public sealed class RiskScoringServiceTests
     }
 
     /// <summary>
+    /// Verifies watched applications stay visible without repeatedly high-risk interrupting the user.
+    /// </summary>
+    [Fact]
+    public void ScoreNewListeningPort_DowngradesWatchedNetworkReachableAppToWatchLevel()
+    {
+        var service = new RiskScoringService();
+        var port = new ListeningPort
+        {
+            PortNumber = 3389,
+            LocalAddress = "0.0.0.0",
+            Reachability = PortReachability.NetworkReachable,
+            Application = new ApplicationIdentity
+            {
+                DisplayName = "Remote Desktop",
+                ProcessName = "svchost",
+                SignatureStatus = SignatureStatus.TrustedSigned,
+                TrustStatus = TrustStatus.KnownWatched
+            }
+        };
+
+        var assessment = service.ScoreNewListeningPort(port, new AccessWatchSettings());
+
+        Assert.Equal(RiskLevel.Medium, assessment.RiskLevel);
+        Assert.Equal(RiskStatus.Watched, assessment.RiskStatus);
+        Assert.Equal(NotificationAction.SoftNotify, assessment.Action);
+        Assert.Contains("watched application", assessment.Summary);
+        Assert.Contains("asked AccessWatch to watch", assessment.WhyItMatters);
+    }
+    /// <summary>
     /// Verifies trusted Plex ports are silent after the app is trusted.
     /// </summary>
     [Fact]

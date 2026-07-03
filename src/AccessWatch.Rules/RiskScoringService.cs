@@ -59,6 +59,17 @@ public sealed class RiskScoringService : IRiskScoringService
                 "No action needed.");
         }
 
+        if (application?.TrustStatus == TrustStatus.KnownWatched && port.Reachability == PortReachability.NetworkReachable)
+        {
+            return Assessment(
+                RiskLevel.Medium,
+                RiskStatus.Watched,
+                settings,
+                $"{ApplicationName(application)} opened a watched application port.",
+                "You asked AccessWatch to watch this app, so the activity stays visible without treating it like a new unknown high-risk app.",
+                "Keep watching unless the port, app identity, or network adapter changes unexpectedly.");
+        }
+
         // Network-reachable remote access ports are interruption-worthy because they can expose control surfaces to LAN peers.
         if (port.Reachability == PortReachability.NetworkReachable && isHighRiskPort)
         {

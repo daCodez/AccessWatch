@@ -171,6 +171,38 @@ public sealed class ServiceScanCoordinatorTests
 
 
     /// <summary>
+    /// Verifies watched application decisions reduce future scan noise while keeping events visible.
+    /// </summary>
+    [Fact]
+    public async Task RunListeningPortScanAsync_AppliesWatchedApplicationDecisionBeforeScoring()
+    {
+        var repository = new FakeRepository { IsNewPort = true, TrustDecision = TrustStatus.KnownWatched };
+        var port = new ListeningPort
+        {
+            PortNumber = 3389,
+            Protocol = "TCP",
+            LocalAddress = "0.0.0.0",
+            Reachability = PortReachability.NetworkReachable,
+            Application = new ApplicationIdentity
+            {
+                DisplayName = "Remote Desktop",
+                ProcessName = "svchost",
+                SignatureStatus = SignatureStatus.TrustedSigned
+            }
+        };
+        var coordinator = CreateCoordinator(repository, new FakeScanner([port]));
+
+        var count = await coordinator.RunListeningPortScanAsync(CancellationToken.None);
+
+        Assert.Equal(1, count);
+        var networkEvent = Assert.Single(repository.Events);
+        Assert.Equal(RiskLevel.Medium, networkEvent.RiskLevel);
+        Assert.True(networkEvent.WasUserNotified);
+        var notification = Assert.Single(repository.Notifications);
+        Assert.Equal(NotificationAction.SoftNotify, notification.Action);
+        Assert.Equal(RiskLevel.Medium, Assert.Single(repository.Incidents).RiskLevel);
+    }
+    /// <summary>
     /// Verifies an existing port creates an event when a different application owns it.
     /// </summary>
     [Fact]
@@ -362,4 +394,3 @@ public sealed class ServiceScanCoordinatorTests
         }
     }
 }
-
