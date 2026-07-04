@@ -135,8 +135,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private DashboardIncidentItemViewModel? selectedIncident;
     private string selectedIncidentAiReview = string.Empty;
     private string selectedIncidentRuleSuggestion = string.Empty;
-    private string selectedEnforcementPlan = "Block a device or app to prepare a reviewed Windows Firewall protection plan.";
-    private FirewallEnforcementPlan? selectedFirewallEnforcementPlan;
+    private readonly FirewallEnforcementPlanReviewViewModel enforcementPlanReview = new();
     private string selectedDeviceAlias = string.Empty;
     private bool isLoading;
 
@@ -533,20 +532,17 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <summary>
     /// Gets the current reviewed Windows Firewall protection plan.
     /// </summary>
-    public string SelectedEnforcementPlan => selectedEnforcementPlan;
+    public string SelectedEnforcementPlan => enforcementPlanReview.Text;
 
     /// <summary>
     /// Gets whether a protection plan is available for review.
     /// </summary>
-    public bool HasEnforcementPlan => !string.IsNullOrWhiteSpace(selectedEnforcementPlan);
+    public bool HasEnforcementPlan => enforcementPlanReview.HasText;
 
     /// <summary>
     /// Gets whether the reviewed firewall protection plan can be applied.
     /// </summary>
-    public bool CanApplyEnforcementPlan =>
-        selectedFirewallEnforcementPlan is not null &&
-        selectedFirewallEnforcementPlan.PowerShellCommands.Count > 0 &&
-        !IsLoading;
+    public bool CanApplyEnforcementPlan => enforcementPlanReview.CanApply(IsLoading);
 
     /// <summary>
     /// Gets the structured rule suggestion created from the selected incident.
@@ -859,7 +855,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task ApplySelectedEnforcementPlanAsync(CancellationToken cancellationToken)
     {
-        if (selectedFirewallEnforcementPlan is null)
+        if (enforcementPlanReview.SelectedPlan is null)
         {
             StatusMessage = "Block a device or app before applying protection.";
             return;
@@ -871,17 +867,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        var plan = selectedFirewallEnforcementPlan;
+        var plan = enforcementPlanReview.SelectedPlan;
         var result = await firewallEnforcementExecutor.ApplyAsync(plan, cancellationToken);
-        if (result.Succeeded)
-        {
-            selectedFirewallEnforcementPlan = null;
-        }
-
-        selectedEnforcementPlan = FormatEnforcementPlan(plan, result);
+        enforcementPlanReview.ShowApplyResult(plan, result);
         StatusMessage = result.Summary;
-        OnPropertyChanged(nameof(SelectedEnforcementPlan));
-        OnPropertyChanged(nameof(CanApplyEnforcementPlan));
+        NotifyEnforcementPlanChanged();
     }
 
     /// <summary>
@@ -1476,11 +1466,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
         if (firewallEnforcementPlanner is null)
         {
-            selectedFirewallEnforcementPlan = null;
-            selectedEnforcementPlan = "Firewall protection planning is not connected for this dashboard session.";
-            OnPropertyChanged(nameof(SelectedEnforcementPlan));
-            OnPropertyChanged(nameof(HasEnforcementPlan));
-            OnPropertyChanged(nameof(CanApplyEnforcementPlan));
+            ShowEnforcementPlanningDisconnected();
             return;
         }
 
@@ -1505,11 +1491,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
         if (firewallEnforcementPlanner is null)
         {
-            selectedFirewallEnforcementPlan = null;
-            selectedEnforcementPlan = "Firewall protection planning is not connected for this dashboard session.";
-            OnPropertyChanged(nameof(SelectedEnforcementPlan));
-            OnPropertyChanged(nameof(HasEnforcementPlan));
-            OnPropertyChanged(nameof(CanApplyEnforcementPlan));
+            ShowEnforcementPlanningDisconnected();
             return;
         }
 
@@ -1525,37 +1507,27 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private void SetEnforcementPlan(FirewallEnforcementPlan plan)
     {
-        selectedFirewallEnforcementPlan = plan;
-        selectedEnforcementPlan = FormatEnforcementPlan(plan);
-        OnPropertyChanged(nameof(SelectedEnforcementPlan));
-        OnPropertyChanged(nameof(HasEnforcementPlan));
-        OnPropertyChanged(nameof(CanApplyEnforcementPlan));
+        enforcementPlanReview.SetPlan(plan);
+        NotifyEnforcementPlanChanged();
+    }
+
+    private void ShowEnforcementPlanningDisconnected()
+    {
+        enforcementPlanReview.ShowPlanningDisconnected();
+        NotifyEnforcementPlanChanged();
     }
 
     private void ResetEnforcementPlan()
     {
-        selectedFirewallEnforcementPlan = null;
-        selectedEnforcementPlan = "Block a device or app to prepare a reviewed Windows Firewall protection plan.";
+        enforcementPlanReview.Reset();
+        NotifyEnforcementPlanChanged();
+    }
+
+    private void NotifyEnforcementPlanChanged()
+    {
         OnPropertyChanged(nameof(SelectedEnforcementPlan));
         OnPropertyChanged(nameof(HasEnforcementPlan));
         OnPropertyChanged(nameof(CanApplyEnforcementPlan));
-    }
-
-    private static string FormatEnforcementPlan(FirewallEnforcementPlan plan, FirewallEnforcementResult? result = null)
-    {
-        var commands = plan.PowerShellCommands.Count == 0
-            ? "No firewall command is ready yet."
-            : string.Join(Environment.NewLine, plan.PowerShellCommands);
-        var planText = string.Join(
-            Environment.NewLine,
-            plan.Summary,
-            plan.Explanation,
-            plan.RequiresAdministrator ? "Requires administrator approval before applying." : "Does not require administrator approval.",
-            commands);
-
-        return result is null
-            ? planText
-            : string.Join(Environment.NewLine, planText, string.Empty, "Last apply result:", result.Summary, result.Detail);
     }
 
     private static TrustDecision CreateTrustDecision(string targetType, long targetId, TrustStatus decision)

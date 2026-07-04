@@ -866,6 +866,30 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies failed firewall apply results keep the reviewed plan available.
+    /// </summary>
+    [Fact]
+    public void FirewallEnforcementPlanReviewViewModel_ShowApplyFailure_KeepsPlanAvailable()
+    {
+        var plan = new FirewallEnforcementPlan(
+            "Device",
+            "guest-phone",
+            "Block guest-phone",
+            "Review first",
+            ["New-NetFirewallRule inbound"],
+            true);
+        var review = new FirewallEnforcementPlanReviewViewModel();
+        review.SetPlan(plan);
+
+        review.ShowApplyResult(plan, new FirewallEnforcementResult(false, "Could not apply protection.", "Firewall rejected the rule.", []));
+
+        Assert.Same(plan, review.SelectedPlan);
+        Assert.True(review.CanApply(false));
+        Assert.Contains("Last apply result:", review.Text);
+        Assert.Contains("Firewall rejected the rule.", review.Text);
+    }
+
+    /// <summary>
     /// Verifies the apply protection button state follows the reviewed firewall plan.
     /// </summary>
     [Fact]
