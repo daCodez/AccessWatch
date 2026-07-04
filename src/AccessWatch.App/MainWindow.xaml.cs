@@ -50,7 +50,8 @@ public partial class MainWindow : Window
             simulator.TriggerDemoEventAsync,
             settings,
             new ManualAiHandoffService(),
-            new WindowsFirewallEnforcementPlanner());
+            new WindowsFirewallEnforcementPlanner(),
+            new WindowsFirewallEnforcementExecutor());
         DataContext = viewModel;
         Loaded += OnLoaded;
         Closed += OnClosed;
@@ -110,6 +111,10 @@ public partial class MainWindow : Window
         await viewModel.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
     }
 
+    private async void OnApplyProtectionClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.ApplySelectedEnforcementPlanAsync(CancellationToken.None);
+    }
     private async void OnTrustApplicationClick(object sender, RoutedEventArgs e)
     {
         await viewModel.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Trusted, CancellationToken.None);

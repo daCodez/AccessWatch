@@ -128,6 +128,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click=\"OnGuestDeviceClick\"", xaml);
         Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedEnforcementPlan, Mode=OneWay}\"", xaml);
+        Assert.Contains("Content=\"Apply protection\"", xaml);
+        Assert.Contains("IsEnabled=\"{Binding CanApplyEnforcementPlan}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentDetail}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentExplanation, Mode=OneWay}\"", xaml);
@@ -861,6 +863,88 @@ public sealed class NotificationAndViewModelTests
 
         Assert.Contains("Does not require administrator approval.", model.SelectedEnforcementPlan);
         Assert.Contains("No firewall command is ready yet.", model.SelectedEnforcementPlan);
+    }
+
+    /// <summary>
+    /// Verifies the apply protection button state follows the reviewed firewall plan.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_BlockTrustDecision_EnablesApplyProtectionForReadyPlan()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 46, Hostname = "guest-phone", IpAddress = "192.168.1.55" }]
+        };
+        var model = new DashboardShellViewModel(
+            repository,
+            firewallEnforcementPlanner: new WindowsFirewallEnforcementPlanner());
+
+        await model.LoadAsync(CancellationToken.None);
+        Assert.False(model.CanApplyEnforcementPlan);
+
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+
+        Assert.True(model.CanApplyEnforcementPlan);
+    }
+
+    /// <summary>
+    /// Verifies applying protection explains when execution is not connected.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplySelectedEnforcementPlanWithoutExecutor_ExplainsMissingApplicationService()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 47, Hostname = "guest-phone", IpAddress = "192.168.1.55" }]
+        };
+        var model = new DashboardShellViewModel(
+            repository,
+            firewallEnforcementPlanner: new WindowsFirewallEnforcementPlanner());
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+        await model.ApplySelectedEnforcementPlanAsync(CancellationToken.None);
+
+        Assert.Equal("Firewall protection application is not connected for this dashboard session.", model.StatusMessage);
+        Assert.True(model.CanApplyEnforcementPlan);
+    }
+
+    /// <summary>
+    /// Verifies successful protection application records the result and disables repeat apply.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplySelectedEnforcementPlan_ShowsSuccessAndDisablesRepeatApply()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 48, Hostname = "guest-phone", IpAddress = "192.168.1.55" }]
+        };
+        var model = new DashboardShellViewModel(
+            repository,
+            firewallEnforcementPlanner: new WindowsFirewallEnforcementPlanner(),
+            firewallEnforcementExecutor: new FakeFirewallExecutor(true));
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
+        await model.ApplySelectedEnforcementPlanAsync(CancellationToken.None);
+
+        Assert.Equal("Applied firewall protection for guest-phone.", model.StatusMessage);
+        Assert.Contains("Last apply result:", model.SelectedEnforcementPlan);
+        Assert.Contains("AccessWatch applied 2 Windows Firewall rule(s).", model.SelectedEnforcementPlan);
+        Assert.False(model.CanApplyEnforcementPlan);
+    }
+
+    /// <summary>
+    /// Verifies apply protection requires a reviewed plan first.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplySelectedEnforcementPlanRequiresPlan()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository(), firewallEnforcementExecutor: new FakeFirewallExecutor(true));
+
+        await model.ApplySelectedEnforcementPlanAsync(CancellationToken.None);
+
+        Assert.Equal("Block a device or app before applying protection.", model.StatusMessage);
     }
 
     /// <summary>
@@ -2083,6 +2167,18 @@ public sealed class NotificationAndViewModelTests
                 "This plan intentionally has no command yet.",
                 [],
                 false);
+        }
+    }
+
+    private sealed class FakeFirewallExecutor(bool succeeds) : IFirewallEnforcementExecutor
+    {
+        public Task<FirewallEnforcementResult> ApplyAsync(FirewallEnforcementPlan plan, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new FirewallEnforcementResult(
+                succeeds,
+                succeeds ? $"Applied firewall protection for {plan.TargetName}." : $"Could not apply protection for {plan.TargetName}.",
+                succeeds ? $"AccessWatch applied {plan.PowerShellCommands.Count} Windows Firewall rule(s)." : "Firewall rule failed.",
+                succeeds ? plan.PowerShellCommands : []));
         }
     }
 
