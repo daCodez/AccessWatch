@@ -50,7 +50,13 @@ public sealed record DashboardDeviceItemViewModel(
     string LastSeen,
     string LastConfirmed,
     string RecommendedAction,
-    string Detail);
+    string Detail)
+{
+    /// <summary>
+    /// Gets the plain-English detail text for this device row.
+    /// </summary>
+    public string DetailText => $"Device: {Name} | State: {InventoryState} | IP: {IpAddress} | MAC: {MacAddress} | Vendor: {Vendor} | Trust: {TrustStatus} | Risk: {RiskStatus} | First seen: {FirstSeen} | Last seen: {LastSeen} | Last confirmed: {LastConfirmed} | Next: {RecommendedAction} | Details: {Detail}";
+}
 
 /// <summary>
 /// Represents an application row shown in the dashboard.
@@ -64,7 +70,13 @@ public sealed record DashboardApplicationItemViewModel(
     string TrustStatus,
     string LastSeen,
     string ExecutablePath,
-    string Detail);
+    string Detail)
+{
+    /// <summary>
+    /// Gets the plain-English detail text for this application row.
+    /// </summary>
+    public string DetailText => $"Application: {Name} | Process: {ProcessName} | Publisher: {Publisher} | Signature: {SignatureStatus} | Trust: {TrustStatus} | Identity: {Detail}";
+}
 
 /// <summary>
 /// Represents a listening port row shown in the dashboard.
@@ -83,7 +95,13 @@ public sealed record DashboardPortItemViewModel(
     string Meaning,
     string Exposure,
     string SuggestedAction,
-    string Investigation);
+    string Investigation)
+{
+    /// <summary>
+    /// Gets the plain-English detail text for this listening port row.
+    /// </summary>
+    public string DetailText => $"Port: {Endpoint} | Meaning: {Meaning} | Exposure: {Exposure} | Application: {ApplicationName} | Risk: {RiskStatus} | Trust: {TrustStatus} | First seen: {FirstSeen} | Last seen: {LastSeen} | Identity: {Detail}";
+}
 
 /// <summary>
 /// Represents an incident row shown in the dashboard.
@@ -103,7 +121,13 @@ public sealed record DashboardIncidentItemViewModel(
     string MainTarget,
     string Started,
     string LastUpdated,
-    string Summary);
+    string Summary)
+{
+    /// <summary>
+    /// Gets the plain-English detail text for this incident row.
+    /// </summary>
+    public string DetailText => $"Incident: {Title} | Target: {MainTarget} | Risk: {RiskLevel} | Status: {Status} | Events: {EventCount} | Summary: {Summary}";
+}
 
 /// <summary>
 /// Represents a dashboard settings choice.
@@ -360,7 +384,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public string SelectedDeviceDetail => selectedDevice is null
         ? "Select a device to see its name, address, trust, and risk context."
-        : $"Device: {selectedDevice.Name} | State: {selectedDevice.InventoryState} | IP: {selectedDevice.IpAddress} | MAC: {selectedDevice.MacAddress} | Vendor: {selectedDevice.Vendor} | Trust: {selectedDevice.TrustStatus} | Risk: {selectedDevice.RiskStatus} | First seen: {selectedDevice.FirstSeen} | Last seen: {selectedDevice.LastSeen} | Last confirmed: {selectedDevice.LastConfirmed} | Next: {selectedDevice.RecommendedAction} | Details: {selectedDevice.Detail}";
+        : selectedDevice.DetailText;
 
     /// <summary>
     /// Gets whether device trust action buttons can run.
@@ -405,7 +429,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public string SelectedApplicationDetail => selectedApplication is null
         ? "Select an application to see publisher, signature, trust, and executable context."
-        : $"Application: {selectedApplication.Name} | Process: {selectedApplication.ProcessName} | Publisher: {selectedApplication.Publisher} | Signature: {selectedApplication.SignatureStatus} | Trust: {selectedApplication.TrustStatus} | Identity: {selectedApplication.Detail}";
+        : selectedApplication.DetailText;
 
     /// <summary>
     /// Gets whether application trust action buttons can run.
@@ -440,7 +464,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public string SelectedPortDetail => selectedPort is null
         ? "Select a port to see the owning application, reachability, risk, and timing context."
-        : $"Port: {selectedPort.Endpoint} | Meaning: {selectedPort.Meaning} | Exposure: {selectedPort.Exposure} | Application: {selectedPort.ApplicationName} | Risk: {selectedPort.RiskStatus} | Trust: {selectedPort.TrustStatus} | First seen: {selectedPort.FirstSeen} | Last seen: {selectedPort.LastSeen} | Identity: {selectedPort.Detail}";
+        : selectedPort.DetailText;
 
     /// <summary>
     /// Gets the selected port investigation guidance.
@@ -496,7 +520,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public string SelectedIncidentDetail => selectedIncident is null
         ? "Select an incident to see its target, timeline, and AI review context."
-        : $"Incident: {selectedIncident.Title} | Target: {selectedIncident.MainTarget} | Risk: {selectedIncident.RiskLevel} | Status: {selectedIncident.Status} | Events: {selectedIncident.EventCount} | Summary: {selectedIncident.Summary}";
+        : selectedIncident.DetailText;
 
     /// <summary>
     /// Gets a local explanation of the selected incident and what to verify next.
