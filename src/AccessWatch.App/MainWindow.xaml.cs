@@ -50,6 +50,7 @@ public partial class MainWindow : Window
             simulator.TriggerDemoEventAsync,
             settings,
             new ManualAiHandoffService(),
+            new OpenClawGatewayInvestigationBridge(),
             new WindowsFirewallEnforcementPlanner(),
             new WindowsFirewallEnforcementExecutor());
         DataContext = viewModel;
@@ -155,9 +156,9 @@ public partial class MainWindow : Window
         await viewModel.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
     }
 
-    private void OnReviewIncidentWithAiClick(object sender, RoutedEventArgs e)
+    private async void OnReviewIncidentWithAiClick(object sender, RoutedEventArgs e)
     {
-        viewModel.CreateSelectedIncidentAiReview();
+        await viewModel.CreateSelectedIncidentAiReviewAsync(CancellationToken.None);
     }
 
     private void OnCopyIncidentForChatGptClick(object sender, RoutedEventArgs e)

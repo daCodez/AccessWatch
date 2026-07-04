@@ -18,12 +18,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private readonly Func<CancellationToken, Task<int>>? scanAsync;
     private readonly Func<CancellationToken, Task<int>>? simulateAsync;
     private readonly IAiHandoffService? aiHandoffService;
+    private readonly IAiInvestigationBridge? aiInvestigationBridge;
     private readonly IFirewallEnforcementPlanner? firewallEnforcementPlanner;
     private readonly IFirewallEnforcementExecutor? firewallEnforcementExecutor;
     private readonly AccessWatchSettings settings;
     private DashboardPageViewModel selectedPage;
     private string selectedProtectionMode;
     private string selectedAiMode;
+    private string selectedOpenClawGatewayEndpoint;
     private string settingsStatus = "Settings match the running configuration.";
     private string statusMessage = "Connect the service or run a scan to load AccessWatch activity.";
     private string activeOperation = string.Empty;
@@ -46,6 +48,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         settings = new AccessWatchSettings();
         selectedProtectionMode = settings.ProtectionMode.ToString();
         selectedAiMode = settings.AiMode.ToString();
+        selectedOpenClawGatewayEndpoint = settings.OpenClawGatewayEndpoint;
         selectedPage = Pages[0];
     }
 
@@ -57,6 +60,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <param name="simulateAsync">Optional simulator action that persists a demo event.</param>
     /// <param name="settings">Mutable settings used by dashboard actions in this app session.</param>
     /// <param name="aiHandoffService">Optional service used to create redacted incident AI review briefs.</param>
+    /// <param name="aiInvestigationBridge">Optional bridge used to request in-app AI reviews.</param>
     /// <param name="firewallEnforcementPlanner">Optional planner used to prepare reviewed Windows Firewall actions.</param>
     /// <param name="firewallEnforcementExecutor">Optional executor used to apply reviewed Windows Firewall actions.</param>
     public DashboardShellViewModel(
@@ -65,6 +69,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         Func<CancellationToken, Task<int>>? simulateAsync = null,
         AccessWatchSettings? settings = null,
         IAiHandoffService? aiHandoffService = null,
+        IAiInvestigationBridge? aiInvestigationBridge = null,
         IFirewallEnforcementPlanner? firewallEnforcementPlanner = null,
         IFirewallEnforcementExecutor? firewallEnforcementExecutor = null)
     {
@@ -72,11 +77,13 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         this.scanAsync = scanAsync;
         this.simulateAsync = simulateAsync;
         this.aiHandoffService = aiHandoffService;
+        this.aiInvestigationBridge = aiInvestigationBridge;
         this.firewallEnforcementPlanner = firewallEnforcementPlanner;
         this.firewallEnforcementExecutor = firewallEnforcementExecutor;
         this.settings = settings ?? new AccessWatchSettings();
         selectedProtectionMode = this.settings.ProtectionMode.ToString();
         selectedAiMode = this.settings.AiMode.ToString();
+        selectedOpenClawGatewayEndpoint = this.settings.OpenClawGatewayEndpoint;
         selectedPage = Pages[0];
     }
 
@@ -412,10 +419,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <summary>
     /// Gets whether an incident is selected for the subscription-friendly AI review workspace.
     /// </summary>
-    public bool CanReviewIncidentWithAi =>
-        selectedIncident is not null &&
-        aiHandoffService is not null &&
-        settings.AiMode != AiMode.Off;
+    public bool CanReviewIncidentWithAi => selectedIncident is not null && HasAiReviewConnection();
 
     /// <summary>
     /// Gets the redacted in-app AI review brief for the selected incident.
@@ -511,6 +515,20 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             selectedAiMode = value ?? settings.AiMode.ToString();
             SettingsStatus = "Settings changed. Apply to update the running configuration.";
             OnPropertyChanged(nameof(SelectedAiMode));
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the OpenClaw-compatible bridge endpoint.
+    /// </summary>
+    public string SelectedOpenClawGatewayEndpoint
+    {
+        get => selectedOpenClawGatewayEndpoint;
+        set
+        {
+            selectedOpenClawGatewayEndpoint = value ?? settings.OpenClawGatewayEndpoint;
+            SettingsStatus = "Settings changed. Apply to update the running configuration.";
+            OnPropertyChanged(nameof(SelectedOpenClawGatewayEndpoint));
         }
     }
 
@@ -663,9 +681,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         settings.ProtectionMode = Enum.Parse<ProtectionMode>(SelectedProtectionMode);
         settings.AiMode = Enum.Parse<AiMode>(SelectedAiMode);
+        settings.OpenClawGatewayEndpoint = string.IsNullOrWhiteSpace(SelectedOpenClawGatewayEndpoint)
+            ? new AccessWatchSettings().OpenClawGatewayEndpoint
+            : SelectedOpenClawGatewayEndpoint.Trim();
+        selectedOpenClawGatewayEndpoint = settings.OpenClawGatewayEndpoint;
         SettingsStatus = $"Settings applied. Running {CurrentProtectionMode} protection with {CurrentAiMode} AI review.";
         OnPropertyChanged(nameof(CurrentProtectionMode));
         OnPropertyChanged(nameof(CurrentAiMode));
+        OnPropertyChanged(nameof(SelectedOpenClawGatewayEndpoint));
         OnPropertyChanged(nameof(CanReviewIncidentWithAi));
     }
 
@@ -676,9 +699,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         selectedProtectionMode = settings.ProtectionMode.ToString();
         selectedAiMode = settings.AiMode.ToString();
+        selectedOpenClawGatewayEndpoint = settings.OpenClawGatewayEndpoint;
         SettingsStatus = "Settings match the running configuration.";
         OnPropertyChanged(nameof(SelectedProtectionMode));
         OnPropertyChanged(nameof(SelectedAiMode));
+        OnPropertyChanged(nameof(SelectedOpenClawGatewayEndpoint));
     }
 
     /// <summary>
@@ -848,9 +873,24 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public void CreateSelectedIncidentAiReview()
     {
+        CreateSelectedIncidentAiReviewAsync(CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Creates or requests an in-app AI review for the selected incident.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token for bridge review.</param>
+    public async Task CreateSelectedIncidentAiReviewAsync(CancellationToken cancellationToken)
+    {
         if (selectedIncident is null)
         {
             StatusMessage = "Select an incident before starting AI review.";
+            return;
+        }
+
+        if (settings.AiMode == AiMode.Off)
+        {
+            StatusMessage = "Turn on AI review in Settings before reviewing with AI.";
             return;
         }
 
@@ -860,13 +900,32 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        if (settings.AiMode == AiMode.Off)
+        var redactedIncident = aiHandoffService.CreateRedactedIncidentSummary(ToIncident(selectedIncident));
+        if (settings.AiMode == AiMode.OpenClawGateway)
         {
-            StatusMessage = "Turn on AI review in Settings before reviewing with ChatGPT.";
+            if (aiInvestigationBridge is null)
+            {
+                StatusMessage = "OpenClaw bridge is not connected for this dashboard session.";
+                return;
+            }
+
+            selectedIncidentAiReview = "OpenClaw bridge is reviewing the redacted incident context...";
+            OnPropertyChanged(nameof(SelectedIncidentAiReview));
+            OnPropertyChanged(nameof(HasIncidentAiReview));
+            StatusMessage = $"Sent redacted review request for {selectedIncident.Title} to OpenClaw bridge.";
+            var result = await aiInvestigationBridge.ReviewIncidentAsync(
+                BuildAiInvestigationRequest(selectedIncident, redactedIncident),
+                settings,
+                cancellationToken).ConfigureAwait(true);
+            selectedIncidentAiReview = BuildBridgeReview(selectedIncident, result);
+            OnPropertyChanged(nameof(SelectedIncidentAiReview));
+            OnPropertyChanged(nameof(HasIncidentAiReview));
+            StatusMessage = result.Succeeded
+                ? $"OpenClaw bridge review ready for {selectedIncident.Title}."
+                : $"OpenClaw bridge review unavailable for {selectedIncident.Title}.";
             return;
         }
 
-        var redactedIncident = aiHandoffService.CreateRedactedIncidentSummary(ToIncident(selectedIncident));
         selectedIncidentAiReview = BuildChatGptReviewBrief(selectedIncident, redactedIncident);
         OnPropertyChanged(nameof(SelectedIncidentAiReview));
         OnPropertyChanged(nameof(HasIncidentAiReview));
@@ -882,6 +941,13 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             ? "Copied the redacted review brief. Paste it into ChatGPT when you are ready."
             : "Review the incident with AI before copying it for ChatGPT.";
     }
+
+    private bool HasAiReviewConnection() => settings.AiMode switch
+    {
+        AiMode.Off => false,
+        AiMode.OpenClawGateway => aiHandoffService is not null && aiInvestigationBridge is not null,
+        _ => aiHandoffService is not null
+    };
 
     private async Task ApplySelectedIncidentUpdateAsync(
         IncidentStatus status,
@@ -1587,6 +1653,33 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             ? "Verify which app or device was involved before trusting or blocking anything."
             : $"Verify that {incident.MainTarget} was expected at the recorded time.";
         return $"Why: {urgency} {status} Verify: {verify} Recommended action: use Watch for expected but noisy behavior, Resolve when confirmed, or Escalate if this was unexpected.";
+    }
+
+    private static AiInvestigationRequest BuildAiInvestigationRequest(DashboardIncidentItemViewModel incident, string redactedIncident)
+    {
+        return new AiInvestigationRequest(
+            "AccessWatch",
+            "Incident",
+            incident.Title,
+            incident.RiskLevel,
+            incident.Status,
+            redactedIncident,
+            "Explain the likely cause, identify missing evidence, recommend Resolve/Watch/Escalate/Create rule, and keep sensitive data local.");
+    }
+
+    private static string BuildBridgeReview(DashboardIncidentItemViewModel incident, AiInvestigationResult result)
+    {
+        return string.Join(
+            Environment.NewLine + Environment.NewLine,
+            "AccessWatch OpenClaw bridge review",
+            $"Incident: {incident.Title}",
+            $"Provider: {result.Provider}",
+            $"Status: {(result.Succeeded ? "Completed" : "Unavailable")}",
+            $"Confidence: {result.Confidence}",
+            "Summary:",
+            result.Summary,
+            "Recommended action:",
+            result.RecommendedAction);
     }
 
     private static string BuildChatGptReviewBrief(DashboardIncidentItemViewModel incident, string redactedIncident)
