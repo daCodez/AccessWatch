@@ -15,27 +15,38 @@ namespace AccessWatch.Tests;
 public sealed class NotificationAndViewModelTests
 {
     /// <summary>
-    /// Verifies notification messages preserve assessment context.
+    /// Verifies notification messages use plain warning language instead of technical details.
     /// </summary>
-    [Fact]
-    public void NotificationMessageFactory_CreatesFriendlyMessage()
+    [Theory]
+    [InlineData(RiskLevel.High, NotificationAction.AskBeforeAllow, "Visual Studio started using the camera.", "Camera activation is sensitive.", "AccessWatch warning", "Someone is trying to use your camera. Open AccessWatch to block, allow, or watch it.")]
+    [InlineData(RiskLevel.High, NotificationAction.AskBeforeAllow, "Skype started using the microphone.", "Microphone activation is sensitive.", "AccessWatch warning", "Someone is trying to use your microphone. Open AccessWatch to block, allow, or watch it.")]
+    [InlineData(RiskLevel.High, NotificationAction.AskBeforeAllow, "Unknown app opened a port.", "It is network-reachable.", "AccessWatch warning", "Someone is trying to connect to your PC. Open AccessWatch to block, allow, or watch it.")]
+    [InlineData(RiskLevel.Medium, NotificationAction.SoftNotify, "Kitchen tablet joined the network.", "A new device should be reviewed.", "AccessWatch notice", "A new device joined your network. Open AccessWatch if you do not recognize it.")]
+    [InlineData(RiskLevel.Low, NotificationAction.SilentLog, "Background check completed.", "No sensitive activity.", "AccessWatch notice", "AccessWatch noticed something unusual. No action is needed right now.")]
+    [InlineData(RiskLevel.Critical, NotificationAction.AutoBlock, "Unknown listener appeared.", "A listener can accept connections.", "AccessWatch warning", "Someone is trying to connect to your PC. AccessWatch is prepared to block it.")]
+    public void NotificationMessageFactory_CreatesPlainToastAlert(
+        RiskLevel riskLevel,
+        NotificationAction action,
+        string summary,
+        string whyItMatters,
+        string expectedTitle,
+        string expectedBody)
     {
         var factory = new NotificationMessageFactory();
         var assessment = new PortRiskAssessment(
-            RiskLevel.High,
+            riskLevel,
             RiskStatus.HighRisk,
-            NotificationAction.AskBeforeAllow,
-            "Discord updater opened a port.",
-            "It is network reachable.",
+            action,
+            summary,
+            whyItMatters,
             "Review it.");
 
         var message = factory.Create(assessment);
 
-        Assert.Equal("AccessWatch", message.Title);
-        Assert.Contains("Discord updater opened a port.", message.Body);
-        Assert.Contains("It is network reachable.", message.Body);
-        Assert.Equal(RiskLevel.High, message.RiskLevel);
-        Assert.Equal(NotificationAction.AskBeforeAllow, message.Action);
+        Assert.Equal(expectedTitle, message.Title);
+        Assert.Equal(expectedBody, message.Body);
+        Assert.Equal(riskLevel, message.RiskLevel);
+        Assert.Equal(action, message.Action);
         Assert.Equal("Review it.", message.SuggestedAction);
     }
 
