@@ -50,7 +50,7 @@ public partial class MainWindow : Window
             simulator.TriggerDemoEventAsync,
             settings,
             new ManualAiHandoffService(),
-            new OpenClawGatewayInvestigationBridge(),
+            new SupportBridgeInvestigationBridge(),
             new WindowsFirewallEnforcementPlanner(),
             new WindowsFirewallEnforcementExecutor());
         DataContext = viewModel;

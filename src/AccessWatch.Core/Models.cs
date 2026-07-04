@@ -236,8 +236,8 @@ public sealed record AccessWatchSettings
     /// <summary>AI assistance mode.</summary>
     public AiMode AiMode { get; set; } = AiMode.ManualChatGptCopy;
 
-    /// <summary>Local OpenClaw-compatible bridge endpoint for in-app AI review.</summary>
-    public string OpenClawGatewayEndpoint { get; set; } = "http://127.0.0.1:7331/accesswatch/investigations";
+    /// <summary>Local support bridge endpoint for in-app AI review.</summary>
+    public string SupportBridgeEndpoint { get; set; } = "http://127.0.0.1:7331/accesswatch/investigations";
 }
 
 

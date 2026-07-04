@@ -186,7 +186,7 @@ public sealed class ServiceRegistrationTests
         using var provider = new ServiceCollection().AddAccessWatchAi().BuildServiceProvider();
 
         Assert.IsType<ManualAiHandoffService>(provider.GetRequiredService<IAiHandoffService>());
-        Assert.IsType<OpenClawGatewayInvestigationBridge>(provider.GetRequiredService<IAiInvestigationBridge>());
+        Assert.IsType<SupportBridgeInvestigationBridge>(provider.GetRequiredService<IAiInvestigationBridge>());
     }
 }
 

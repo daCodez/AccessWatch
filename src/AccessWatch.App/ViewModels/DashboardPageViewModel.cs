@@ -25,7 +25,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private DashboardPageViewModel selectedPage;
     private string selectedProtectionMode;
     private string selectedAiMode;
-    private string selectedOpenClawGatewayEndpoint;
+    private string selectedSupportBridgeEndpoint;
     private string settingsStatus = "Settings match the running configuration.";
     private string statusMessage = "Connect the service or run a scan to load AccessWatch activity.";
     private string activeOperation = string.Empty;
@@ -48,7 +48,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         settings = new AccessWatchSettings();
         selectedProtectionMode = settings.ProtectionMode.ToString();
         selectedAiMode = settings.AiMode.ToString();
-        selectedOpenClawGatewayEndpoint = settings.OpenClawGatewayEndpoint;
+        selectedSupportBridgeEndpoint = settings.SupportBridgeEndpoint;
         selectedPage = Pages[0];
     }
 
@@ -83,7 +83,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         this.settings = settings ?? new AccessWatchSettings();
         selectedProtectionMode = this.settings.ProtectionMode.ToString();
         selectedAiMode = this.settings.AiMode.ToString();
-        selectedOpenClawGatewayEndpoint = this.settings.OpenClawGatewayEndpoint;
+        selectedSupportBridgeEndpoint = this.settings.SupportBridgeEndpoint;
         selectedPage = Pages[0];
     }
 
@@ -485,7 +485,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     [
         new("Off", "Off", "Keep incident review fully local without ChatGPT assistance."),
         new("ManualChatGptCopy", "ChatGPT subscription", "Use your ChatGPT subscription with redacted in-app incident review briefs."),
-        new("OpenClawGateway", "OpenClaw bridge", "Send redacted reviews to a local OpenClaw-compatible support bridge."),
+        new("SupportBridge", "Support bridge", "Send redacted reviews to a local local support bridge."),
         new("LocalAi", "Local AI", "Reserve local model assistance for a future release."),
         new("OpenAiApi", "OpenAI API", "Reserve connected AI assistance for a future release.")
     ];
@@ -519,16 +519,16 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Gets or sets the OpenClaw-compatible bridge endpoint.
+    /// Gets or sets the support bridge endpoint.
     /// </summary>
-    public string SelectedOpenClawGatewayEndpoint
+    public string SelectedSupportBridgeEndpoint
     {
-        get => selectedOpenClawGatewayEndpoint;
+        get => selectedSupportBridgeEndpoint;
         set
         {
-            selectedOpenClawGatewayEndpoint = value ?? settings.OpenClawGatewayEndpoint;
+            selectedSupportBridgeEndpoint = value ?? settings.SupportBridgeEndpoint;
             SettingsStatus = "Settings changed. Apply to update the running configuration.";
-            OnPropertyChanged(nameof(SelectedOpenClawGatewayEndpoint));
+            OnPropertyChanged(nameof(SelectedSupportBridgeEndpoint));
         }
     }
 
@@ -681,14 +681,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         settings.ProtectionMode = Enum.Parse<ProtectionMode>(SelectedProtectionMode);
         settings.AiMode = Enum.Parse<AiMode>(SelectedAiMode);
-        settings.OpenClawGatewayEndpoint = string.IsNullOrWhiteSpace(SelectedOpenClawGatewayEndpoint)
-            ? new AccessWatchSettings().OpenClawGatewayEndpoint
-            : SelectedOpenClawGatewayEndpoint.Trim();
-        selectedOpenClawGatewayEndpoint = settings.OpenClawGatewayEndpoint;
+        settings.SupportBridgeEndpoint = string.IsNullOrWhiteSpace(SelectedSupportBridgeEndpoint)
+            ? new AccessWatchSettings().SupportBridgeEndpoint
+            : SelectedSupportBridgeEndpoint.Trim();
+        selectedSupportBridgeEndpoint = settings.SupportBridgeEndpoint;
         SettingsStatus = $"Settings applied. Running {CurrentProtectionMode} protection with {CurrentAiMode} AI review.";
         OnPropertyChanged(nameof(CurrentProtectionMode));
         OnPropertyChanged(nameof(CurrentAiMode));
-        OnPropertyChanged(nameof(SelectedOpenClawGatewayEndpoint));
+        OnPropertyChanged(nameof(SelectedSupportBridgeEndpoint));
         OnPropertyChanged(nameof(CanReviewIncidentWithAi));
     }
 
@@ -699,11 +699,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         selectedProtectionMode = settings.ProtectionMode.ToString();
         selectedAiMode = settings.AiMode.ToString();
-        selectedOpenClawGatewayEndpoint = settings.OpenClawGatewayEndpoint;
+        selectedSupportBridgeEndpoint = settings.SupportBridgeEndpoint;
         SettingsStatus = "Settings match the running configuration.";
         OnPropertyChanged(nameof(SelectedProtectionMode));
         OnPropertyChanged(nameof(SelectedAiMode));
-        OnPropertyChanged(nameof(SelectedOpenClawGatewayEndpoint));
+        OnPropertyChanged(nameof(SelectedSupportBridgeEndpoint));
     }
 
     /// <summary>
@@ -901,18 +901,18 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
 
         var redactedIncident = aiHandoffService.CreateRedactedIncidentSummary(ToIncident(selectedIncident));
-        if (settings.AiMode == AiMode.OpenClawGateway)
+        if (settings.AiMode == AiMode.SupportBridge)
         {
             if (aiInvestigationBridge is null)
             {
-                StatusMessage = "OpenClaw bridge is not connected for this dashboard session.";
+                StatusMessage = "Support bridge is not connected for this dashboard session.";
                 return;
             }
 
-            selectedIncidentAiReview = "OpenClaw bridge is reviewing the redacted incident context...";
+            selectedIncidentAiReview = "Support bridge is reviewing the redacted incident context...";
             OnPropertyChanged(nameof(SelectedIncidentAiReview));
             OnPropertyChanged(nameof(HasIncidentAiReview));
-            StatusMessage = $"Sent redacted review request for {selectedIncident.Title} to OpenClaw bridge.";
+            StatusMessage = $"Sent redacted review request for {selectedIncident.Title} to support bridge.";
             var result = await aiInvestigationBridge.ReviewIncidentAsync(
                 BuildAiInvestigationRequest(selectedIncident, redactedIncident),
                 settings,
@@ -921,8 +921,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(SelectedIncidentAiReview));
             OnPropertyChanged(nameof(HasIncidentAiReview));
             StatusMessage = result.Succeeded
-                ? $"OpenClaw bridge review ready for {selectedIncident.Title}."
-                : $"OpenClaw bridge review unavailable for {selectedIncident.Title}.";
+                ? $"Support bridge review ready for {selectedIncident.Title}."
+                : $"Support bridge review unavailable for {selectedIncident.Title}.";
             return;
         }
 
@@ -945,7 +945,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private bool HasAiReviewConnection() => settings.AiMode switch
     {
         AiMode.Off => false,
-        AiMode.OpenClawGateway => aiHandoffService is not null && aiInvestigationBridge is not null,
+        AiMode.SupportBridge => aiHandoffService is not null && aiInvestigationBridge is not null,
         _ => aiHandoffService is not null
     };
 
@@ -1671,7 +1671,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         return string.Join(
             Environment.NewLine + Environment.NewLine,
-            "AccessWatch OpenClaw bridge review",
+            "AccessWatch support bridge review",
             $"Incident: {incident.Title}",
             $"Provider: {result.Provider}",
             $"Status: {(result.Succeeded ? "Completed" : "Unavailable")}",

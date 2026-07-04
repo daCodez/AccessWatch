@@ -5,9 +5,9 @@ using AccessWatch.Core;
 namespace AccessWatch.Tests;
 
 /// <summary>
-/// Verifies OpenClaw-compatible AI bridge behavior.
+/// Verifies support bridge AI behavior.
 /// </summary>
-public sealed class OpenClawGatewayInvestigationBridgeTests
+public sealed class SupportBridgeInvestigationBridgeTests
 {
     /// <summary>
     /// Verifies the bridge posts redacted investigation requests to the configured localhost endpoint.
@@ -19,25 +19,25 @@ public sealed class OpenClawGatewayInvestigationBridgeTests
         {
             Content = new StringContent("""
                 {
-                  "provider": "OpenClaw",
+                  "provider": "Support Bridge",
                   "summary": "Local-only listener looks expected.",
                   "recommendedAction": "Watch until the process identity is confirmed.",
                   "confidence": "Medium"
                 }
                 """)
         });
-        var bridge = new OpenClawGatewayInvestigationBridge(new HttpClient(handler));
-        var settings = new AccessWatchSettings { OpenClawGatewayEndpoint = "http://localhost:7331/accesswatch/investigations" };
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(handler));
+        var settings = new AccessWatchSettings { SupportBridgeEndpoint = "http://localhost:7331/accesswatch/investigations" };
 
         var result = await bridge.ReviewIncidentAsync(CreateRequest(), settings, CancellationToken.None);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("OpenClaw", result.Provider);
+        Assert.Equal("Support Bridge", result.Provider);
         Assert.Equal("Local-only listener looks expected.", result.Summary);
         Assert.Equal("Watch until the process identity is confirmed.", result.RecommendedAction);
         Assert.Equal("Medium", result.Confidence);
         Assert.Equal(HttpMethod.Post, handler.Request?.Method);
-        Assert.Equal(settings.OpenClawGatewayEndpoint, handler.Request?.RequestUri?.ToString());
+        Assert.Equal(settings.SupportBridgeEndpoint, handler.Request?.RequestUri?.ToString());
     }
 
     /// <summary>
@@ -47,8 +47,8 @@ public sealed class OpenClawGatewayInvestigationBridgeTests
     public async Task ReviewIncidentAsync_WithRemoteEndpoint_ReturnsUnavailableWithoutSending()
     {
         var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK));
-        var bridge = new OpenClawGatewayInvestigationBridge(new HttpClient(handler));
-        var settings = new AccessWatchSettings { OpenClawGatewayEndpoint = "https://example.com/accesswatch" };
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(handler));
+        var settings = new AccessWatchSettings { SupportBridgeEndpoint = "https://example.com/accesswatch" };
 
         var result = await bridge.ReviewIncidentAsync(CreateRequest(), settings, CancellationToken.None);
 
@@ -63,8 +63,8 @@ public sealed class OpenClawGatewayInvestigationBridgeTests
     [Fact]
     public async Task ReviewIncidentAsync_WithInvalidEndpoint_ReturnsUnavailable()
     {
-        var bridge = new OpenClawGatewayInvestigationBridge();
-        var settings = new AccessWatchSettings { OpenClawGatewayEndpoint = "not a url" };
+        var bridge = new SupportBridgeInvestigationBridge();
+        var settings = new AccessWatchSettings { SupportBridgeEndpoint = "not a url" };
 
         var result = await bridge.ReviewIncidentAsync(CreateRequest(), settings, CancellationToken.None);
 
@@ -78,7 +78,7 @@ public sealed class OpenClawGatewayInvestigationBridgeTests
     [Fact]
     public async Task ReviewIncidentAsync_WithGatewayError_ReturnsUnavailable()
     {
-        var bridge = new OpenClawGatewayInvestigationBridge(new HttpClient(new RecordingHandler(new HttpResponseMessage(HttpStatusCode.BadGateway)
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(new RecordingHandler(new HttpResponseMessage(HttpStatusCode.BadGateway)
         {
             ReasonPhrase = "No agent"
         })));
@@ -96,7 +96,7 @@ public sealed class OpenClawGatewayInvestigationBridgeTests
     [Fact]
     public async Task ReviewIncidentAsync_WithPlainTextResponse_ReturnsTextSummary()
     {
-        var bridge = new OpenClawGatewayInvestigationBridge(new HttpClient(new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent("This looks like a localhost-only development server.")
         })));
@@ -115,7 +115,7 @@ public sealed class OpenClawGatewayInvestigationBridgeTests
     [Fact]
     public async Task ReviewIncidentAsync_WithEmptyResponse_ReturnsUnavailable()
     {
-        var bridge = new OpenClawGatewayInvestigationBridge(new HttpClient(new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(" ")
         })));
@@ -132,7 +132,7 @@ public sealed class OpenClawGatewayInvestigationBridgeTests
     [Fact]
     public async Task ReviewIncidentAsync_WithNetworkFailure_ReturnsUnavailable()
     {
-        var bridge = new OpenClawGatewayInvestigationBridge(new HttpClient(new ThrowingHandler(new HttpRequestException("connection refused"))));
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(new ThrowingHandler(new HttpRequestException("connection refused"))));
 
         var result = await bridge.ReviewIncidentAsync(CreateRequest(), new AccessWatchSettings(), CancellationToken.None);
 
@@ -147,7 +147,7 @@ public sealed class OpenClawGatewayInvestigationBridgeTests
     [Fact]
     public async Task ReviewIncidentAsync_WithTimeout_ReturnsUnavailable()
     {
-        var bridge = new OpenClawGatewayInvestigationBridge(new HttpClient(new ThrowingHandler(new OperationCanceledException())));
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(new ThrowingHandler(new OperationCanceledException())));
 
         var result = await bridge.ReviewIncidentAsync(CreateRequest(), new AccessWatchSettings(), CancellationToken.None);
 
@@ -163,7 +163,7 @@ public sealed class OpenClawGatewayInvestigationBridgeTests
     {
         using var source = new CancellationTokenSource();
         await source.CancelAsync();
-        var bridge = new OpenClawGatewayInvestigationBridge(new HttpClient(new ThrowingHandler(new OperationCanceledException())));
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(new ThrowingHandler(new OperationCanceledException())));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => bridge.ReviewIncidentAsync(CreateRequest(), new AccessWatchSettings(), source.Token));
     }

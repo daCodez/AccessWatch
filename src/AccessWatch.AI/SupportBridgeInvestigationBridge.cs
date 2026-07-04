@@ -6,20 +6,20 @@ using AccessWatch.Core;
 namespace AccessWatch.AI;
 
 /// <summary>
-/// Sends redacted AccessWatch investigation requests to a local OpenClaw-compatible gateway.
+/// Sends redacted AccessWatch investigation requests to a local support bridge gateway.
 /// </summary>
 [ExcludeFromCodeCoverage]
-public sealed class OpenClawGatewayInvestigationBridge : IAiInvestigationBridge
+public sealed class SupportBridgeInvestigationBridge : IAiInvestigationBridge
 {
-    private const string ProviderName = "OpenClaw Gateway";
+    private const string ProviderName = "Support Bridge";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient httpClient;
 
     /// <summary>
-    /// Initializes a new OpenClaw gateway bridge.
+    /// Initializes a new support bridge gateway.
     /// </summary>
     /// <param name="httpClient">HTTP client used for local gateway calls.</param>
-    public OpenClawGatewayInvestigationBridge(HttpClient? httpClient = null)
+    public SupportBridgeInvestigationBridge(HttpClient? httpClient = null)
     {
         this.httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
     }
@@ -30,14 +30,14 @@ public sealed class OpenClawGatewayInvestigationBridge : IAiInvestigationBridge
         AccessWatchSettings settings,
         CancellationToken cancellationToken)
     {
-        if (!Uri.TryCreate(settings.OpenClawGatewayEndpoint, UriKind.Absolute, out var endpoint))
+        if (!Uri.TryCreate(settings.SupportBridgeEndpoint, UriKind.Absolute, out var endpoint))
         {
-            return AiInvestigationResult.Unavailable(ProviderName, "OpenClaw bridge endpoint is not a valid URL.");
+            return AiInvestigationResult.Unavailable(ProviderName, "Support bridge endpoint is not a valid URL.");
         }
 
         if (!IsLocalEndpoint(endpoint))
         {
-            return AiInvestigationResult.Unavailable(ProviderName, "OpenClaw bridge endpoint must be localhost or loopback for this release.");
+            return AiInvestigationResult.Unavailable(ProviderName, "Support bridge endpoint must be localhost or loopback for this release.");
         }
 
         try
@@ -47,22 +47,22 @@ public sealed class OpenClawGatewayInvestigationBridge : IAiInvestigationBridge
 
             if (!response.IsSuccessStatusCode)
             {
-                return AiInvestigationResult.Unavailable(ProviderName, $"OpenClaw bridge returned {(int)response.StatusCode} {response.ReasonPhrase}.");
+                return AiInvestigationResult.Unavailable(ProviderName, $"Support bridge returned {(int)response.StatusCode} {response.ReasonPhrase}.");
             }
 
             return ParseResponse(responseText);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return AiInvestigationResult.Unavailable(ProviderName, "OpenClaw bridge timed out before returning a review.");
+            return AiInvestigationResult.Unavailable(ProviderName, "Support bridge timed out before returning a review.");
         }
         catch (HttpRequestException ex)
         {
-            return AiInvestigationResult.Unavailable(ProviderName, $"OpenClaw bridge is not reachable: {ex.Message}");
+            return AiInvestigationResult.Unavailable(ProviderName, $"Support bridge is not reachable: {ex.Message}");
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return AiInvestigationResult.Unavailable(ProviderName, "OpenClaw bridge timed out before returning a review.");
+            return AiInvestigationResult.Unavailable(ProviderName, "Support bridge timed out before returning a review.");
         }
     }
 
@@ -70,7 +70,7 @@ public sealed class OpenClawGatewayInvestigationBridge : IAiInvestigationBridge
     {
         if (string.IsNullOrWhiteSpace(responseText))
         {
-            return AiInvestigationResult.Unavailable(ProviderName, "OpenClaw bridge returned an empty review.");
+            return AiInvestigationResult.Unavailable(ProviderName, "Support bridge returned an empty review.");
         }
 
         try

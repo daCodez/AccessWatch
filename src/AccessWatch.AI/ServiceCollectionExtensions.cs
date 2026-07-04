@@ -16,7 +16,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAccessWatchAi(this IServiceCollection services)
     {
         services.AddSingleton<IAiHandoffService, ManualAiHandoffService>();
-        services.AddSingleton<IAiInvestigationBridge, OpenClawGatewayInvestigationBridge>();
+        services.AddSingleton<IAiInvestigationBridge, SupportBridgeInvestigationBridge>();
         return services;
     }
 }

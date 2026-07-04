@@ -337,8 +337,8 @@
                                 <ColumnDefinition Width="200" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="OpenClaw bridge" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" VerticalAlignment="Center" />
-                            <TextBox Grid.Column="1" Text="{Binding SelectedOpenClawGatewayEndpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="32" MinWidth="420" HorizontalAlignment="Left" />
+                            <TextBlock Text="Support bridge" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" Text="{Binding SelectedSupportBridgeEndpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="32" MinWidth="420" HorizontalAlignment="Left" />
                         </Grid>
 
                         <StackPanel Grid.Row="3">

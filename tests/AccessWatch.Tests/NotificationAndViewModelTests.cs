@@ -106,7 +106,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("SelectedValue=\"{Binding SelectedProtectionMode, Mode=TwoWay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding AiModeOptions}\"", xaml);
         Assert.Contains("SelectedValue=\"{Binding SelectedAiMode, Mode=TwoWay}\"", xaml);
-        Assert.Contains("Text=\"{Binding SelectedOpenClawGatewayEndpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedSupportBridgeEndpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
         Assert.Contains("Click=\"OnApplySettingsClick\"", xaml);
         Assert.Contains("Click=\"OnResetSettingsClick\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedDevice, Mode=TwoWay}\"", xaml);
@@ -1157,20 +1157,20 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Off", model.SelectedAiMode);
         Assert.Equal("Strict", model.CurrentProtectionMode);
         Assert.Equal("Off", model.CurrentAiMode);
-        Assert.Equal(settings.OpenClawGatewayEndpoint, model.SelectedOpenClawGatewayEndpoint);
+        Assert.Equal(settings.SupportBridgeEndpoint, model.SelectedSupportBridgeEndpoint);
         Assert.Equal("Settings match the running configuration.", model.SettingsStatus);
         Assert.Equal(["Quiet", "Balanced", "Strict", "Lockdown"], model.ProtectionModeOptions.Select(option => option.Value));
-        Assert.Equal(["Off", "ManualChatGptCopy", "OpenClawGateway", "LocalAi", "OpenAiApi"], model.AiModeOptions.Select(option => option.Value));
+        Assert.Equal(["Off", "ManualChatGptCopy", "SupportBridge", "LocalAi", "OpenAiApi"], model.AiModeOptions.Select(option => option.Value));
 
         model.SelectedProtectionMode = "Lockdown";
         model.SelectedAiMode = "OpenAiApi";
-        model.SelectedOpenClawGatewayEndpoint = " http://localhost:8123/accesswatch ";
+        model.SelectedSupportBridgeEndpoint = " http://localhost:8123/accesswatch ";
         model.ApplySettings();
 
         Assert.Equal(ProtectionMode.Lockdown, settings.ProtectionMode);
         Assert.Equal(AiMode.OpenAiApi, settings.AiMode);
-        Assert.Equal("http://localhost:8123/accesswatch", settings.OpenClawGatewayEndpoint);
-        Assert.Equal("http://localhost:8123/accesswatch", model.SelectedOpenClawGatewayEndpoint);
+        Assert.Equal("http://localhost:8123/accesswatch", settings.SupportBridgeEndpoint);
+        Assert.Equal("http://localhost:8123/accesswatch", model.SelectedSupportBridgeEndpoint);
         Assert.Equal("Lockdown", model.CurrentProtectionMode);
         Assert.Equal("OpenAiApi", model.CurrentAiMode);
         Assert.Contains("Settings applied", model.SettingsStatus);
@@ -1180,28 +1180,28 @@ public sealed class NotificationAndViewModelTests
         changed.Clear();
         model.SelectedProtectionMode = null!;
         model.SelectedAiMode = null!;
-        model.SelectedOpenClawGatewayEndpoint = null!;
+        model.SelectedSupportBridgeEndpoint = null!;
 
         Assert.Equal("Lockdown", model.SelectedProtectionMode);
         Assert.Equal("OpenAiApi", model.SelectedAiMode);
-        Assert.Equal("http://localhost:8123/accesswatch", model.SelectedOpenClawGatewayEndpoint);
+        Assert.Equal("http://localhost:8123/accesswatch", model.SelectedSupportBridgeEndpoint);
 
         model.SelectedProtectionMode = "Strict";
         model.SelectedAiMode = "Off";
-        model.SelectedOpenClawGatewayEndpoint = "http://localhost:9999/other";
+        model.SelectedSupportBridgeEndpoint = "http://localhost:9999/other";
         model.ResetSettingsSelections();
 
         Assert.Equal("Lockdown", model.SelectedProtectionMode);
         Assert.Equal("OpenAiApi", model.SelectedAiMode);
-        Assert.Equal("http://localhost:8123/accesswatch", model.SelectedOpenClawGatewayEndpoint);
+        Assert.Equal("http://localhost:8123/accesswatch", model.SelectedSupportBridgeEndpoint);
         Assert.Contains("match the running configuration", model.SettingsStatus);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedProtectionMode), changed);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedAiMode), changed);
-        Assert.Contains(nameof(DashboardShellViewModel.SelectedOpenClawGatewayEndpoint), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedSupportBridgeEndpoint), changed);
 
-        model.SelectedOpenClawGatewayEndpoint = " ";
+        model.SelectedSupportBridgeEndpoint = " ";
         model.ApplySettings();
-        Assert.Equal(new AccessWatchSettings().OpenClawGatewayEndpoint, settings.OpenClawGatewayEndpoint);
+        Assert.Equal(new AccessWatchSettings().SupportBridgeEndpoint, settings.SupportBridgeEndpoint);
     }
 
 
@@ -1528,15 +1528,15 @@ public sealed class NotificationAndViewModelTests
 
 
     /// <summary>
-    /// Verifies OpenClaw bridge mode sends redacted incident context and displays the in-app result.
+    /// Verifies Support bridge mode sends redacted incident context and displays the in-app result.
     /// </summary>
     [Fact]
-    public async Task DashboardShellViewModel_CreateSelectedIncidentAiReview_WithOpenClawBridge_DisplaysBridgeResult()
+    public async Task DashboardShellViewModel_CreateSelectedIncidentAiReview_WithSupportBridge_DisplaysBridgeResult()
     {
-        var settings = new AccessWatchSettings { AiMode = AiMode.OpenClawGateway };
+        var settings = new AccessWatchSettings { AiMode = AiMode.SupportBridge };
         var bridge = new FakeAiInvestigationBridge(new AiInvestigationResult(
             true,
-            "OpenClaw",
+            "Support Bridge",
             "The listener appears local-only but still needs process identity confirmation.",
             "Watch until the owning process is confirmed.",
             "Medium",
@@ -1568,9 +1568,9 @@ public sealed class NotificationAndViewModelTests
         await model.CreateSelectedIncidentAiReviewAsync(CancellationToken.None);
 
         Assert.True(model.HasIncidentAiReview);
-        Assert.Equal("OpenClaw bridge review ready for Network port opened.", model.StatusMessage);
-        Assert.Contains("AccessWatch OpenClaw bridge review", model.SelectedIncidentAiReview);
-        Assert.Contains("Provider: OpenClaw", model.SelectedIncidentAiReview);
+        Assert.Equal("Support bridge review ready for Network port opened.", model.StatusMessage);
+        Assert.Contains("AccessWatch support bridge review", model.SelectedIncidentAiReview);
+        Assert.Contains("Provider: Support Bridge", model.SelectedIncidentAiReview);
         Assert.Contains("Watch until the owning process is confirmed.", model.SelectedIncidentAiReview);
         Assert.DoesNotContain("10.0.0.50", bridge.Request!.ContextJson);
         Assert.DoesNotContain("02:AC:CE:55:10:01", bridge.Request.ContextJson);
@@ -1580,13 +1580,13 @@ public sealed class NotificationAndViewModelTests
 
 
     /// <summary>
-    /// Verifies unavailable OpenClaw bridge results stay visible as unavailable in the app.
+    /// Verifies unavailable Support bridge results stay visible as unavailable in the app.
     /// </summary>
     [Fact]
-    public async Task DashboardShellViewModel_CreateSelectedIncidentAiReview_WithUnavailableOpenClawBridge_DisplaysUnavailableResult()
+    public async Task DashboardShellViewModel_CreateSelectedIncidentAiReview_WithUnavailableSupportBridge_DisplaysUnavailableResult()
     {
-        var settings = new AccessWatchSettings { AiMode = AiMode.OpenClawGateway };
-        var bridge = new FakeAiInvestigationBridge(AiInvestigationResult.Unavailable("OpenClaw Gateway", "Bridge is not running."));
+        var settings = new AccessWatchSettings { AiMode = AiMode.SupportBridge };
+        var bridge = new FakeAiInvestigationBridge(AiInvestigationResult.Unavailable("Support Bridge", "Bridge is not running."));
         var model = new DashboardShellViewModel(
             new FakeRepository(),
             settings: settings,
@@ -1613,21 +1613,21 @@ public sealed class NotificationAndViewModelTests
 
         await model.CreateSelectedIncidentAiReviewAsync(CancellationToken.None);
 
-        Assert.Equal("OpenClaw bridge review unavailable for Network port opened.", model.StatusMessage);
+        Assert.Equal("Support bridge review unavailable for Network port opened.", model.StatusMessage);
         Assert.Contains("Status: Unavailable", model.SelectedIncidentAiReview);
         Assert.Contains("Bridge is not running.", model.SelectedIncidentAiReview);
     }
 
     /// <summary>
-    /// Verifies OpenClaw bridge mode still requires the redaction handoff service.
+    /// Verifies Support bridge mode still requires the redaction handoff service.
     /// </summary>
     [Fact]
-    public void DashboardShellViewModel_CanReviewIncidentWithAi_WithOpenClawWithoutRedactionService_IsFalse()
+    public void DashboardShellViewModel_CanReviewIncidentWithAi_WithSupportBridgeWithoutRedactionService_IsFalse()
     {
         var model = new DashboardShellViewModel(
             new FakeRepository(),
-            settings: new AccessWatchSettings { AiMode = AiMode.OpenClawGateway },
-            aiInvestigationBridge: new FakeAiInvestigationBridge(AiInvestigationResult.Unavailable("OpenClaw", "Not used")))
+            settings: new AccessWatchSettings { AiMode = AiMode.SupportBridge },
+            aiInvestigationBridge: new FakeAiInvestigationBridge(AiInvestigationResult.Unavailable("Support Bridge", "Not used")))
         {
             SelectedIncident = new DashboardIncidentItemViewModel(
                 80,
@@ -1651,14 +1651,14 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
-    /// Verifies OpenClaw bridge mode explains when the bridge dependency is missing.
+    /// Verifies Support bridge mode explains when the bridge dependency is missing.
     /// </summary>
     [Fact]
-    public void DashboardShellViewModel_CreateSelectedIncidentAiReview_WithOpenClawWithoutBridge_ExplainsMissingBridge()
+    public void DashboardShellViewModel_CreateSelectedIncidentAiReview_WithSupportBridgeWithoutBridge_ExplainsMissingBridge()
     {
         var model = new DashboardShellViewModel(
             new FakeRepository(),
-            settings: new AccessWatchSettings { AiMode = AiMode.OpenClawGateway },
+            settings: new AccessWatchSettings { AiMode = AiMode.SupportBridge },
             aiHandoffService: new ManualAiHandoffService())
         {
             SelectedIncident = new DashboardIncidentItemViewModel(
@@ -1682,7 +1682,7 @@ public sealed class NotificationAndViewModelTests
         Assert.False(model.CanReviewIncidentWithAi);
         model.CreateSelectedIncidentAiReview();
 
-        Assert.Equal("OpenClaw bridge is not connected for this dashboard session.", model.StatusMessage);
+        Assert.Equal("Support bridge is not connected for this dashboard session.", model.StatusMessage);
     }
 
     /// <summary>
