@@ -1645,7 +1645,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             TrustStatus.KnownWatched => "Keep watching for repeated or unexpected activity.",
             TrustStatus.Guest => "Keep guest access limited and review if it exposes services.",
             TrustStatus.Blocked => "Keep blocked; investigate if it reappears.",
-            _ => "Assign an alias, then trust, watch, guest-mark, or block this device."
+            _ => "Click Trace device. If AccessWatch still cannot identify it, leave it watched or block it instead of naming it."
         };
     }
 
@@ -1680,16 +1680,40 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             $"Hardware ID: {device.MacAddress}",
             $"Maker: {device.Vendor}",
             $"Name source: {device.NameSource}",
+            $"AccessWatch guess: {DeviceIdentityGuess(device)}",
             $"First seen: {device.FirstSeen}",
             $"Last seen: {device.LastSeen}",
             $"Last confirmed: {device.LastConfirmed}",
             $"Trust: {device.TrustStatus}",
             $"Risk: {device.RiskStatus}",
-            $"What this means: {device.Detail}",
-            $"Recommended action: {device.RecommendedAction}"
+            $"Clues AccessWatch found: {device.Detail}",
+            $"Next step: {device.RecommendedAction}"
         ]);
     }
 
+    private static string DeviceIdentityGuess(DashboardDeviceItemViewModel device)
+    {
+        var evidence = string.Concat(device.Name, " ", device.Vendor, " ", device.Detail).ToLowerInvariant();
+        if (HasDeviceHint(evidence, ["phone", "tablet", "android", "iphone", "ipad"]))
+        {
+            return "Likely phone or tablet.";
+        }
+
+        if (HasDeviceHint(evidence, ["router", "gateway"]) || device.IpAddress.EndsWith(".1", StringComparison.Ordinal))
+        {
+            return "Likely router or gateway.";
+        }
+
+        if (HasDeviceHint(evidence, ["windows", "workstation", "laptop", "desktop", "pc"]))
+        {
+            return "Likely PC or laptop.";
+        }
+
+        return "Unknown device; keep it watched until AccessWatch sees a clearer name or you recognize it.";
+    }
+
+    private static bool HasDeviceHint(string evidence, string[] hints) =>
+        Array.Exists(hints, hint => evidence.Contains(hint, StringComparison.Ordinal));
     private static string FormatTimestamp(DateTimeOffset timestamp)
     {
         return timestamp == default

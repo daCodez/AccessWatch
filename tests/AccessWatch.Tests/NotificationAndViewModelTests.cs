@@ -650,7 +650,7 @@ public sealed class NotificationAndViewModelTests
             {
                 Assert.Equal("Device at 192.168.1.77", device.Name);
                 Assert.Equal("Unconfirmed", device.InventoryState);
-                Assert.Equal("Assign an alias, then trust, watch, guest-mark, or block this device.", device.RecommendedAction);
+                Assert.Equal("Click Trace device. If AccessWatch still cannot identify it, leave it watched or block it instead of naming it.", device.RecommendedAction);
                 Assert.Equal("Not confirmed", device.LastConfirmed);
             },
             device =>
@@ -731,7 +731,9 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Trace report: office-laptop", model.SelectedDeviceTrace);
         Assert.Contains("Network address: 192.168.1.25", model.SelectedDeviceTrace);
         Assert.Contains("Hardware ID: 02:AC:CE:55:20:25", model.SelectedDeviceTrace);
-        Assert.Contains("Recommended action:", model.SelectedDeviceTrace);
+        Assert.Contains("AccessWatch guess: Likely PC or laptop.", model.SelectedDeviceTrace);
+        Assert.Contains("Clues AccessWatch found:", model.SelectedDeviceTrace);
+        Assert.Contains("Next step:", model.SelectedDeviceTrace);
         Assert.Contains("Trace ready for office-laptop", model.StatusMessage);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedDeviceTrace), changed);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedDeviceDetail), changed);
@@ -757,6 +759,43 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains(nameof(DashboardShellViewModel.SelectedApplicationDetail), changed);
     }
 
+    /// <summary>
+    /// Verifies device trace reports give a plain identity guess instead of asking the user to interpret raw clues.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_TraceSelectedDevice_GuessesCommonDeviceTypes()
+    {
+        var repository = new FakeRepository
+        {
+            Devices =
+            [
+                new NetworkDevice { Hostname = "home-gateway", IpAddress = "192.168.1.1", DeviceTypeGuess = "Router" },
+                new NetworkDevice { Hostname = "johns-phone", IpAddress = "192.168.1.30", DeviceTypeGuess = "Phone" },
+                new NetworkDevice { Hostname = "office-laptop", IpAddress = "192.168.1.40", DeviceTypeGuess = "Windows workstation" },
+                new NetworkDevice { IpAddress = "192.168.1.77" }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        model.SelectedDevice = model.Devices[0];
+        model.TraceSelectedDevice();
+        Assert.Contains("AccessWatch guess: Likely router or gateway.", model.SelectedDeviceTrace);
+
+        model.SelectedDevice = model.Devices[1];
+        model.TraceSelectedDevice();
+        Assert.Contains("AccessWatch guess: Likely phone or tablet.", model.SelectedDeviceTrace);
+
+        model.SelectedDevice = model.Devices[2];
+        model.TraceSelectedDevice();
+        Assert.Contains("AccessWatch guess: Likely PC or laptop.", model.SelectedDeviceTrace);
+
+        model.SelectedDevice = model.Devices[3];
+        model.TraceSelectedDevice();
+        Assert.Contains("AccessWatch guess: Unknown device; keep it watched until AccessWatch sees a clearer name or you recognize it.", model.SelectedDeviceTrace);
+        Assert.Contains("Next step: Click Trace device. If AccessWatch still cannot identify it, leave it watched or block it instead of naming it.", model.SelectedDeviceTrace);
+    }
     /// <summary>
     /// Verifies device and application action buttons persist trust decisions and update the selected row.
     /// </summary>
