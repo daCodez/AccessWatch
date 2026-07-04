@@ -151,6 +151,7 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -162,6 +163,7 @@
                                     <Button Content="Watch device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="98" Height="30" Margin="0,0,8,0" Click="OnWatchDeviceClick" />
                                     <Button Content="Guest device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="98" Height="30" Margin="0,0,8,0" Click="OnGuestDeviceClick" />
                                     <Button Content="Block device" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,0" Click="OnBlockDeviceClick" />
+                                    <Button Content="Trace device" IsEnabled="{Binding CanTraceSelectedDevice}" Width="96" Height="30" Margin="0,0,8,0" Click="OnTraceDeviceClick" />
                                     <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="116" Height="30" Click="OnApplyProtectionClick" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">
@@ -170,7 +172,8 @@
                                     <Button Content="Save alias" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="88" Height="30" Margin="0,0,8,0" Click="OnSaveDeviceAliasClick" />
                                     <Button Content="Clear" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="64" Height="30" Click="OnClearDeviceAliasClick" />
                                 </StackPanel>
-                                <TextBox Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
+                                <TextBox Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding SelectedDeviceTrace, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="88" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
+                                <TextBox Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
                             </Grid>
                         </Border>
                     </Grid>

@@ -18,19 +18,20 @@ public sealed class NotificationAndViewModelTests
     /// Verifies notification messages use plain warning language instead of technical details.
     /// </summary>
     [Theory]
-    [InlineData(RiskLevel.High, NotificationAction.AskBeforeAllow, "Visual Studio started using the camera.", "Camera activation is sensitive.", "AccessWatch warning", "Someone is trying to use your camera. Open AccessWatch to block, allow, or watch it.")]
-    [InlineData(RiskLevel.High, NotificationAction.AskBeforeAllow, "Skype started using the microphone.", "Microphone activation is sensitive.", "AccessWatch warning", "Someone is trying to use your microphone. Open AccessWatch to block, allow, or watch it.")]
-    [InlineData(RiskLevel.High, NotificationAction.AskBeforeAllow, "Unknown app opened a port.", "It is network-reachable.", "AccessWatch warning", "Someone is trying to connect to your PC. Open AccessWatch to block, allow, or watch it.")]
-    [InlineData(RiskLevel.Medium, NotificationAction.SoftNotify, "Kitchen tablet joined the network.", "A new device should be reviewed.", "AccessWatch notice", "A new device joined your network. Open AccessWatch if you do not recognize it.")]
-    [InlineData(RiskLevel.Low, NotificationAction.SilentLog, "Background check completed.", "No sensitive activity.", "AccessWatch notice", "AccessWatch noticed something unusual. No action is needed right now.")]
-    [InlineData(RiskLevel.Critical, NotificationAction.AutoBlock, "Unknown listener appeared.", "A listener can accept connections.", "AccessWatch warning", "Someone is trying to connect to your PC. AccessWatch is prepared to block it.")]
+    [InlineData(RiskLevel.High, NotificationAction.AskBeforeAllow, "Visual Studio started using the camera.", "Camera activation is sensitive.", "AccessWatch warning", "Someone is trying to use your camera.", "Open AccessWatch to block, allow, or watch it.")]
+    [InlineData(RiskLevel.High, NotificationAction.AskBeforeAllow, "Skype started using the microphone.", "Microphone activation is sensitive.", "AccessWatch warning", "Someone is trying to use your microphone.", "Open AccessWatch to block, allow, or watch it.")]
+    [InlineData(RiskLevel.High, NotificationAction.AskBeforeAllow, "Unknown app opened a port.", "It is network-reachable.", "AccessWatch warning", "Someone is trying to connect to your PC.", "Open AccessWatch to block, allow, or watch it.")]
+    [InlineData(RiskLevel.Medium, NotificationAction.SoftNotify, "Kitchen tablet joined the network.", "A new device should be reviewed.", "AccessWatch notice", "A new device joined your network.", "Trace this device in AccessWatch.")]
+    [InlineData(RiskLevel.Low, NotificationAction.SilentLog, "Background check completed.", "No sensitive activity.", "AccessWatch notice", "AccessWatch noticed something unusual.", "No action is needed right now.")]
+    [InlineData(RiskLevel.Critical, NotificationAction.AutoBlock, "Unknown listener appeared.", "A listener can accept connections.", "AccessWatch warning", "Someone is trying to connect to your PC.", "AccessWatch is prepared to block it.")]
     public void NotificationMessageFactory_CreatesPlainToastAlert(
         RiskLevel riskLevel,
         NotificationAction action,
         string summary,
         string whyItMatters,
         string expectedTitle,
-        string expectedBody)
+        string expectedBody,
+        string expectedSuggestedAction)
     {
         var factory = new NotificationMessageFactory();
         var assessment = new PortRiskAssessment(
@@ -47,7 +48,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal(expectedBody, message.Body);
         Assert.Equal(riskLevel, message.RiskLevel);
         Assert.Equal(action, message.Action);
-        Assert.Equal("Review it.", message.SuggestedAction);
+        Assert.Equal(expectedSuggestedAction, message.SuggestedAction);
     }
 
     /// <summary>
@@ -717,11 +718,22 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("office-laptop", model.SelectedDevice?.Name);
         Assert.Equal("Visual Studio", model.SelectedApplication?.Name);
         Assert.True(model.CanApplyDeviceTrustDecision);
+        Assert.True(model.CanTraceSelectedDevice);
         Assert.True(model.CanApplyApplicationTrustDecision);
         Assert.Contains("office-laptop", model.SelectedDeviceDetail);
+        Assert.Contains("Click Trace device", model.SelectedDeviceTrace);
         Assert.Contains("192.168.1.25", model.SelectedDeviceDetail);
         Assert.Contains("Visual Studio", model.SelectedApplicationDetail);
         Assert.Contains("Microsoft Corporation", model.SelectedApplicationDetail);
+
+        model.TraceSelectedDevice();
+
+        Assert.Contains("Trace report: office-laptop", model.SelectedDeviceTrace);
+        Assert.Contains("Network address: 192.168.1.25", model.SelectedDeviceTrace);
+        Assert.Contains("Hardware ID: 02:AC:CE:55:20:25", model.SelectedDeviceTrace);
+        Assert.Contains("Recommended action:", model.SelectedDeviceTrace);
+        Assert.Contains("Trace ready for office-laptop", model.StatusMessage);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedDeviceTrace), changed);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedDeviceDetail), changed);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedApplicationDetail), changed);
 
@@ -732,8 +744,16 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Select a device", model.SelectedDeviceDetail);
         Assert.Contains("Select an application", model.SelectedApplicationDetail);
         Assert.False(model.CanApplyDeviceTrustDecision);
+        Assert.False(model.CanTraceSelectedDevice);
         Assert.False(model.CanApplyApplicationTrustDecision);
+        Assert.Contains("Select a device", model.SelectedDeviceTrace);
+
+        model.TraceSelectedDevice();
+
+        Assert.Contains("Select a device before tracing it", model.StatusMessage);
+        Assert.Contains("Select a device", model.SelectedDeviceTrace);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedDeviceDetail), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedDeviceTrace), changed);
         Assert.Contains(nameof(DashboardShellViewModel.SelectedApplicationDetail), changed);
     }
 

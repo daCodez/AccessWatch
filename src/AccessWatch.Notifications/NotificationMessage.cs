@@ -24,43 +24,43 @@ public sealed class NotificationMessageFactory
     /// <returns>A notification message.</returns>
     public NotificationMessage Create(PortRiskAssessment assessment)
     {
+        var alert = PlainAlertFor(assessment);
         return new NotificationMessage(
             TitleFor(assessment),
-            BodyFor(assessment),
+            alert.Body,
             assessment.RiskLevel,
             assessment.Action,
-            assessment.SuggestedAction);
+            alert.SuggestedAction);
     }
 
     private static string TitleFor(PortRiskAssessment assessment) =>
         assessment.RiskLevel >= RiskLevel.High ? "AccessWatch warning" : "AccessWatch notice";
 
-    private static string BodyFor(PortRiskAssessment assessment)
+    private static PlainNotificationAlert PlainAlertFor(PortRiskAssessment assessment)
     {
         var evidence = string.Concat(assessment.Summary, " ", assessment.WhyItMatters).ToLowerInvariant();
-        var action = PlainAction(assessment);
 
         if (evidence.Contains("camera", StringComparison.Ordinal))
         {
-            return $"Someone is trying to use your camera. {action}";
+            return new PlainNotificationAlert("Someone is trying to use your camera.", PlainAction(assessment));
         }
 
         if (evidence.Contains("microphone", StringComparison.Ordinal))
         {
-            return $"Someone is trying to use your microphone. {action}";
+            return new PlainNotificationAlert("Someone is trying to use your microphone.", PlainAction(assessment));
         }
 
         if (evidence.Contains("joined the network", StringComparison.Ordinal) || evidence.Contains("new device", StringComparison.Ordinal))
         {
-            return $"A new device joined your network. {action}";
+            return new PlainNotificationAlert("A new device joined your network.", "Trace this device in AccessWatch.");
         }
 
         if (evidence.Contains("network-reachable", StringComparison.Ordinal) || evidence.Contains("opened a port", StringComparison.Ordinal) || evidence.Contains("remote", StringComparison.Ordinal) || evidence.Contains("listener", StringComparison.Ordinal))
         {
-            return $"Someone is trying to connect to your PC. {action}";
+            return new PlainNotificationAlert("Someone is trying to connect to your PC.", PlainAction(assessment));
         }
 
-        return $"AccessWatch noticed something unusual. {action}";
+        return new PlainNotificationAlert("AccessWatch noticed something unusual.", PlainAction(assessment));
     }
 
     private static string PlainAction(PortRiskAssessment assessment) =>
@@ -71,4 +71,6 @@ public sealed class NotificationMessageFactory
             NotificationAction.SoftNotify => "Open AccessWatch if you do not recognize it.",
             _ => "No action is needed right now."
         };
+
+    private readonly record struct PlainNotificationAlert(string Body, string SuggestedAction);
 }

@@ -33,6 +33,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private DashboardApplicationItemViewModel? selectedApplication;
     private DashboardPortItemViewModel? selectedPort;
     private string selectedPortInvestigation = string.Empty;
+    private string selectedDeviceTrace = DeviceTracePrompt(null);
     private DashboardIncidentItemViewModel? selectedIncident;
     private string selectedIncidentAiReview = string.Empty;
     private string selectedIncidentRuleSuggestion = string.Empty;
@@ -256,8 +257,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             selectedDeviceAlias = value?.UserAlias ?? string.Empty;
             OnPropertyChanged(nameof(SelectedDevice));
             OnPropertyChanged(nameof(SelectedDeviceAlias));
+            selectedDeviceTrace = DeviceTracePrompt(value);
             OnPropertyChanged(nameof(SelectedDeviceDetail));
+            OnPropertyChanged(nameof(SelectedDeviceTrace));
             OnPropertyChanged(nameof(CanApplyDeviceTrustDecision));
+            OnPropertyChanged(nameof(CanTraceSelectedDevice));
         }
     }
 
@@ -267,6 +271,16 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public string SelectedDeviceDetail => selectedDevice is null
         ? "Select a device to see its name, address, trust, and risk context."
         : selectedDevice.DetailText;
+
+    /// <summary>
+    /// Gets the current trace report for the selected device.
+    /// </summary>
+    public string SelectedDeviceTrace => selectedDeviceTrace;
+
+    /// <summary>
+    /// Gets whether the selected device can be traced.
+    /// </summary>
+    public bool CanTraceSelectedDevice => selectedDevice is not null;
 
     /// <summary>
     /// Gets whether device trust action buttons can run.
@@ -733,6 +747,25 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         SelectedDeviceAlias = string.Empty;
         await SaveSelectedDeviceAliasAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Creates a plain-English trace report for the selected device.
+    /// </summary>
+    public void TraceSelectedDevice()
+    {
+        if (selectedDevice is null)
+        {
+            selectedDeviceTrace = DeviceTracePrompt(null);
+            OnPropertyChanged(nameof(SelectedDeviceTrace));
+            StatusMessage = "Select a device before tracing it.";
+            return;
+        }
+
+        selectedDeviceTrace = BuildDeviceTrace(selectedDevice);
+        OnPropertyChanged(nameof(SelectedDeviceTrace));
+        StatusMessage = $"Trace ready for {selectedDevice.Name}.";
+    }
+
     /// <summary>
     /// Applies a trust decision to the selected device and updates the dashboard row.
     /// </summary>
@@ -1632,6 +1665,29 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             (null, not null) => notes,
             _ => "No extra device details recorded yet."
         };
+    }
+
+    private static string DeviceTracePrompt(DashboardDeviceItemViewModel? device) => device is null
+        ? "Select a device, then click Trace device to see where it came from and what to do next."
+        : $"Click Trace device to review {device.Name}.";
+
+    private static string BuildDeviceTrace(DashboardDeviceItemViewModel device)
+    {
+        return string.Join(Environment.NewLine,
+        [
+            $"Trace report: {device.Name}",
+            $"Network address: {device.IpAddress}",
+            $"Hardware ID: {device.MacAddress}",
+            $"Maker: {device.Vendor}",
+            $"Name source: {device.NameSource}",
+            $"First seen: {device.FirstSeen}",
+            $"Last seen: {device.LastSeen}",
+            $"Last confirmed: {device.LastConfirmed}",
+            $"Trust: {device.TrustStatus}",
+            $"Risk: {device.RiskStatus}",
+            $"What this means: {device.Detail}",
+            $"Recommended action: {device.RecommendedAction}"
+        ]);
     }
 
     private static string FormatTimestamp(DateTimeOffset timestamp)

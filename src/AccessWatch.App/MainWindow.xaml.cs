@@ -112,6 +112,11 @@ public partial class MainWindow : Window
         await viewModel.ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, CancellationToken.None);
     }
 
+    private void OnTraceDeviceClick(object sender, RoutedEventArgs e)
+    {
+        viewModel.TraceSelectedDevice();
+    }
+
     private async void OnApplyProtectionClick(object sender, RoutedEventArgs e)
     {
         await viewModel.ApplySelectedEnforcementPlanAsync(CancellationToken.None);
