@@ -1723,6 +1723,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private static string BuildIncidentExplanation(DashboardIncidentItemViewModel incident)
     {
+        var privacyFocus = IncidentPrivacyFocus(incident);
         var urgency = incident.RawRiskLevel >= RiskLevel.High
             ? "This deserves prompt review because the incident risk is high enough to interrupt normal workflow."
             : "This is worth watching, but it does not currently look severe enough for immediate blocking.";
@@ -1732,7 +1733,33 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         var verify = incident.MainTarget == "Target unavailable"
             ? "Verify which app or device was involved before trusting or blocking anything."
             : $"Verify that {incident.MainTarget} was expected at the recorded time.";
-        return $"Why: {urgency} {status} Verify: {verify} Recommended action: use Watch for expected but noisy behavior, Resolve when confirmed, or Escalate if this was unexpected.";
+        return $"Protection focus: {privacyFocus} Why: {urgency} {status} Verify: {verify} Recommended action: use Watch for expected but noisy behavior, Resolve when confirmed, or Escalate if this was unexpected.";
+    }
+
+    private static string IncidentPrivacyFocus(DashboardIncidentItemViewModel incident)
+    {
+        var evidence = string.Concat(incident.Title, " ", incident.Summary).ToLowerInvariant();
+        if (evidence.Contains("camera", StringComparison.Ordinal))
+        {
+            return "Camera use was detected. Outside sources usually reach the camera through a local app, browser permission, remote session, or malware.";
+        }
+
+        if (evidence.Contains("microphone", StringComparison.Ordinal))
+        {
+            return "Microphone use was detected. Outside sources usually reach the microphone through a local app, browser permission, remote session, or malware.";
+        }
+
+        if (evidence.Contains("network port", StringComparison.Ordinal) || evidence.Contains("listening", StringComparison.Ordinal) || evidence.Contains("remote", StringComparison.Ordinal))
+        {
+            return "A possible outside connection path was detected. Other devices may be able to try reaching this PC.";
+        }
+
+        if (evidence.Contains("new device", StringComparison.Ordinal))
+        {
+            return "A new network device was detected. Keep it watched until you recognize it.";
+        }
+
+        return "AccessWatch grouped this because it may affect privacy, remote access, or network exposure.";
     }
 
     private static AiInvestigationRequest BuildAiInvestigationRequest(DashboardIncidentItemViewModel incident, string redactedIncident)
@@ -1830,15 +1857,48 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             : FirstUseful(DisplayDeviceName(device), networkEvent.SourceIp);
         var sourceDevice = string.IsNullOrWhiteSpace(sourceDeviceName) ? string.Empty : $"Device {sourceDeviceName}. ";
         var whatHappened = FirstUseful(details.WhatHappened, FriendlyEventType(networkEvent.EventType));
+        var protection = ClassifyProtectionActivity(networkEvent, details, applicationName);
 
         return new DashboardActivityItemViewModel(
             networkEvent.RiskLevel.ToString(),
             applicationName,
-            networkEvent.Summary,
-            $"{sourceDevice}{whatHappened}{endpoint}{reachability}",
+            protection.Summary,
+            $"{protection.Detail} Evidence: {sourceDevice}{whatHappened}{endpoint}{reachability}",
             BuildApplicationIdentity(application, details.ProcessName),
-            FirstUseful(details.WhyItMatters, DefaultWhyItMatters(networkEvent.RiskLevel)),
-            FirstUseful(details.SuggestedAction, DefaultSuggestedAction(networkEvent.RiskLevel)));
+            FirstUseful(protection.WhyItMatters, details.WhyItMatters, DefaultWhyItMatters(networkEvent.RiskLevel)),
+            FirstUseful(protection.SuggestedAction, details.SuggestedAction, DefaultSuggestedAction(networkEvent.RiskLevel)));
+    }
+
+    private static ProtectionActivity ClassifyProtectionActivity(NetworkEvent networkEvent, EventDetails details, string applicationName)
+    {
+        return networkEvent.EventType switch
+        {
+            "CameraActivated" => new ProtectionActivity(
+                "Camera access detected.",
+                $"{applicationName} is using the camera. Outside sources usually reach the camera through a local app, browser permission, remote session, or malware.",
+                "Camera access can expose the room around you.",
+                "If you did not start this, close the app and watch or block it in AccessWatch."),
+            "MicrophoneActivated" => new ProtectionActivity(
+                "Microphone access detected.",
+                $"{applicationName} is using the microphone. Outside sources usually reach the microphone through a local app, browser permission, remote session, or malware.",
+                "Microphone access can expose nearby conversations.",
+                "If you did not start this, close the app and watch or block it in AccessWatch."),
+            "NewListeningPort" or "ListeningPortApplicationChanged" => new ProtectionActivity(
+                "Possible outside connection path detected.",
+                $"Other devices may be able to connect to {applicationName} on this PC.",
+                "Open network services can let other devices try to reach this PC.",
+                "If you do not recognize this app or port, watch it or block it."),
+            "NewDeviceObserved" => new ProtectionActivity(
+                "New network device detected.",
+                "A device appeared on your network.",
+                "Unknown devices can be harmless, but they should stay visible until recognized.",
+                "Trace the device before trusting or naming it."),
+            _ => new ProtectionActivity(
+                FirstUseful(networkEvent.Summary, FriendlyEventType(networkEvent.EventType)),
+                "AccessWatch recorded activity that may affect your privacy or network exposure.",
+                details.WhyItMatters,
+                details.SuggestedAction)
+        };
     }
 
     private static EventDetails ParseEventDetails(string detailsJson)
@@ -1947,6 +2007,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+
     private static string FirstUseful(params ReadOnlySpan<string?> values)
     {
         foreach (var value in values)
@@ -1971,6 +2032,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+
+    private sealed record ProtectionActivity(string Summary, string Detail, string? WhyItMatters, string? SuggestedAction);
 
     private sealed record EventDetails(
         string? WhatHappened = null,

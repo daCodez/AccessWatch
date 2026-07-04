@@ -397,7 +397,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal([1, 1, 1, 1], model.Metrics.Select(metric => metric.Count));
         var activity = Assert.Single(model.RecentActivity);
         Assert.Equal("Medium", activity.Kind);
-        Assert.Contains("Plex opened", activity.Summary);
+        Assert.Equal("Possible outside connection path detected.", activity.Summary);
         Assert.Contains("0.0.0.0:32400", activity.Detail);
         Assert.Contains("Loaded 1 events, 1 ports, 0 incidents, and 1 devices.", model.StatusMessage);
         Assert.Contains(nameof(DashboardShellViewModel.IsLoading), changed);
@@ -1432,6 +1432,9 @@ public sealed class NotificationAndViewModelTests
             });
         Assert.Same(model.Incidents[0], model.SelectedIncident);
         Assert.Contains("Camera activated", model.SelectedIncidentDetail);
+        Assert.Contains("Protection focus:", model.SelectedIncidentExplanation);
+        Assert.Contains("Camera use was detected", model.SelectedIncidentExplanation);
+        Assert.Contains("Outside sources usually reach the camera", model.SelectedIncidentExplanation);
         Assert.Contains("Why:", model.SelectedIncidentExplanation);
         Assert.Contains("Visual Studio on office-laptop", model.SelectedIncidentExplanation);
         Assert.True(model.CanApplyIncidentAction);
@@ -1918,11 +1921,13 @@ public sealed class NotificationAndViewModelTests
         var activity = Assert.Single(model.RecentActivity);
         Assert.Equal("Windows Service Host", activity.ApplicationName);
         Assert.Contains("Signed by Microsoft Windows", activity.ApplicationIdentity);
+        Assert.Equal("Possible outside connection path detected.", activity.Summary);
+        Assert.Contains("Other devices may be able to connect to Windows Service Host on this PC.", activity.Detail);
+        Assert.Contains("Evidence: Device office-printer", activity.Detail);
         Assert.Contains("A new listening TCP port appeared.", activity.Detail);
-        Assert.Contains("Device office-printer", activity.Detail);
         Assert.Contains("NetworkReachable", activity.Detail);
-        Assert.Equal("Other devices on your network may be able to connect to this service.", activity.WhyItMatters);
-        Assert.Equal("Confirm the app is expected before trusting it.", activity.SuggestedAction);
+        Assert.Equal("Open network services can let other devices try to reach this PC.", activity.WhyItMatters);
+        Assert.Equal("If you do not recognize this app or port, watch it or block it.", activity.SuggestedAction);
     }
     /// <summary>
     /// Verifies event detail device names are shown when the stored device row is not available.
@@ -1952,7 +1957,10 @@ public sealed class NotificationAndViewModelTests
         await model.LoadAsync(CancellationToken.None);
 
         var activity = Assert.Single(model.RecentActivity);
-        Assert.Contains("Device office-laptop", activity.Detail);
+        Assert.Equal("Camera access detected.", activity.Summary);
+        Assert.Contains("Visual Studio is using the camera", activity.Detail);
+        Assert.Contains("Outside sources usually reach the camera", activity.Detail);
+        Assert.Contains("Evidence: Device office-laptop", activity.Detail);
         Assert.Contains("Visual Studio activated the camera.", activity.Detail);
     }
     /// <summary>
@@ -1986,10 +1994,91 @@ public sealed class NotificationAndViewModelTests
 
         var activity = Assert.Single(model.RecentActivity);
         Assert.Equal("Visual Studio", activity.ApplicationName);
-        Assert.Contains("Device office-laptop", activity.Detail);
+        Assert.Equal("Camera access detected.", activity.Summary);
+        Assert.Contains("Visual Studio is using the camera", activity.Detail);
+        Assert.Contains("Outside sources usually reach the camera", activity.Detail);
+        Assert.Contains("Evidence: Device office-laptop", activity.Detail);
         Assert.Contains("Visual Studio activated the camera.", activity.Detail);
         Assert.Contains("Local sensor access", activity.Detail);
         Assert.DoesNotContain("local:n/a", activity.Detail);
+    }
+    /// <summary>
+    /// Verifies privacy-related recent activity leads with the protection concern instead of raw telemetry.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_UsesProtectionFirstPrivacyActivity()
+    {
+        var repository = new FakeRepository
+        {
+            Applications = [new AppIdentity { ApplicationId = 12, DisplayName = "Skype", ProcessName = "Skype" }],
+            Events =
+            [
+                new NetworkEvent
+                {
+                    ApplicationId = 12,
+                    EventType = "MicrophoneActivated",
+                    Protocol = "Local",
+                    Direction = "SensorAccess",
+                    RiskLevel = RiskLevel.High,
+                    Summary = "Skype started using the microphone.",
+                    DetailsJson = "{ \"whatHappened\": \"Skype activated the microphone.\", \"app\": \"Skype\", \"processName\": \"Skype\", \"deviceName\": \"office-laptop\", \"reachability\": \"Local sensor access\" }"
+                },
+                new NetworkEvent
+                {
+                    EventType = "NewDeviceObserved",
+                    Protocol = "ARP",
+                    Direction = "NetworkObservation",
+                    RiskLevel = RiskLevel.Medium,
+                    Summary = "Unknown tablet joined the network.",
+                    DetailsJson = "{ \"whatHappened\": \"Unknown tablet joined the local network.\", \"deviceName\": \"unknown-tablet\" }"
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.RecentActivity,
+            microphone =>
+            {
+                Assert.Equal("Microphone access detected.", microphone.Summary);
+                Assert.Contains("Skype is using the microphone", microphone.Detail);
+                Assert.Contains("Outside sources usually reach the microphone", microphone.Detail);
+                Assert.Equal("Microphone access can expose nearby conversations.", microphone.WhyItMatters);
+                Assert.Equal("If you did not start this, close the app and watch or block it in AccessWatch.", microphone.SuggestedAction);
+            },
+            device =>
+            {
+                Assert.Equal("New network device detected.", device.Summary);
+                Assert.Contains("A device appeared on your network.", device.Detail);
+                Assert.Equal("Unknown devices can be harmless, but they should stay visible until recognized.", device.WhyItMatters);
+                Assert.Equal("Trace the device before trusting or naming it.", device.SuggestedAction);
+            });
+    }
+
+    /// <summary>
+    /// Verifies incident explanations name the privacy or outside-access concern first.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_SelectedIncidentExplanation_UsesProtectionFocus()
+    {
+        var model = new DashboardShellViewModel();
+
+        model.SelectedIncident = CreateIncidentRow("Microphone access", "Skype used the microphone.");
+        Assert.Contains("Microphone use was detected", model.SelectedIncidentExplanation);
+
+        model.SelectedIncident = CreateIncidentRow("Listening service", "A listening service opened.");
+        Assert.Contains("possible outside connection path", model.SelectedIncidentExplanation);
+
+        model.SelectedIncident = CreateIncidentRow("Remote service", "Remote access may be available.");
+        Assert.Contains("possible outside connection path", model.SelectedIncidentExplanation);
+
+        model.SelectedIncident = CreateIncidentRow("New device observed", "A new device joined.");
+        Assert.Contains("A new network device was detected", model.SelectedIncidentExplanation);
+
+        model.SelectedIncident = CreateIncidentRow("Unusual activity", "Something changed.");
+        Assert.Contains("privacy, remote access, or network exposure", model.SelectedIncidentExplanation);
     }
     /// <summary>
     /// Verifies event activity remains useful when stored detail JSON is missing or malformed.
@@ -2040,8 +2129,8 @@ public sealed class NotificationAndViewModelTests
                 Assert.Contains("Process helper", second.ApplicationIdentity);
                 Assert.Contains("stored app identity unavailable", second.ApplicationIdentity);
                 Assert.Contains("changed owning application", second.Detail);
-                Assert.Equal("This activity is visible enough to keep on your radar.", second.WhyItMatters);
-                Assert.Equal("No action needed if you recognize the application.", second.SuggestedAction);
+                Assert.Equal("Open network services can let other devices try to reach this PC.", second.WhyItMatters);
+                Assert.Equal("If you do not recognize this app or port, watch it or block it.", second.SuggestedAction);
             });
     }
 
@@ -2085,7 +2174,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains(model.RecentActivity, activity => activity.ApplicationIdentity.Contains("Signature status unknown"));
         Assert.Contains(model.RecentActivity, activity => activity.ApplicationIdentity.Contains("Publisher Example Corp"));
         Assert.Contains(model.RecentActivity, activity => activity.ApplicationName == "Blank Process" && activity.ApplicationIdentity == "Signature status unknown; Executable path unavailable");
-        Assert.All(model.RecentActivity, activity => Assert.Equal("Confirm the application and port are expected before trusting it.", activity.SuggestedAction));
+        Assert.All(model.RecentActivity, activity => Assert.Equal("If you do not recognize this app or port, watch it or block it.", activity.SuggestedAction));
     }
 
     private static NetworkEvent NewIdentityEvent(long applicationId, RiskLevel riskLevel)
@@ -2462,6 +2551,24 @@ public sealed class NotificationAndViewModelTests
             return Task.FromResult(result);
         }
     }
+
+    private static DashboardIncidentItemViewModel CreateIncidentRow(string title, string summary) =>
+        new(
+            1,
+            null,
+            null,
+            RiskLevel.High,
+            IncidentStatus.Open,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            title,
+            RiskLevel.High.ToString(),
+            IncidentStatus.Open.ToString(),
+            1,
+            "Target unavailable",
+            "Now",
+            "Now",
+            summary);
 
     private sealed class FakeRepository : IAccessWatchRepository
     {
