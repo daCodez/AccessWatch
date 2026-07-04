@@ -118,6 +118,8 @@ public enum AiMode
     Off,
     /// <summary>Manual copy and paste into ChatGPT.</summary>
     ManualChatGptCopy,
+    /// <summary>Send redacted review requests to a locally approved OpenClaw gateway.</summary>
+    OpenClawGateway,
     /// <summary>Future local model support.</summary>
     LocalAi,
     /// <summary>Future OpenAI API support.</summary>

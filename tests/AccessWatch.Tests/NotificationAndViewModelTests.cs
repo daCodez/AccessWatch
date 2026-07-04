@@ -1158,7 +1158,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Off", model.CurrentAiMode);
         Assert.Equal("Settings match the running configuration.", model.SettingsStatus);
         Assert.Equal(["Quiet", "Balanced", "Strict", "Lockdown"], model.ProtectionModeOptions.Select(option => option.Value));
-        Assert.Equal(["Off", "ManualChatGptCopy", "LocalAi", "OpenAiApi"], model.AiModeOptions.Select(option => option.Value));
+        Assert.Equal(["Off", "ManualChatGptCopy", "OpenClawGateway", "LocalAi", "OpenAiApi"], model.AiModeOptions.Select(option => option.Value));
 
         model.SelectedProtectionMode = "Lockdown";
         model.SelectedAiMode = "OpenAiApi";

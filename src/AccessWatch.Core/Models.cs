@@ -235,8 +235,39 @@ public sealed record AccessWatchSettings
 
     /// <summary>AI assistance mode.</summary>
     public AiMode AiMode { get; set; } = AiMode.ManualChatGptCopy;
+
+    /// <summary>Local OpenClaw-compatible bridge endpoint for in-app AI review.</summary>
+    public string OpenClawGatewayEndpoint { get; set; } = "http://127.0.0.1:7331/accesswatch/investigations";
 }
 
+
+/// <summary>
+/// Represents an AI investigation request sent to an approved local bridge.
+/// </summary>
+public sealed record AiInvestigationRequest(
+    string Source,
+    string TargetType,
+    string Title,
+    string RiskLevel,
+    string Status,
+    string ContextJson,
+    string Prompt);
+
+/// <summary>
+/// Represents an AI investigation result returned by an approved local bridge.
+/// </summary>
+public sealed record AiInvestigationResult(
+    bool Succeeded,
+    string Provider,
+    string Summary,
+    string RecommendedAction,
+    string Confidence,
+    string RawResponse)
+{
+    /// <summary>Creates an unavailable result with an operator-friendly reason.</summary>
+    public static AiInvestigationResult Unavailable(string provider, string reason) =>
+        new(false, provider, reason, "Check the bridge connection, then retry.", "Unavailable", string.Empty);
+}
 
 /// <summary>
 /// Represents grouped related security events.

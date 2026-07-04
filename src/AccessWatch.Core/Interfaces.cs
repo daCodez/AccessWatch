@@ -215,3 +215,21 @@ public interface IAiHandoffService
     string CreateRedactedIncidentSummary(Incident incident);
 }
 
+/// <summary>
+/// Sends redacted investigation requests to an approved AI bridge.
+/// </summary>
+public interface IAiInvestigationBridge
+{
+    /// <summary>
+    /// Reviews an incident through the configured bridge.
+    /// </summary>
+    /// <param name="request">Redacted investigation request.</param>
+    /// <param name="settings">Current AccessWatch AI settings.</param>
+    /// <param name="cancellationToken">Cancellation token for the review.</param>
+    /// <returns>The bridge review result or an unavailable result.</returns>
+    Task<AiInvestigationResult> ReviewIncidentAsync(
+        AiInvestigationRequest request,
+        AccessWatchSettings settings,
+        CancellationToken cancellationToken);
+}
+

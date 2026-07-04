@@ -481,6 +481,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     [
         new("Off", "Off", "Keep incident review fully local without ChatGPT assistance."),
         new("ManualChatGptCopy", "ChatGPT subscription", "Use your ChatGPT subscription with redacted in-app incident review briefs."),
+        new("OpenClawGateway", "OpenClaw bridge", "Send redacted reviews to a local OpenClaw-compatible support bridge."),
         new("LocalAi", "Local AI", "Reserve local model assistance for a future release."),
         new("OpenAiApi", "OpenAI API", "Reserve connected AI assistance for a future release.")
     ];
