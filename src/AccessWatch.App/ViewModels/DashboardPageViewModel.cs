@@ -139,6 +139,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsApplicationsSelected));
             OnPropertyChanged(nameof(IsPortsSelected));
             OnPropertyChanged(nameof(IsIncidentsSelected));
+            OnPropertyChanged(nameof(IsRulesSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
             OnPropertyChanged(nameof(IsPlaceholderSelected));
             OnPropertyChanged(nameof(OverviewVisibility));
@@ -146,6 +147,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(ApplicationsVisibility));
             OnPropertyChanged(nameof(PortsVisibility));
             OnPropertyChanged(nameof(IncidentsVisibility));
+            OnPropertyChanged(nameof(RulesVisibility));
             OnPropertyChanged(nameof(SettingsVisibility));
             OnPropertyChanged(nameof(PlaceholderVisibility));
         }

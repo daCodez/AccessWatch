@@ -304,6 +304,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Visible", model.RulesVisibility);
         Assert.Equal("Collapsed", model.SettingsVisibility);
         Assert.Equal("Collapsed", model.PlaceholderVisibility);
+        Assert.Contains(nameof(DashboardShellViewModel.IsRulesSelected), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.RulesVisibility), changed);
 
         model.SelectedPage = model.Pages.Single(page => page.Name == "Settings");
 
