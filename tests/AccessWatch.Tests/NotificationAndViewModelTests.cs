@@ -1965,6 +1965,8 @@ public sealed class NotificationAndViewModelTests
         var changed = new List<string?>();
         model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
 
+        Assert.Equal("Visible", model.RulesEmptyVisibility);
+
         model.PreviewSelectedRule();
         Assert.Equal("Select a rule before previewing it.", model.StatusMessage);
         await model.EnableSelectedRuleAsync(CancellationToken.None);
@@ -1975,6 +1977,7 @@ public sealed class NotificationAndViewModelTests
         await model.LoadAsync(CancellationToken.None);
 
         Assert.Equal(8, model.Rules.Count);
+        Assert.Equal("Collapsed", model.RulesEmptyVisibility);
         Assert.True(model.CanApplyRuleAction);
         Assert.Contains("Rule: Watch remote admin", model.SelectedRuleDetail);
         Assert.Contains("App: Visual Studio", model.SelectedRule!.Conditions);

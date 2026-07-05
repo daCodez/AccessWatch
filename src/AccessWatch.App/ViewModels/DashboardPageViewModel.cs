@@ -622,6 +622,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public bool CanApplyRuleAction => selectedRule is not null && repository is not null;
 
     /// <summary>
+    /// Gets WPF visibility text for the no-rules message.
+    /// </summary>
+    public string RulesEmptyVisibility => ToVisibility(Rules.Count == 0);
+
+    /// <summary>
     /// Gets incident status filter choices.
     /// </summary>
     public IReadOnlyList<string> IncidentStatusFilterOptions { get; } = ["All", "Open", "Watching", "Resolved"];
@@ -1145,6 +1150,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
         var rule = CreateRuleSuggestion(selectedIncident);
         var ruleId = await repository.UpsertRuleAsync(rule, cancellationToken);
+        var ruleItem = CreateRuleItem(rule with { RuleId = ruleId });
+        Rules.Insert(0, ruleItem);
+        OnPropertyChanged(nameof(RulesEmptyVisibility));
+        SelectedRule = ruleItem;
         selectedIncidentRuleSuggestion = rule.ConditionJson;
         OnPropertyChanged(nameof(SelectedIncidentRuleSuggestion));
         OnPropertyChanged(nameof(HasIncidentRuleSuggestion));
@@ -1208,6 +1217,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         else
         {
             Rules.Insert(0, displayRule);
+            OnPropertyChanged(nameof(RulesEmptyVisibility));
         }
 
         SelectedRule = displayRule;
@@ -1708,6 +1718,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
 
         SelectedRule = Rules.FirstOrDefault();
+        OnPropertyChanged(nameof(RulesEmptyVisibility));
     }
 
     private void RefreshRulePreviews()

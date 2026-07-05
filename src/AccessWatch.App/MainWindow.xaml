@@ -355,6 +355,12 @@
                                 <DataGridTextColumn Header="Notifications" Binding="{Binding QuietHours}" Width="150" />
                             </DataGrid.Columns>
                         </DataGrid>
+                        <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="22" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="560" Visibility="{Binding RulesEmptyVisibility}">
+                            <StackPanel>
+                                <TextBlock Text="No rules yet" FontSize="18" FontWeight="SemiBold" Foreground="#24292F" HorizontalAlignment="Center" />
+                                <TextBlock Text="Rules appear here after you create a rule from an incident. AccessWatch keeps new rules disabled first, so you can preview what they affect before enabling them." Margin="0,8,0,0" FontSize="13" Foreground="#57606A" TextWrapping="Wrap" TextAlignment="Center" />
+                            </StackPanel>
+                        </Border>
                         <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
                                 <Grid.ColumnDefinitions>
