@@ -39,6 +39,18 @@ public interface INetworkDeviceDiscoveryService
     Task<IReadOnlyList<NetworkDevice>> DiscoverAsync(CancellationToken cancellationToken);
 }
 /// <summary>
+/// Scans operating system privacy telemetry for active camera and microphone usage.
+/// </summary>
+public interface ISensorAccessScanner
+{
+    /// <summary>
+    /// Gets the sensitive sensor access sessions currently visible to AccessWatch.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token for the scan.</param>
+    /// <returns>The active camera and microphone access sessions.</returns>
+    Task<IReadOnlyList<SensorAccessObservation>> ScanAsync(CancellationToken cancellationToken);
+}
+/// <summary>
 /// Stores AccessWatch observations and events.
 /// </summary>
 public interface IAccessWatchRepository
@@ -232,4 +244,3 @@ public interface IAiInvestigationBridge
         AccessWatchSettings settings,
         CancellationToken cancellationToken);
 }
-

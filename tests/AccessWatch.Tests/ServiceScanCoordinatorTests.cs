@@ -238,6 +238,129 @@ public sealed class ServiceScanCoordinatorTests
         Assert.Equal(RiskLevel.Medium, Assert.Single(repository.Incidents).RiskLevel);
     }
     /// <summary>
+    /// Verifies active camera access creates a warning event, incident, and toast.
+    /// </summary>
+    [Fact]
+    public async Task RunListeningPortScanAsync_CreatesEventForActiveCameraAccess()
+    {
+        var repository = new FakeRepository();
+        var sensorStartedUtc = new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero);
+        var coordinator = CreateCoordinator(
+            repository,
+            new FakeScanner([]),
+            sensorScanner: new FakeSensorScanner([new SensorAccessObservation
+            {
+                EventType = "CameraActivated",
+                SensorName = "Camera",
+                ApplicationKey = @"C:#Tools#VideoChat#VideoChat.exe",
+                DisplayName = "VideoChat",
+                ProcessName = "VideoChat",
+                FilePath = @"C:\Tools\VideoChat\VideoChat.exe",
+                StartedUtc = sensorStartedUtc
+            }]));
+
+        var count = await coordinator.RunListeningPortScanAsync(CancellationToken.None);
+
+        Assert.Equal(1, count);
+        var networkEvent = Assert.Single(repository.Events);
+        Assert.Equal("CameraActivated", networkEvent.EventType);
+        Assert.Equal("LocalSensor", networkEvent.Protocol);
+        Assert.Equal("SensorAccess", networkEvent.Direction);
+        Assert.Equal(99, networkEvent.ApplicationId);
+        Assert.True(networkEvent.WasUserNotified);
+        Assert.Contains("VideoChat", networkEvent.DetailsJson);
+        Assert.Contains("Camera activation is sensitive", networkEvent.DetailsJson);
+        var incident = Assert.Single(repository.Incidents);
+        Assert.Equal("Camera access: VideoChat", incident.Title);
+        Assert.Equal(RiskLevel.High, incident.RiskLevel);
+        var notification = Assert.Single(repository.Notifications);
+        Assert.Equal("Someone is trying to use your camera.", notification.Body);
+    }
+
+    /// <summary>
+    /// Verifies active microphone access uses the microphone-specific warning.
+    /// </summary>
+    [Fact]
+    public async Task RunListeningPortScanAsync_CreatesEventForActiveMicrophoneAccess()
+    {
+        var repository = new FakeRepository();
+        var coordinator = CreateCoordinator(
+            repository,
+            new FakeScanner([]),
+            sensorScanner: new FakeSensorScanner([new SensorAccessObservation
+            {
+                EventType = "MicrophoneActivated",
+                SensorName = "Microphone",
+                ApplicationKey = "MeetingApp",
+                DisplayName = "MeetingApp",
+                ProcessName = "MeetingApp",
+                StartedUtc = new DateTimeOffset(2026, 7, 5, 12, 5, 0, TimeSpan.Zero)
+            }]));
+
+        var count = await coordinator.RunListeningPortScanAsync(CancellationToken.None);
+
+        Assert.Equal(1, count);
+        var networkEvent = Assert.Single(repository.Events);
+        Assert.Equal("MicrophoneActivated", networkEvent.EventType);
+        Assert.Contains("MeetingApp started using the microphone", networkEvent.Summary);
+        Assert.Equal("Someone is trying to use your microphone.", Assert.Single(repository.Notifications).Body);
+        Assert.Equal("Microphone access: MeetingApp", Assert.Single(repository.Incidents).Title);
+    }
+
+    /// <summary>
+    /// Verifies an empty sensor scan leaves the port scan result unchanged.
+    /// </summary>
+    [Fact]
+    public async Task RunListeningPortScanAsync_WithNoSensorObservations_CreatesNoSensorEvents()
+    {
+        var repository = new FakeRepository();
+        var sensorScanner = new FakeSensorScanner([]);
+        var coordinator = CreateCoordinator(repository, new FakeScanner([]), sensorScanner: sensorScanner);
+
+        var count = await coordinator.RunListeningPortScanAsync(CancellationToken.None);
+
+        Assert.Equal(0, count);
+        Assert.Equal(1, sensorScanner.ScanCount);
+        Assert.Empty(repository.Events);
+        Assert.Empty(repository.Notifications);
+    }
+
+    /// <summary>
+    /// Verifies repeated scans of the same active sensor session are deduplicated.
+    /// </summary>
+    [Fact]
+    public async Task RunListeningPortScanAsync_SkipsDuplicateActiveSensorSession()
+    {
+        var sensorStartedUtc = new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero);
+        var repository = new FakeRepository();
+        repository.Events.Add(new NetworkEvent
+        {
+            EventType = "CameraActivated",
+            ApplicationId = 99,
+            CreatedUtc = sensorStartedUtc.AddMinutes(1)
+        });
+        var coordinator = CreateCoordinator(
+            repository,
+            new FakeScanner([]),
+            sensorScanner: new FakeSensorScanner([new SensorAccessObservation
+            {
+                EventType = "CameraActivated",
+                SensorName = "Camera",
+                ApplicationKey = "CameraApp",
+                DisplayName = "CameraApp",
+                ProcessName = "CameraApp",
+                StartedUtc = sensorStartedUtc
+            }]));
+
+        var count = await coordinator.RunListeningPortScanAsync(CancellationToken.None);
+
+        Assert.Equal(0, count);
+        Assert.Single(repository.Events);
+        Assert.Empty(repository.Incidents);
+        Assert.Empty(repository.Notifications);
+    }
+
+    /// <summary>
     /// Verifies an existing port creates an event when a different application owns it.
     /// </summary>
     [Fact]
@@ -269,7 +392,11 @@ public sealed class ServiceScanCoordinatorTests
         var incident = Assert.Single(repository.Incidents);
         Assert.Contains("Port ownership changed: New owner", incident.Title);
     }
-    private static ServiceScanCoordinator CreateCoordinator(FakeRepository repository, FakeScanner scanner, IReadOnlyList<NetworkDevice>? devices = null)
+    private static ServiceScanCoordinator CreateCoordinator(
+        FakeRepository repository,
+        FakeScanner scanner,
+        IReadOnlyList<NetworkDevice>? devices = null,
+        ISensorAccessScanner? sensorScanner = null)
     {
         return new ServiceScanCoordinator(
             repository,
@@ -279,7 +406,8 @@ public sealed class ServiceScanCoordinatorTests
             new AccessWatchSettings(),
             new NotificationMessageFactory(),
             repository,
-            NullLogger<ServiceScanCoordinator>.Instance);
+            NullLogger<ServiceScanCoordinator>.Instance,
+            sensorScanner);
     }
 
     private sealed class FakeDeviceDiscovery : INetworkDeviceDiscoveryService
@@ -310,6 +438,24 @@ public sealed class ServiceScanCoordinatorTests
         public Task<IReadOnlyList<ListeningPort>> ScanAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult(ports);
+        }
+    }
+
+    private sealed class FakeSensorScanner : ISensorAccessScanner
+    {
+        private readonly IReadOnlyList<SensorAccessObservation> observations;
+
+        public FakeSensorScanner(IReadOnlyList<SensorAccessObservation> observations)
+        {
+            this.observations = observations;
+        }
+
+        public int ScanCount { get; private set; }
+
+        public Task<IReadOnlyList<SensorAccessObservation>> ScanAsync(CancellationToken cancellationToken)
+        {
+            ScanCount++;
+            return Task.FromResult(observations);
         }
     }
 
@@ -425,7 +571,7 @@ public sealed class ServiceScanCoordinatorTests
 
         public Task<IReadOnlyList<NetworkEvent>> ListRecentNetworkEventsAsync(int limit, CancellationToken cancellationToken)
         {
-            return Task.FromResult<IReadOnlyList<NetworkEvent>>([]);
+            return Task.FromResult<IReadOnlyList<NetworkEvent>>(Events.Take(limit).ToArray());
         }
     }
 }

@@ -135,6 +135,32 @@ public sealed record ListeningPort
 }
 
 /// <summary>
+/// Represents active access to a sensitive local sensor such as camera or microphone.
+/// </summary>
+public sealed record SensorAccessObservation
+{
+    /// <summary>Event type created when this access is observed.</summary>
+    public string EventType { get; init; } = string.Empty;
+
+    /// <summary>User-facing sensor name.</summary>
+    public string SensorName { get; init; } = string.Empty;
+
+    /// <summary>Stable application key from the operating system privacy store.</summary>
+    public string ApplicationKey { get; init; } = string.Empty;
+
+    /// <summary>User-friendly application display name.</summary>
+    public string DisplayName { get; init; } = "Unknown application";
+
+    /// <summary>Process executable name when known.</summary>
+    public string ProcessName { get; init; } = "unknown";
+
+    /// <summary>Full executable path when known.</summary>
+    public string? FilePath { get; init; }
+
+    /// <summary>When the current sensor access session began.</summary>
+    public DateTimeOffset StartedUtc { get; init; }
+}
+/// <summary>
 /// Represents an AccessWatch network event.
 /// </summary>
 public sealed record NetworkEvent

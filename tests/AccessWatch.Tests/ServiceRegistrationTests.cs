@@ -151,6 +151,7 @@ public sealed class ServiceRegistrationTests
         Assert.IsType<ListeningPortScanner>(provider.GetRequiredService<IListeningPortScanner>());
         Assert.IsType<ConnectionTrustHelper>(provider.GetRequiredService<ConnectionTrustHelper>());
         Assert.IsType<NetworkDeviceDiscoveryService>(provider.GetRequiredService<INetworkDeviceDiscoveryService>());
+        Assert.IsType<WindowsSensorAccessScanner>(provider.GetRequiredService<ISensorAccessScanner>());
     }
 
     /// <summary>

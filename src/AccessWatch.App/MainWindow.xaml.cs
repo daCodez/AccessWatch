@@ -38,7 +38,8 @@ public partial class MainWindow : Window
             settings,
             notificationFactory,
             notificationService,
-            NullLogger<ServiceScanCoordinator>.Instance);
+            NullLogger<ServiceScanCoordinator>.Instance,
+            new WindowsSensorAccessScanner());
         var simulator = new AccessWatchEventSimulator(repository, notificationFactory, notificationService);
         viewModel = new DashboardShellViewModel(
             repository,

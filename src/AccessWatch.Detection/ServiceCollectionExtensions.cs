@@ -20,7 +20,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IListeningPortScanner, ListeningPortScanner>();
         services.AddSingleton<ConnectionTrustHelper>();
         services.AddSingleton<INetworkDeviceDiscoveryService, NetworkDeviceDiscoveryService>();
+        services.AddSingleton<ISensorAccessScanner, WindowsSensorAccessScanner>();
         return services;
     }
 }
-

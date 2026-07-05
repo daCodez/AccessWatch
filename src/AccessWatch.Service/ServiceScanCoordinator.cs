@@ -17,6 +17,7 @@ public sealed class ServiceScanCoordinator
     private readonly NotificationMessageFactory notificationFactory;
     private readonly ITrayNotificationService trayNotificationService;
     private readonly ILogger<ServiceScanCoordinator> logger;
+    private readonly ISensorAccessScanner? sensorAccessScanner;
 
     /// <summary>
     /// Initializes a new service scan coordinator.
@@ -29,6 +30,7 @@ public sealed class ServiceScanCoordinator
     /// <param name="notificationFactory">Notification message factory.</param>
     /// <param name="trayNotificationService">User-facing notification delivery service.</param>
     /// <param name="logger">Logger for scan diagnostics.</param>
+    /// <param name="sensorAccessScanner">Optional camera and microphone access scanner.</param>
     public ServiceScanCoordinator(
         IAccessWatchRepository repository,
         IListeningPortScanner portScanner,
@@ -37,7 +39,8 @@ public sealed class ServiceScanCoordinator
         AccessWatchSettings settings,
         NotificationMessageFactory notificationFactory,
         ITrayNotificationService trayNotificationService,
-        ILogger<ServiceScanCoordinator> logger)
+        ILogger<ServiceScanCoordinator> logger,
+        ISensorAccessScanner? sensorAccessScanner = null)
     {
         this.repository = repository;
         this.portScanner = portScanner;
@@ -47,6 +50,7 @@ public sealed class ServiceScanCoordinator
         this.notificationFactory = notificationFactory;
         this.trayNotificationService = trayNotificationService;
         this.logger = logger;
+        this.sensorAccessScanner = sensorAccessScanner;
     }
 
     /// <summary>
@@ -141,7 +145,123 @@ public sealed class ServiceScanCoordinator
                 notification.RiskLevel);
         }
 
+        createdEvents += await RunSensorAccessScanAsync(cancellationToken);
+
         return createdEvents;
+    }
+
+    private async Task<int> RunSensorAccessScanAsync(CancellationToken cancellationToken)
+    {
+        if (sensorAccessScanner is null)
+        {
+            return 0;
+        }
+
+        var observations = await sensorAccessScanner.ScanAsync(cancellationToken);
+        if (observations.Count == 0)
+        {
+            return 0;
+        }
+
+        var recentEvents = await repository.ListRecentNetworkEventsAsync(200, cancellationToken);
+        var createdEvents = 0;
+        foreach (var observation in observations)
+        {
+            var application = CreateSensorApplication(observation);
+            var applicationId = await repository.UpsertApplicationAsync(application, cancellationToken);
+            if (HasExistingSensorEvent(recentEvents, observation, applicationId))
+            {
+                continue;
+            }
+
+            var assessment = CreateSensorAssessment(observation);
+            var notification = notificationFactory.Create(assessment);
+            var networkEvent = CreateSensorEvent(observation, applicationId, assessment, notification.Action != NotificationAction.SilentLog);
+            await repository.AddNetworkEventAsync(networkEvent, cancellationToken);
+            var incident = IncidentFactory.CreateReviewIncident(networkEvent, DateTimeOffset.UtcNow);
+            if (incident is not null)
+            {
+                await repository.UpsertIncidentAsync(incident, cancellationToken);
+            }
+
+            if (notification.Action != NotificationAction.SilentLog)
+            {
+                await trayNotificationService.ShowAsync(notification, cancellationToken);
+            }
+
+            createdEvents++;
+            logger.LogInformation(
+                "Sensitive sensor access detected: {Application} {SensorName} Action={Action} Risk={RiskLevel}",
+                observation.DisplayName,
+                observation.SensorName,
+                notification.Action,
+                notification.RiskLevel);
+        }
+
+        return createdEvents;
+    }
+
+    private static ApplicationIdentity CreateSensorApplication(SensorAccessObservation observation)
+    {
+        return new ApplicationIdentity
+        {
+            DisplayName = observation.DisplayName,
+            ProcessName = observation.ProcessName,
+            FilePath = observation.FilePath,
+            FirstSeenUtc = observation.StartedUtc,
+            LastSeenUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static bool HasExistingSensorEvent(IReadOnlyList<NetworkEvent> recentEvents, SensorAccessObservation observation, long applicationId)
+    {
+        return recentEvents.Any(networkEvent =>
+            networkEvent.EventType == observation.EventType
+            && networkEvent.ApplicationId == applicationId
+            && networkEvent.CreatedUtc >= observation.StartedUtc);
+    }
+
+    private static PortRiskAssessment CreateSensorAssessment(SensorAccessObservation observation)
+    {
+        var sensorName = observation.SensorName.ToLowerInvariant();
+        return new PortRiskAssessment(
+            RiskLevel.High,
+            RiskStatus.HighRisk,
+            NotificationAction.AskBeforeAllow,
+            $"{observation.DisplayName} started using the {sensorName}.",
+            $"{observation.SensorName} activation is sensitive.",
+            "Confirm this was expected. If not, close the app and watch or block it.");
+    }
+
+    private static NetworkEvent CreateSensorEvent(
+        SensorAccessObservation observation,
+        long applicationId,
+        PortRiskAssessment assessment,
+        bool wasUserNotified)
+    {
+        var details = new
+        {
+            whatHappened = $"{observation.DisplayName} started using the {observation.SensorName.ToLowerInvariant()}.",
+            app = observation.DisplayName,
+            processName = observation.ProcessName,
+            sensor = observation.SensorName,
+            startedUtc = observation.StartedUtc,
+            whyItMatters = assessment.WhyItMatters,
+            suggestedAction = assessment.SuggestedAction
+        };
+
+        return new NetworkEvent
+        {
+            EventType = observation.EventType,
+            Protocol = "LocalSensor",
+            Direction = "SensorAccess",
+            ApplicationId = applicationId,
+            RiskLevel = assessment.RiskLevel,
+            Summary = assessment.Summary,
+            DetailsJson = JsonSerializer.Serialize(details),
+            WasUserNotified = wasUserNotified,
+            CreatedUtc = DateTimeOffset.UtcNow
+        };
     }
 
     private static RiskStatus RiskStatusForDeviceTrust(TrustStatus trustStatus)
