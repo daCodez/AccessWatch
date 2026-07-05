@@ -137,7 +137,34 @@ public sealed record DashboardIncidentItemViewModel(
 }
 
 /// <summary>
+/// Represents a stored rule shown in the dashboard.
+/// </summary>
+public sealed record DashboardRuleItemViewModel(
+    long RuleId,
+    string Name,
+    string Enabled,
+    bool IsEnabled,
+    string Action,
+    string RiskLevel,
+    string Scope,
+    string Conditions,
+    string Preview,
+    string Duration,
+    string QuietHours,
+    string NetworkProfile,
+    string ChangeDetection,
+    string AiSummary,
+    string Description,
+    string ConditionJson,
+    string Created,
+    string Updated)
+{
+    /// <summary>
+    /// Gets the plain-English detail text for this rule row.
+    /// </summary>
+    public string DetailText => $"Rule: {Name} | State: {Enabled} | Action: {Action} | Risk: {RiskLevel} | Scope: {Scope} | Conditions: {Conditions} | Duration: {Duration} | Quiet hours: {QuietHours} | Network profile: {NetworkProfile} | Change detection: {ChangeDetection} | Summary: {AiSummary} | Description: {Description}";
+}
+/// <summary>
 /// Represents a dashboard settings choice.
 /// </summary>
 public sealed record DashboardSettingsOptionViewModel(string Value, string Name, string Summary);
-

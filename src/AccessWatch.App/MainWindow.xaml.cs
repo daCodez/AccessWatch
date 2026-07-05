@@ -188,6 +188,20 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnPreviewRuleClick(object sender, RoutedEventArgs e)
+    {
+        viewModel.PreviewSelectedRule();
+    }
+
+    private async void OnEnableRuleClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.EnableSelectedRuleAsync(CancellationToken.None);
+    }
+
+    private async void OnDisableRuleClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.DisableSelectedRuleAsync(CancellationToken.None);
+    }
     private void OnApplySettingsClick(object sender, RoutedEventArgs e)
     {
         viewModel.ApplySettings();

@@ -26,6 +26,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private string selectedProtectionMode;
     private string selectedAiMode;
     private string selectedSupportBridgeEndpoint;
+    private string selectedQuietHours = "Off";
+    private string selectedNetworkProfile = "Home";
+    private string currentQuietHours = "Off";
+    private string currentNetworkProfile = "Home";
     private string settingsStatus = "Settings match the running configuration.";
     private string statusMessage = "Connect the service or run a scan to load AccessWatch activity.";
     private string activeOperation = string.Empty;
@@ -35,6 +39,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private string selectedPortInvestigation = string.Empty;
     private string selectedDeviceTrace = DeviceTracePrompt(null);
     private DashboardIncidentItemViewModel? selectedIncident;
+    private DashboardRuleItemViewModel? selectedRule;
+    private string selectedRulePreview = "Select a rule to preview what it would affect.";
     private string selectedIncidentAiReview = string.Empty;
     private string selectedIncidentRuleSuggestion = string.Empty;
     private string selectedIncidentNotes = string.Empty;
@@ -107,6 +113,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         new("Applications", "Resolved app identities and trust decisions."),
         new("Ports", "Current and historical listening ports."),
         new("Incidents", "Grouped low-noise security events."),
+        new("Rules", "Preview, enable, and tune AccessWatch actions."),
         new("Settings", "Protection mode and AI review settings.")
     ];
 
@@ -180,6 +187,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public bool IsIncidentsSelected => SelectedPageTitle == "Incidents";
 
     /// <summary>
+    /// Gets whether the rules page is selected.
+    /// </summary>
+    public bool IsRulesSelected => SelectedPageTitle == "Rules";
+
+    /// <summary>
     /// Gets whether the settings page is selected.
     /// </summary>
     public bool IsSettingsSelected => SelectedPageTitle == "Settings";
@@ -187,7 +199,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <summary>
     /// Gets whether the selected page is not yet implemented.
     /// </summary>
-    public bool IsPlaceholderSelected => !IsOverviewSelected && !IsDevicesSelected && !IsApplicationsSelected && !IsPortsSelected && !IsIncidentsSelected && !IsSettingsSelected;
+    public bool IsPlaceholderSelected => !IsOverviewSelected && !IsDevicesSelected && !IsApplicationsSelected && !IsPortsSelected && !IsIncidentsSelected && !IsRulesSelected && !IsSettingsSelected;
 
     /// <summary>
     /// Gets WPF visibility text for the overview panel.
@@ -213,6 +225,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets WPF visibility text for the incidents panel.
     /// </summary>
     public string IncidentsVisibility => ToVisibility(IsIncidentsSelected);
+
+    /// <summary>
+    /// Gets WPF visibility text for the rules panel.
+    /// </summary>
+    public string RulesVisibility => ToVisibility(IsRulesSelected);
 
     /// <summary>
     /// Gets WPF visibility text for the settings panel.
@@ -561,6 +578,50 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public ObservableCollection<DashboardIncidentItemViewModel> Incidents { get; } = [];
 
     /// <summary>
+    /// Gets stored AccessWatch rules loaded from storage.
+    /// </summary>
+    public ObservableCollection<DashboardRuleItemViewModel> Rules { get; } = [];
+
+    /// <summary>
+    /// Gets or sets the selected rule shown in the detail panel.
+    /// </summary>
+    public DashboardRuleItemViewModel? SelectedRule
+    {
+        get => selectedRule;
+        set
+        {
+            if (Equals(selectedRule, value))
+            {
+                return;
+            }
+
+            selectedRule = value;
+            selectedRulePreview = value?.Preview ?? "Select a rule to preview what it would affect.";
+            OnPropertyChanged(nameof(SelectedRule));
+            OnPropertyChanged(nameof(SelectedRuleDetail));
+            OnPropertyChanged(nameof(SelectedRulePreview));
+            OnPropertyChanged(nameof(CanApplyRuleAction));
+        }
+    }
+
+    /// <summary>
+    /// Gets plain-English details for the selected rule.
+    /// </summary>
+    public string SelectedRuleDetail => selectedRule is null
+        ? "Select a rule to see its conditions, action, duration, and safety notes."
+        : selectedRule.DetailText;
+
+    /// <summary>
+    /// Gets the selected rule preview text.
+    /// </summary>
+    public string SelectedRulePreview => selectedRulePreview;
+
+    /// <summary>
+    /// Gets whether rule action buttons can run.
+    /// </summary>
+    public bool CanApplyRuleAction => selectedRule is not null && repository is not null;
+
+    /// <summary>
     /// Gets incident status filter choices.
     /// </summary>
     public IReadOnlyList<string> IncidentStatusFilterOptions { get; } = ["All", "Open", "Watching", "Resolved"];
@@ -627,6 +688,63 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         new("OpenAiApi", "OpenAI API", "Reserve connected AI assistance for a future release.")
     ];
 
+    /// <summary>
+    /// Gets quiet hour choices shown on the Settings page.
+    /// </summary>
+    public IReadOnlyList<DashboardSettingsOptionViewModel> QuietHoursOptions { get; } =
+    [
+        new("Off", "Off", "Show important alerts as they happen."),
+        new("22-7", "10 PM - 7 AM", "Keep non-critical rule notifications quiet overnight."),
+        new("23-6", "11 PM - 6 AM", "Use a shorter overnight quiet window.")
+    ];
+
+    /// <summary>
+    /// Gets network profile choices shown on the Settings page.
+    /// </summary>
+    public IReadOnlyList<DashboardSettingsOptionViewModel> NetworkProfileOptions { get; } =
+    [
+        new("Home", "Home", "Default profile for your trusted home network."),
+        new("Work", "Work", "Use stricter review for shared work networks."),
+        new("Public", "Public Wi-Fi", "Treat new devices and reachable ports as more suspicious.")
+    ];
+
+    /// <summary>
+    /// Gets or sets the selected quiet-hours rule notification window.
+    /// </summary>
+    public string SelectedQuietHours
+    {
+        get => selectedQuietHours;
+        set
+        {
+            selectedQuietHours = string.IsNullOrWhiteSpace(value) ? currentQuietHours : value;
+            SettingsStatus = "Settings changed. Apply to update the running configuration.";
+            OnPropertyChanged(nameof(SelectedQuietHours));
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the selected network profile for rule previews.
+    /// </summary>
+    public string SelectedNetworkProfile
+    {
+        get => selectedNetworkProfile;
+        set
+        {
+            selectedNetworkProfile = string.IsNullOrWhiteSpace(value) ? currentNetworkProfile : value;
+            SettingsStatus = "Settings changed. Apply to update the running configuration.";
+            OnPropertyChanged(nameof(SelectedNetworkProfile));
+        }
+    }
+
+    /// <summary>
+    /// Gets the quiet-hours setting currently used by rule previews.
+    /// </summary>
+    public string CurrentQuietHours => currentQuietHours;
+
+    /// <summary>
+    /// Gets the network profile currently used by rule previews.
+    /// </summary>
+    public string CurrentNetworkProfile => currentNetworkProfile;
     /// <summary>
     /// Gets or sets the selected protection mode value.
     /// </summary>
@@ -787,12 +905,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             var ports = await repository.ListRecentPortsAsync(500, cancellationToken);
             var events = await repository.ListRecentNetworkEventsAsync(50, cancellationToken);
             var incidents = await repository.ListRecentIncidentsAsync(200, cancellationToken);
+            var rules = await repository.ListRulesAsync(true, cancellationToken);
 
             ReplaceMetrics(devices.Count, applications.Count, ports.Count, events.Count);
             ReplaceDevices(devices);
             ReplaceApplications(applications);
             ReplacePorts(ports, events);
             ReplaceIncidents(incidents, devices, applications);
+            ReplaceRules(rules);
             ReplaceRecentActivity(events, applications, ports, devices);
             StatusMessage = events.Count == 0 && ports.Count == 0 && devices.Count == 0 && incidents.Count == 0
                 ? "No stored activity yet. Start the AccessWatch service to record listening ports and devices."
@@ -822,13 +942,17 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             ? new AccessWatchSettings().SupportBridgeEndpoint
             : SelectedSupportBridgeEndpoint.Trim();
         selectedSupportBridgeEndpoint = settings.SupportBridgeEndpoint;
-        SettingsStatus = $"Settings applied. Running {CurrentProtectionMode} protection with {CurrentAiMode} AI review.";
+        currentQuietHours = SelectedQuietHours;
+        currentNetworkProfile = SelectedNetworkProfile;
+        SettingsStatus = $"Settings applied. Running {CurrentProtectionMode} protection with {CurrentAiMode} AI review, {DescribeQuietHours(CurrentQuietHours)}, and {CurrentNetworkProfile} network rules.";
+        RefreshRulePreviews();
         OnPropertyChanged(nameof(CurrentProtectionMode));
         OnPropertyChanged(nameof(CurrentAiMode));
+        OnPropertyChanged(nameof(CurrentQuietHours));
+        OnPropertyChanged(nameof(CurrentNetworkProfile));
         OnPropertyChanged(nameof(SelectedSupportBridgeEndpoint));
         OnPropertyChanged(nameof(CanReviewIncidentWithAi));
     }
-
     /// <summary>
     /// Restores Settings page selections to the running configuration.
     /// </summary>
@@ -837,12 +961,15 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         selectedProtectionMode = settings.ProtectionMode.ToString();
         selectedAiMode = settings.AiMode.ToString();
         selectedSupportBridgeEndpoint = settings.SupportBridgeEndpoint;
+        selectedQuietHours = currentQuietHours;
+        selectedNetworkProfile = currentNetworkProfile;
         SettingsStatus = "Settings match the running configuration.";
         OnPropertyChanged(nameof(SelectedProtectionMode));
         OnPropertyChanged(nameof(SelectedAiMode));
         OnPropertyChanged(nameof(SelectedSupportBridgeEndpoint));
+        OnPropertyChanged(nameof(SelectedQuietHours));
+        OnPropertyChanged(nameof(SelectedNetworkProfile));
     }
-
     /// <summary>
     /// Saves the alias entered for the selected device.
     /// </summary>
@@ -1024,6 +1151,70 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         StatusMessage = $"Created disabled rule suggestion #{ruleId} from {selectedIncident.Title}.";
     }
 
+    /// <summary>
+    /// Refreshes the selected rule preview.
+    /// </summary>
+    public void PreviewSelectedRule()
+    {
+        if (selectedRule is null)
+        {
+            StatusMessage = "Select a rule before previewing it.";
+            return;
+        }
+
+        selectedRulePreview = BuildRulePreview(selectedRule);
+        StatusMessage = $"Previewed rule {selectedRule.Name}.";
+        OnPropertyChanged(nameof(SelectedRulePreview));
+    }
+
+    /// <summary>
+    /// Enables the selected rule after review.
+    /// </summary>
+    public Task EnableSelectedRuleAsync(CancellationToken cancellationToken)
+    {
+        return SetSelectedRuleEnabledAsync(true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Disables the selected rule.
+    /// </summary>
+    public Task DisableSelectedRuleAsync(CancellationToken cancellationToken)
+    {
+        return SetSelectedRuleEnabledAsync(false, cancellationToken);
+    }
+
+    private async Task SetSelectedRuleEnabledAsync(bool enabled, CancellationToken cancellationToken)
+    {
+        if (selectedRule is null)
+        {
+            StatusMessage = enabled ? "Select a rule before enabling it." : "Select a rule before disabling it.";
+            return;
+        }
+
+        if (repository is null)
+        {
+            StatusMessage = "Rule actions are not connected for this dashboard session.";
+            return;
+        }
+
+        var updatedRule = ToAccessWatchRule(selectedRule, enabled);
+        var ruleId = await repository.UpsertRuleAsync(updatedRule, cancellationToken);
+        var displayRule = CreateRuleItem(updatedRule with { RuleId = ruleId > 0 ? ruleId : updatedRule.RuleId });
+        var index = Rules.IndexOf(selectedRule);
+        if (index >= 0)
+        {
+            Rules[index] = displayRule;
+        }
+        else
+        {
+            Rules.Insert(0, displayRule);
+        }
+
+        SelectedRule = displayRule;
+        StatusMessage = enabled
+            ? $"Enabled rule {displayRule.Name}. AccessWatch will apply its {displayRule.Action} action when matching activity appears."
+            : $"Disabled rule {displayRule.Name}. Matching activity will stay visible, but this rule will not act on it.";
+    }
     /// <summary>
     /// Creates a redacted in-app AI review brief for the selected incident.
     /// </summary>
@@ -1508,6 +1699,223 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
     }
 
+    private void ReplaceRules(IReadOnlyList<AccessWatchRule> rules)
+    {
+        Rules.Clear();
+        foreach (var rule in rules.Take(200))
+        {
+            Rules.Add(CreateRuleItem(rule));
+        }
+
+        SelectedRule = Rules.FirstOrDefault();
+    }
+
+    private void RefreshRulePreviews()
+    {
+        if (Rules.Count == 0)
+        {
+            return;
+        }
+
+        var selectedRuleId = selectedRule?.RuleId;
+        var refreshed = Rules.Select(rule => CreateRuleItem(ToAccessWatchRule(rule, rule.IsEnabled))).ToList();
+        Rules.Clear();
+        foreach (var rule in refreshed)
+        {
+            Rules.Add(rule);
+        }
+
+        SelectedRule = Rules.FirstOrDefault(rule => rule.RuleId == selectedRuleId) ?? Rules.FirstOrDefault();
+    }
+
+    private DashboardRuleItemViewModel CreateRuleItem(AccessWatchRule rule)
+    {
+        var app = GetRuleConditionValue(rule.ConditionJson, "app") ?? GetRuleConditionValue(rule.ConditionJson, "mainApplicationId");
+        var device = GetRuleConditionValue(rule.ConditionJson, "device") ?? GetRuleConditionValue(rule.ConditionJson, "mainDeviceId");
+        var port = GetRuleConditionValue(rule.ConditionJson, "port") ?? GetRuleConditionValue(rule.ConditionJson, "destinationPort");
+        var network = GetRuleConditionValue(rule.ConditionJson, "network");
+        var signature = GetRuleConditionValue(rule.ConditionJson, "signature");
+        var path = GetRuleConditionValue(rule.ConditionJson, "path");
+        var title = GetRuleConditionValue(rule.ConditionJson, "title");
+        var target = GetRuleConditionValue(rule.ConditionJson, "target");
+        var source = GetRuleConditionValue(rule.ConditionJson, "source");
+        var groupKey = GetRuleConditionValue(rule.ConditionJson, "groupKey");
+        var conditionParts = new List<string>();
+        AddRuleCondition(conditionParts, "App", app);
+        AddRuleCondition(conditionParts, "Device", device);
+        AddRuleCondition(conditionParts, "Port", port);
+        AddRuleCondition(conditionParts, "Network", network);
+        AddRuleCondition(conditionParts, "Signature", signature);
+        AddRuleCondition(conditionParts, "Path", path);
+        AddRuleCondition(conditionParts, "Incident", title);
+        AddRuleCondition(conditionParts, "Target", target);
+        AddRuleCondition(conditionParts, "Group", groupKey);
+
+        var conditions = conditionParts.Count == 0
+            ? "No specific conditions stored yet. Review before enabling."
+            : string.Join("; ", conditionParts);
+        var scope = FirstUseful(
+            LabelRuleScope("Application", app),
+            LabelRuleScope("Device", device),
+            LabelRuleScope("Port", port),
+            LabelRuleScope("Target", target),
+            "Matching future AccessWatch activity");
+        var duration = DescribeRuleDuration(rule.ConditionJson);
+        var quietHours = DescribeQuietHours(CurrentQuietHours);
+        var profile = DescribeNetworkProfile(CurrentNetworkProfile);
+        var changeDetection = DescribeRuleChangeDetection(app, device, signature, path);
+        var summary = BuildRuleInvestigationSummary(rule, scope, conditions, duration, profile, source);
+        var preview = BuildRulePreview(rule, scope, conditions, duration, quietHours, profile);
+
+        return new DashboardRuleItemViewModel(
+            rule.RuleId,
+            FirstUseful(rule.Name, "Unnamed rule"),
+            rule.Enabled ? "Enabled" : "Disabled",
+            rule.Enabled,
+            rule.Action.ToString(),
+            rule.RiskLevel.ToString(),
+            scope,
+            conditions,
+            preview,
+            duration,
+            quietHours,
+            profile,
+            changeDetection,
+            summary,
+            FirstUseful(rule.Description, "No description recorded."),
+            FirstUseful(rule.ConditionJson, "{}"),
+            FormatTimestamp(rule.CreatedUtc),
+            FormatTimestamp(rule.UpdatedUtc));
+    }
+
+    private static AccessWatchRule ToAccessWatchRule(DashboardRuleItemViewModel rule, bool enabled)
+    {
+        return new AccessWatchRule
+        {
+            RuleId = rule.RuleId,
+            Name = rule.Name,
+            Description = rule.Description,
+            ConditionJson = string.IsNullOrWhiteSpace(rule.ConditionJson) ? "{}" : rule.ConditionJson,
+            RiskLevel = Enum.TryParse<RiskLevel>(rule.RiskLevel, out var riskLevel) ? riskLevel : RiskLevel.Medium,
+            Action = Enum.TryParse<NotificationAction>(rule.Action, out var action) ? action : NotificationAction.SoftNotify,
+            Enabled = enabled,
+            UpdatedUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static void AddRuleCondition(ICollection<string> parts, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            parts.Add($"{label}: {value}");
+        }
+    }
+
+    private static string? LabelRuleScope(string label, string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : $"{label} {value}";
+    }
+
+    private static string BuildRulePreview(DashboardRuleItemViewModel rule)
+    {
+        return $"This rule would affect {rule.Scope}. Conditions: {rule.Conditions}. Action: {rule.Action}. Risk label: {rule.RiskLevel}. Duration: {rule.Duration}. Notifications: {rule.QuietHours}. Network profile: {rule.NetworkProfile}.";
+    }
+
+    private static string BuildRulePreview(AccessWatchRule rule, string scope, string conditions, string duration, string quietHours, string profile)
+    {
+        var state = rule.Enabled ? "enabled" : "disabled until you turn it on";
+        return $"This rule is {state}. It would affect {scope}. Conditions: {conditions}. Action: {rule.Action}. Risk label: {rule.RiskLevel}. Duration: {duration}. Notifications: {quietHours}. Network profile: {profile}.";
+    }
+
+    private static string BuildRuleInvestigationSummary(AccessWatchRule rule, string scope, string conditions, string duration, string profile, string? source)
+    {
+        var origin = string.IsNullOrWhiteSpace(source) ? "manual or stored rule" : source;
+        return $"In-app investigation summary: this {origin} rule watches {scope}, checks {conditions}, uses {rule.Action}, and is scoped to {profile}. {duration}";
+    }
+
+    private static string DescribeRuleDuration(string conditionJson)
+    {
+        var expires = GetRuleConditionValue(conditionJson, "expiresUtc");
+        if (!string.IsNullOrWhiteSpace(expires))
+        {
+            return $"Temporary until {expires}.";
+        }
+
+        var hours = GetRuleConditionValue(conditionJson, "durationHours");
+        return string.IsNullOrWhiteSpace(hours)
+            ? "Permanent until disabled."
+            : $"Temporary: watch for {hours} hours.";
+    }
+
+    private static string DescribeQuietHours(string value)
+    {
+        return value switch
+        {
+            "22-7" => "quiet hours from 10 PM to 7 AM",
+            "23-6" => "quiet hours from 11 PM to 6 AM",
+            _ => "quiet hours off"
+        };
+    }
+
+    private static string DescribeNetworkProfile(string value)
+    {
+        return value switch
+        {
+            "Work" => "Work network profile",
+            "Public" => "Public Wi-Fi profile",
+            _ => "Home network profile"
+        };
+    }
+
+    private static string DescribeRuleChangeDetection(string? app, string? device, string? signature, string? path)
+    {
+        if (!string.IsNullOrWhiteSpace(signature) || !string.IsNullOrWhiteSpace(path))
+        {
+            return "Review if the app signature or executable path changes.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(app) || !string.IsNullOrWhiteSpace(device))
+        {
+            return "Review if this trusted app or device changes identity.";
+        }
+
+        return "Review matches before trusting because no stable app or device identity is stored.";
+    }
+
+    private static string? GetRuleConditionValue(string conditionJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(conditionJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(conditionJson);
+            return ReadRuleConditionValue(document.RootElement, propertyName);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadRuleConditionValue(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var property) || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.String => property.GetString(),
+            JsonValueKind.Number => property.TryGetInt64(out var integer) ? integer.ToString(CultureInfo.InvariantCulture) : property.GetDouble().ToString(CultureInfo.InvariantCulture),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => property.GetRawText()
+        };
+    }
     private void ReplaceRecentActivity(
         IReadOnlyList<NetworkEvent> events,
         IReadOnlyList<AppIdentity> applications,

@@ -335,9 +335,56 @@
                         </Grid>
                     </Grid>
                 </Border>
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding RulesVisibility}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="170" />
+                        </Grid.RowDefinitions>
+                        <DataGrid Grid.Row="0" ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Rule" Binding="{Binding Name}" Width="1.4*" />
+                                <DataGridTextColumn Header="State" Binding="{Binding Enabled}" Width="90" />
+                                <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="120" />
+                                <DataGridTextColumn Header="Risk" Binding="{Binding RiskLevel}" Width="90" />
+                                <DataGridTextColumn Header="Scope" Binding="{Binding Scope}" Width="1.3*" />
+                                <DataGridTextColumn Header="Conditions" Binding="{Binding Conditions}" Width="2*" />
+                                <DataGridTextColumn Header="Duration" Binding="{Binding Duration}" Width="150" />
+                                <DataGridTextColumn Header="Network" Binding="{Binding NetworkProfile}" Width="130" />
+                                <DataGridTextColumn Header="Notifications" Binding="{Binding QuietHours}" Width="150" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding SelectedRuleDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button Content="Preview" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Margin="0,0,8,0" Click="OnPreviewRuleClick" />
+                                    <Button Content="Enable" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Margin="0,0,8,0" Click="OnEnableRuleClick" />
+                                    <Button Content="Disable" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Click="OnDisableRuleClick" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Grid Grid.Row="2" Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding SelectedRulePreview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
+                            <TextBox Grid.Column="2" Text="{Binding SelectedRule.AiSummary, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
+                        </Grid>
+                    </Grid>
+                </Border>
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding SettingsVisibility}">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -367,11 +414,29 @@
                                 <ColumnDefinition Width="200" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
+                            <TextBlock Text="Quiet hours" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" VerticalAlignment="Center" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding QuietHoursOptions}" SelectedValue="{Binding SelectedQuietHours, Mode=TwoWay}" SelectedValuePath="Value" DisplayMemberPath="Name" Height="32" MinWidth="260" HorizontalAlignment="Left" />
+                        </Grid>
+
+                        <Grid Grid.Row="3" Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Network profile" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" VerticalAlignment="Center" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding NetworkProfileOptions}" SelectedValue="{Binding SelectedNetworkProfile, Mode=TwoWay}" SelectedValuePath="Value" DisplayMemberPath="Name" Height="32" MinWidth="260" HorizontalAlignment="Left" />
+                        </Grid>
+
+                        <Grid Grid.Row="4" Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
                             <TextBlock Text="Support bridge" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" VerticalAlignment="Center" />
                             <TextBox Grid.Column="1" Text="{Binding SelectedSupportBridgeEndpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="32" MinWidth="420" HorizontalAlignment="Left" />
                         </Grid>
 
-                        <StackPanel Grid.Row="3">
+                        <StackPanel Grid.Row="5">
                             <Grid Margin="0,0,0,18">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="200" />

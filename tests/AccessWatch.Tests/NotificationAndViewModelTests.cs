@@ -75,7 +75,7 @@ public sealed class NotificationAndViewModelTests
     {
         var model = new DashboardShellViewModel();
 
-        Assert.Equal(["Overview", "Devices", "Applications", "Ports", "Incidents", "Settings"], model.Pages.Select(page => page.Name));
+        Assert.Equal(["Overview", "Devices", "Applications", "Ports", "Incidents", "Rules", "Settings"], model.Pages.Select(page => page.Name));
         Assert.All(model.Pages, page => Assert.False(string.IsNullOrWhiteSpace(page.Summary)));
     }
 
@@ -116,11 +116,23 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click=\"OnInvestigatePortClick\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedPortInvestigation, Mode=OneWay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Incidents}\"", xaml);
+        Assert.Contains("Visibility=\"{Binding RulesVisibility}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding Rules}\"", xaml);
+        Assert.Contains("SelectedItem=\"{Binding SelectedRule, Mode=TwoWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedRuleDetail}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedRulePreview, Mode=OneWay}\"", xaml);
+        Assert.Contains("Click=\"OnPreviewRuleClick\"", xaml);
+        Assert.Contains("Click=\"OnEnableRuleClick\"", xaml);
+        Assert.Contains("Click=\"OnDisableRuleClick\"", xaml);
         Assert.Contains("Visibility=\"{Binding SettingsVisibility}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding ProtectionModeOptions}\"", xaml);
         Assert.Contains("SelectedValue=\"{Binding SelectedProtectionMode, Mode=TwoWay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding AiModeOptions}\"", xaml);
         Assert.Contains("SelectedValue=\"{Binding SelectedAiMode, Mode=TwoWay}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding QuietHoursOptions}\"", xaml);
+        Assert.Contains("SelectedValue=\"{Binding SelectedQuietHours, Mode=TwoWay}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding NetworkProfileOptions}\"", xaml);
+        Assert.Contains("SelectedValue=\"{Binding SelectedNetworkProfile, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedSupportBridgeEndpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
         Assert.Contains("Click=\"OnApplySettingsClick\"", xaml);
         Assert.Contains("Click=\"OnResetSettingsClick\"", xaml);
@@ -271,6 +283,26 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Collapsed", model.ApplicationsVisibility);
         Assert.Equal("Collapsed", model.PortsVisibility);
         Assert.Equal("Visible", model.IncidentsVisibility);
+        Assert.Equal("Collapsed", model.PlaceholderVisibility);
+
+        model.SelectedPage = model.Pages.Single(page => page.Name == "Rules");
+
+        Assert.Equal("Rules", model.SelectedPageTitle);
+        Assert.False(model.IsOverviewSelected);
+        Assert.False(model.IsDevicesSelected);
+        Assert.False(model.IsApplicationsSelected);
+        Assert.False(model.IsPortsSelected);
+        Assert.False(model.IsIncidentsSelected);
+        Assert.True(model.IsRulesSelected);
+        Assert.False(model.IsSettingsSelected);
+        Assert.False(model.IsPlaceholderSelected);
+        Assert.Equal("Collapsed", model.OverviewVisibility);
+        Assert.Equal("Collapsed", model.DevicesVisibility);
+        Assert.Equal("Collapsed", model.ApplicationsVisibility);
+        Assert.Equal("Collapsed", model.PortsVisibility);
+        Assert.Equal("Collapsed", model.IncidentsVisibility);
+        Assert.Equal("Visible", model.RulesVisibility);
+        Assert.Equal("Collapsed", model.SettingsVisibility);
         Assert.Equal("Collapsed", model.PlaceholderVisibility);
 
         model.SelectedPage = model.Pages.Single(page => page.Name == "Settings");
@@ -1807,6 +1839,237 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Saved notes", detached.StatusMessage);
     }
     /// <summary>
+    /// Verifies stored rules can be previewed, enabled, disabled, and explained.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_Rules_LoadPreviewAndToggleActions()
+    {
+        var repository = new FakeRepository
+        {
+            Rules =
+            [
+                new AccessWatchRule
+                {
+                    RuleId = 7,
+                    Name = "Watch remote admin",
+                    Description = "Watch remote admin on office laptop.",
+                    ConditionJson = JsonSerializer.Serialize(new
+                    {
+                        source = "IncidentSuggestion",
+                        app = "Visual Studio",
+                        device = "office-laptop",
+                        port = 9443.5,
+                        network = "Work",
+                        signature = "TrustedSigned",
+                        path = @"C:\\Tools\\remote.exe",
+                        durationHours = 24,
+                        groupKey = "app/device"
+                    }),
+                    RiskLevel = RiskLevel.High,
+                    Action = NotificationAction.AskBeforeAllow,
+                    Enabled = false,
+                    CreatedUtc = new DateTimeOffset(2026, 6, 29, 12, 0, 0, TimeSpan.Zero),
+                    UpdatedUtc = new DateTimeOffset(2026, 6, 29, 12, 5, 0, TimeSpan.Zero)
+                },
+                new AccessWatchRule
+                {
+                    RuleId = 8,
+                    Name = "Device watch",
+                    Description = "Watch the tablet briefly.",
+                    ConditionJson = JsonSerializer.Serialize(new
+                    {
+                        mainDeviceId = 42,
+                        expiresUtc = "2026-06-30T12:00:00Z",
+                        recommendedAction = "Watch"
+                    }),
+                    RiskLevel = RiskLevel.Medium,
+                    Action = NotificationAction.SoftNotify,
+                    Enabled = true
+                },
+                new AccessWatchRule
+                {
+                    RuleId = 9,
+                    Name = string.Empty,
+                    Description = string.Empty,
+                    ConditionJson = "{bad json",
+                    RiskLevel = RiskLevel.Low,
+                    Action = NotificationAction.SilentLog,
+                    Enabled = true
+                },
+                new AccessWatchRule
+                {
+                    RuleId = 10,
+                    Name = "Boolean path rule",
+                    Description = "Exercises non-string rule condition values.",
+                    ConditionJson = JsonSerializer.Serialize(new
+                    {
+                        signature = true,
+                        path = new { folder = "Temp" }
+                    }),
+                    RiskLevel = RiskLevel.Low,
+                    Action = NotificationAction.SilentLog,
+                    Enabled = false
+                },
+                new AccessWatchRule
+                {
+                    RuleId = 11,
+                    Name = "App only rule",
+                    Description = "Exercises app-only change detection.",
+                    ConditionJson = JsonSerializer.Serialize(new
+                    {
+                        app = "Skype"
+                    }),
+                    RiskLevel = RiskLevel.Medium,
+                    Action = NotificationAction.SoftNotify,
+                    Enabled = true
+                },
+                new AccessWatchRule
+                {
+                    RuleId = 12,
+                    Name = "No condition rule",
+                    Description = "Exercises empty and null condition values.",
+                    ConditionJson = JsonSerializer.Serialize(new
+                    {
+                        app = (string?)null
+                    }),
+                    RiskLevel = RiskLevel.Low,
+                    Action = NotificationAction.SilentLog,
+                    Enabled = true
+                },
+                new AccessWatchRule
+                {
+                    RuleId = 13,
+                    Name = "False signature rule",
+                    Description = "Exercises false boolean condition values.",
+                    ConditionJson = JsonSerializer.Serialize(new
+                    {
+                        signature = false
+                    }),
+                    RiskLevel = RiskLevel.Low,
+                    Action = NotificationAction.SilentLog,
+                    Enabled = false
+                },
+                new AccessWatchRule
+                {
+                    RuleId = 14,
+                    Name = "Empty condition rule",
+                    Description = "Exercises empty condition JSON.",
+                    ConditionJson = string.Empty,
+                    RiskLevel = RiskLevel.Low,
+                    Action = NotificationAction.SilentLog,
+                    Enabled = false
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        model.PreviewSelectedRule();
+        Assert.Equal("Select a rule before previewing it.", model.StatusMessage);
+        await model.EnableSelectedRuleAsync(CancellationToken.None);
+        Assert.Equal("Select a rule before enabling it.", model.StatusMessage);
+        await model.DisableSelectedRuleAsync(CancellationToken.None);
+        Assert.Equal("Select a rule before disabling it.", model.StatusMessage);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(8, model.Rules.Count);
+        Assert.True(model.CanApplyRuleAction);
+        Assert.Contains("Rule: Watch remote admin", model.SelectedRuleDetail);
+        Assert.Contains("App: Visual Studio", model.SelectedRule!.Conditions);
+        Assert.Contains("Port: 9443.5", model.SelectedRule.Conditions);
+        Assert.Contains("Temporary: watch for 24 hours", model.SelectedRule.Duration);
+        Assert.Contains("quiet hours off", model.SelectedRule.QuietHours);
+        Assert.Contains("Home network profile", model.SelectedRule.NetworkProfile);
+        Assert.Contains("Review if the app signature", model.SelectedRule.ChangeDetection);
+        Assert.Contains("In-app investigation summary", model.SelectedRule.AiSummary);
+        Assert.Contains("disabled until you turn it on", model.SelectedRulePreview);
+        Assert.Contains("Watch remote admin", model.SelectedRule.DetailText);
+        Assert.Contains("2026", model.SelectedRule.Created);
+        Assert.Contains("2026", model.SelectedRule.Updated);
+        Assert.Contains(nameof(DashboardShellViewModel.SelectedRule), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.CanApplyRuleAction), changed);
+
+        model.PreviewSelectedRule();
+        Assert.Contains("Previewed rule Watch remote admin", model.StatusMessage);
+        Assert.Contains("Action: AskBeforeAllow", model.SelectedRulePreview);
+
+        await model.EnableSelectedRuleAsync(CancellationToken.None);
+        Assert.True(repository.RuleUpserts[^1].Enabled);
+        Assert.True(model.SelectedRule!.IsEnabled);
+        Assert.Contains("Enabled rule", model.StatusMessage);
+
+        model.SelectedRule = model.Rules.Single(rule => rule.Name == "Device watch");
+        Assert.Contains("Temporary until 2026-06-30T12:00:00Z", model.SelectedRule.Duration);
+        Assert.Contains("Review if this trusted app or device changes identity", model.SelectedRule.ChangeDetection);
+
+        model.SelectedRule = model.Rules.Single(rule => rule.Name == "Unnamed rule");
+        Assert.Contains("Review matches before trusting", model.SelectedRule.ChangeDetection);
+        Assert.Contains("Permanent until disabled", model.SelectedRule.Duration);
+
+        model.SelectedRule = model.Rules.Single(rule => rule.Name == "Boolean path rule");
+        Assert.Contains("Signature: true", model.SelectedRule.Conditions);
+        Assert.Contains("Path: {", model.SelectedRule.Conditions);
+
+        model.SelectedRule = model.Rules.Single(rule => rule.Name == "App only rule");
+        Assert.Contains("Review if this trusted app or device changes identity", model.SelectedRule.ChangeDetection);
+
+        model.SelectedRule = model.Rules.Single(rule => rule.Name == "No condition rule");
+        Assert.Contains("No specific conditions stored yet", model.SelectedRule.Conditions);
+        Assert.Contains("Review matches before trusting", model.SelectedRule.ChangeDetection);
+
+        model.SelectedRule = model.Rules.Single(rule => rule.Name == "False signature rule");
+        Assert.Contains("Signature: false", model.SelectedRule.Conditions);
+
+        model.SelectedRule = model.Rules[0];
+        model.ApplySettings();
+        Assert.Equal(model.Rules[0].RuleId, model.SelectedRule!.RuleId);
+
+        model.SelectedRule = null;
+        model.SelectedQuietHours = "22-7";
+        model.SelectedNetworkProfile = "Work";
+        model.ApplySettings();
+        Assert.Equal("22-7", model.CurrentQuietHours);
+        Assert.Equal("Work", model.CurrentNetworkProfile);
+        Assert.Contains("10 PM to 7 AM", model.Rules[0].QuietHours);
+        Assert.NotNull(model.SelectedRule);
+        Assert.Contains("Work network profile", model.Rules[0].NetworkProfile);
+
+        model.SelectedRule = model.Rules[0] with { RuleId = 999 };
+        model.SelectedQuietHours = "23-6";
+        model.SelectedNetworkProfile = "Public";
+        model.ApplySettings();
+        Assert.Contains("11 PM to 6 AM", model.Rules[0].QuietHours);
+        Assert.Contains("Public Wi-Fi profile", model.Rules[0].NetworkProfile);
+        Assert.Contains("Public network rules", model.SettingsStatus);
+
+        model.SelectedQuietHours = null!;
+        model.SelectedNetworkProfile = null!;
+        Assert.Equal("23-6", model.SelectedQuietHours);
+        Assert.Equal("Public", model.SelectedNetworkProfile);
+
+        model.SelectedRule = model.Rules[0] with { RiskLevel = "NotARisk", Action = "NotAnAction", ConditionJson = string.Empty };
+        model.Rules.Clear();
+        repository.NextRuleUpsertId = 0;
+        await model.DisableSelectedRuleAsync(CancellationToken.None);
+        Assert.False(repository.RuleUpserts[^1].Enabled);
+        Assert.Single(model.Rules);
+        Assert.Contains("Disabled rule", model.StatusMessage);
+
+        model.SelectedRule = null;
+        Assert.False(model.CanApplyRuleAction);
+        Assert.Equal("Select a rule to see its conditions, action, duration, and safety notes.", model.SelectedRuleDetail);
+        Assert.Equal("Select a rule to preview what it would affect.", model.SelectedRulePreview);
+
+        var detached = new DashboardShellViewModel
+        {
+            SelectedRule = model.Rules[0]
+        };
+        await detached.EnableSelectedRuleAsync(CancellationToken.None);
+        Assert.Equal("Rule actions are not connected for this dashboard session.", detached.StatusMessage);
+    }
+    /// <summary>
     /// Verifies selected incident actions persist state and create rule suggestions.
     /// </summary>
     [Fact]
@@ -2924,6 +3187,8 @@ public sealed class NotificationAndViewModelTests
 
         public List<AccessWatchRule> RuleUpserts { get; } = [];
 
+        public long? NextRuleUpsertId { get; set; }
+
         public List<(long DeviceId, string? UserAlias)> AliasUpdates { get; } = [];
 
         public Exception? Failure { get; init; }
@@ -3003,7 +3268,9 @@ public sealed class NotificationAndViewModelTests
         public Task<long> UpsertRuleAsync(AccessWatchRule rule, CancellationToken cancellationToken)
         {
             RuleUpserts.Add(rule with { RuleId = RuleUpserts.Count + 1 });
-            return Task.FromResult((long)RuleUpserts.Count);
+            var ruleId = NextRuleUpsertId ?? RuleUpserts.Count;
+            NextRuleUpsertId = null;
+            return Task.FromResult((long)ruleId);
         }
 
         public Task<IReadOnlyList<Incident>> ListRecentIncidentsAsync(int limit, CancellationToken cancellationToken)
