@@ -120,12 +120,20 @@ public sealed record DashboardIncidentItemViewModel(
     string MainTarget,
     string Started,
     string LastUpdated,
-    string Summary)
+    string Summary,
+    string GroupKey = "Ungrouped",
+    string Grouping = "Grouped by incident target.",
+    string SeverityExplanation = "Severity explanation unavailable.",
+    string Timeline = "Timeline unavailable.",
+    string Evidence = "Evidence unavailable.",
+    string RecommendedAction = "Review this incident.",
+    string UserNotes = "",
+    string ExportText = "Export unavailable.")
 {
     /// <summary>
     /// Gets the plain-English detail text for this incident row.
     /// </summary>
-    public string DetailText => $"Incident: {Title} | Target: {MainTarget} | Risk: {RiskLevel} | Status: {Status} | Events: {EventCount} | Summary: {Summary}";
+    public string DetailText => $"Incident: {Title} | Group: {Grouping} | Target: {MainTarget} | Risk: {RiskLevel} | Severity: {SeverityExplanation} | Status: {Status} | Events: {EventCount} | Timeline: {Timeline} | Evidence: {Evidence} | Notes: {UserNotes} | Summary: {Summary} | Next: {RecommendedAction}";
 }
 
 /// <summary>

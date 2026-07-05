@@ -258,23 +258,38 @@
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding IncidentsVisibility}">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="320" />
                         </Grid.RowDefinitions>
-                        <DataGrid Grid.Row="0" ItemsSource="{Binding Incidents}" SelectedItem="{Binding SelectedIncident, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
+                        <Grid Grid.Row="0" Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Search" FontSize="12" Foreground="#57606A" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" Text="{Binding IncidentSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="30" />
+                            <TextBlock Grid.Column="3" Text="Status" FontSize="12" Foreground="#57606A" VerticalAlignment="Center" />
+                            <ComboBox Grid.Column="4" ItemsSource="{Binding IncidentStatusFilterOptions}" SelectedItem="{Binding SelectedIncidentStatusFilter, Mode=TwoWay}" Height="30" />
+                        </Grid>
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding Incidents}" SelectedItem="{Binding SelectedIncident, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Incident" Binding="{Binding Title}" Width="1.6*" />
-                                <DataGridTextColumn Header="Risk" Binding="{Binding RiskLevel}" Width="90" />
+                                <DataGridTextColumn Header="Incident" Binding="{Binding Title}" Width="1.4*" />
+                                <DataGridTextColumn Header="Group" Binding="{Binding Grouping}" Width="1.6*" />
+                                <DataGridTextColumn Header="Severity" Binding="{Binding SeverityExplanation}" Width="1.7*" />
                                 <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
                                 <DataGridTextColumn Header="Events" Binding="{Binding EventCount}" Width="70" />
-                                <DataGridTextColumn Header="Target" Binding="{Binding MainTarget}" Width="1.4*" />
-                                <DataGridTextColumn Header="Started" Binding="{Binding Started}" Width="130" />
+                                <DataGridTextColumn Header="Target" Binding="{Binding MainTarget}" Width="1.2*" />
                                 <DataGridTextColumn Header="Updated" Binding="{Binding LastUpdated}" Width="130" />
-                                <DataGridTextColumn Header="Summary" Binding="{Binding Summary}" Width="2*" />
+                                <DataGridTextColumn Header="Next" Binding="{Binding RecommendedAction}" Width="1.7*" />
                             </DataGrid.Columns>
                         </DataGrid>
-                        <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
+                        <Border Grid.Row="2" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -286,12 +301,14 @@
                                     <Button Content="Watch" IsEnabled="{Binding CanApplyIncidentAction}" Width="68" Height="30" Margin="0,0,8,0" Click="OnWatchIncidentClick" />
                                     <Button Content="Escalate" IsEnabled="{Binding CanApplyIncidentAction}" Width="78" Height="30" Margin="0,0,8,0" Click="OnEscalateIncidentClick" />
                                     <Button Content="Create rule" IsEnabled="{Binding CanApplyIncidentAction}" Width="92" Height="30" Margin="0,0,8,0" Click="OnCreateIncidentRuleClick" />
+                                    <Button Content="Save notes" IsEnabled="{Binding CanSaveIncidentNotes}" Width="90" Height="30" Margin="0,0,8,0" Click="OnSaveIncidentNotesClick" />
+                                    <Button Content="Export" IsEnabled="{Binding CanExportIncident}" Width="72" Height="30" Margin="0,0,8,0" Click="OnExportIncidentClick" />
                                     <Button Content="Review with AI" IsEnabled="{Binding CanReviewIncidentWithAi}" Width="112" Height="30" Margin="0,0,8,0" Click="OnReviewIncidentWithAiClick" />
                                     <Button Content="Copy for ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="116" Height="30" Click="OnCopyIncidentForChatGptClick" />
                                 </StackPanel>
                             </Grid>
                         </Border>
-                        <Grid Grid.Row="2" Margin="0,12,0,0">
+                        <Grid Grid.Row="3" Margin="0,12,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="12" />
@@ -299,9 +316,22 @@
                                 <ColumnDefinition Width="12" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Text="{Binding SelectedIncidentExplanation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontSize="12" />
-                            <TextBox Grid.Column="2" Text="{Binding SelectedIncidentAiReview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
-                            <TextBox Grid.Column="4" Text="{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="116" FontFamily="Consolas" FontSize="12" />
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding SelectedIncidentExplanation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
+                            <TextBox Grid.Column="2" Text="{Binding SelectedIncidentTimeline, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
+                            <TextBox Grid.Column="4" Text="{Binding SelectedIncidentEvidence, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
+                            <TextBox Grid.Row="2" Grid.Column="0" Text="{Binding SelectedIncidentNotes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
+                            <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding SelectedIncidentRuleWizard, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" />
+                            <TextBox Grid.Row="2" Grid.Column="4" Text="{Binding SelectedIncidentExport, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" />
+                            <TextBox Grid.Row="4" Grid.Column="0" Text="{Binding SelectedIncidentSeverityExplanation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
+                            <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding SelectedIncidentAiReview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" />
+                            <TextBox Grid.Row="4" Grid.Column="4" Text="{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" />
                         </Grid>
                     </Grid>
                 </Border>

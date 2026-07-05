@@ -149,16 +149,29 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentDetail}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentExplanation, Mode=OneWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding IncidentSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
+        Assert.Contains("SelectedItem=\"{Binding SelectedIncidentStatusFilter, Mode=TwoWay}\"", xaml);
+        Assert.Contains("Header=\"Group\"", xaml);
+        Assert.Contains("Header=\"Severity\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentTimeline, Mode=OneWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentEvidence, Mode=OneWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentNotes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentExport, Mode=OneWay}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncidentRuleWizard, Mode=OneWay}\"", xaml);
         Assert.Contains("Content=\"Resolve\"", xaml);
         Assert.Contains("Content=\"Watch\"", xaml);
         Assert.Contains("Content=\"Escalate\"", xaml);
         Assert.Contains("Content=\"Create rule\"", xaml);
+        Assert.Contains("Content=\"Save notes\"", xaml);
+        Assert.Contains("Content=\"Export\"", xaml);
         Assert.Contains("Content=\"Review with AI\"", xaml);
         Assert.Contains("Content=\"Copy for ChatGPT\"", xaml);
         Assert.Contains("Click=\"OnResolveIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnWatchIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnEscalateIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnCreateIncidentRuleClick\"", xaml);
+        Assert.Contains("Click=\"OnSaveIncidentNotesClick\"", xaml);
+        Assert.Contains("Click=\"OnExportIncidentClick\"", xaml);
         Assert.Contains("Click=\"OnReviewIncidentWithAiClick\"", xaml);
         Assert.Contains("Click=\"OnCopyIncidentForChatGptClick\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentAiReview, Mode=OneWay}\"", xaml);
@@ -1629,6 +1642,169 @@ public sealed class NotificationAndViewModelTests
 
         Assert.Equal("Investigate port", model.PortInvestigationButtonText);
         Assert.Contains("Select a port before investigating it.", model.StatusMessage);
+    }
+    /// <summary>
+    /// Verifies incident grouping, timelines, evidence, notes, filtering, export, and rule wizard text.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_AddsIncidentWorkflowDetailsAndFilters()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 4, Hostname = "office-laptop", IpAddress = "192.168.1.25" }],
+            Applications = [new AppIdentity { ApplicationId = 9, DisplayName = "Skype", ProcessName = "Skype" }],
+            Incidents =
+            [
+                new Incident
+                {
+                    IncidentId = 101,
+                    Title = "Camera opened",
+                    Summary = "Skype activated the camera.",
+                    MainDeviceId = 4,
+                    MainApplicationId = 9,
+                    RiskLevel = RiskLevel.Critical,
+                    Status = IncidentStatus.Open,
+                    EventCount = 2,
+                    StartedUtc = new DateTimeOffset(2026, 6, 29, 13, 0, 0, TimeSpan.Zero),
+                    LastUpdatedUtc = new DateTimeOffset(2026, 6, 29, 13, 5, 0, TimeSpan.Zero),
+                    UserNotes = "User was in a call."
+                },
+                new Incident
+                {
+                    IncidentId = 102,
+                    Title = "Port opened",
+                    Summary = "Remote service opened.",
+                    MainApplicationId = 9,
+                    RiskLevel = RiskLevel.High,
+                    Status = IncidentStatus.Open,
+                    EventCount = 1
+                },
+                new Incident
+                {
+                    IncidentId = 103,
+                    Title = "Device joined",
+                    Summary = "Known tablet joined.",
+                    MainDeviceId = 4,
+                    RiskLevel = RiskLevel.Medium,
+                    Status = IncidentStatus.Watching,
+                    EventCount = 3
+                },
+                new Incident
+                {
+                    IncidentId = 104,
+                    Title = "History item",
+                    Summary = "Old low-risk event.",
+                    RiskLevel = RiskLevel.Low,
+                    Status = IncidentStatus.Resolved,
+                    EventCount = 1,
+                    ResolvedUtc = new DateTimeOffset(2026, 6, 29, 14, 0, 0, TimeSpan.Zero)
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        Assert.Equal("All", model.SelectedIncidentStatusFilter);
+        Assert.Contains("Open", model.IncidentStatusFilterOptions);
+        Assert.Equal("Select an incident to see when it started, changed, and last updated.", model.SelectedIncidentTimeline);
+        Assert.Equal("Select an incident to see the evidence AccessWatch used.", model.SelectedIncidentEvidence);
+        Assert.Equal("Select an incident to see why this severity was assigned.", model.SelectedIncidentSeverityExplanation);
+        Assert.Equal("Select an incident to prepare an export.", model.SelectedIncidentExport);
+        Assert.Equal("Select an incident to see a rule wizard preview.", model.SelectedIncidentRuleWizard);
+        Assert.False(model.CanSaveIncidentNotes);
+        Assert.False(model.CanExportIncident);
+        model.PrepareSelectedIncidentExport();
+        Assert.Equal("Select an incident before preparing an export.", model.StatusMessage);
+        await model.SaveSelectedIncidentNotesAsync(CancellationToken.None);
+        Assert.Equal("Select an incident before saving notes.", model.StatusMessage);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(4, model.Incidents.Count);
+        var critical = model.Incidents[0];
+        Assert.Contains("app/device", critical.GroupKey);
+        Assert.Contains("Grouped by app/device", critical.Grouping);
+        Assert.Contains("Critical because 2 related events", critical.SeverityExplanation);
+        Assert.Contains("Started:", critical.Timeline);
+        Assert.Contains("Resolved: not resolved", critical.Timeline);
+        Assert.Contains("User was in a call.", critical.Evidence);
+        Assert.Contains("Escalate if unexpected; repeated high-risk", critical.RecommendedAction);
+        Assert.Contains("AccessWatch incident export", critical.ExportText);
+        Assert.Equal("User was in a call.", model.SelectedIncidentNotes);
+        Assert.True(model.CanSaveIncidentNotes);
+        Assert.True(model.CanExportIncident);
+        Assert.Contains("Rule creation wizard", model.SelectedIncidentRuleWizard);
+        Assert.Contains("No rule has been created yet", model.SelectedIncidentRuleWizard);
+        Assert.Contains("Camera opened", model.SelectedIncidentExport);
+
+        model.IncidentSearchText = "tablet";
+        Assert.Single(model.Incidents);
+        Assert.Equal("Device joined", model.SelectedIncident!.Title);
+        Assert.Contains("Medium because 3 related events", model.SelectedIncidentSeverityExplanation);
+        Assert.Contains("Watching: leave grouped", model.SelectedIncidentRecommendedAction);
+        model.IncidentSearchText = "tablet";
+        Assert.Single(model.Incidents);
+        model.SelectedIncidentStatusFilter = "Open";
+        Assert.Empty(model.Incidents);
+        model.SelectedIncidentStatusFilter = null!;
+        Assert.Single(model.Incidents);
+        model.IncidentSearchText = null!;
+        Assert.Equal(4, model.Incidents.Count);
+
+        model.SelectedIncident = model.Incidents.Single(incident => incident.Title == "Port opened");
+        Assert.Contains("Grouped by app", model.SelectedIncident!.Grouping);
+        Assert.Contains("High because single event", model.SelectedIncidentSeverityExplanation);
+        Assert.Contains("Escalate if unexpected, or Watch", model.SelectedIncidentRecommendedAction);
+        model.SelectedIncidentNotes = "Confirmed expected remote tool.";
+        await model.SaveSelectedIncidentNotesAsync(CancellationToken.None);
+        Assert.Equal("Confirmed expected remote tool.", repository.IncidentUpserts[^1].UserNotes);
+        Assert.Contains("Saved notes", model.StatusMessage);
+
+        model.PrepareSelectedIncidentExport();
+        Assert.Contains("Prepared export", model.StatusMessage);
+        await model.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
+        Assert.Contains("groupKey", model.SelectedIncidentRuleSuggestion);
+        Assert.Contains("Disabled rule suggestion created", model.SelectedIncidentRuleWizard);
+
+        model.SelectedIncident = model.Incidents.Single(incident => incident.Title == "Device joined");
+        Assert.Contains("Grouped by device", model.SelectedIncident.Grouping);
+        model.SelectedIncident = model.Incidents.Single(incident => incident.Title == "History item");
+        Assert.Contains("Grouped by event", model.SelectedIncident.Grouping);
+        Assert.Contains("Low because AccessWatch recorded single event", model.SelectedIncidentSeverityExplanation);
+        Assert.Contains("Resolved: keep for history", model.SelectedIncidentRecommendedAction);
+        Assert.Contains("Resolved:", model.SelectedIncidentTimeline);
+        Assert.Contains("No analyst notes yet", model.SelectedIncidentEvidence);
+    }
+    /// <summary>
+    /// Verifies incident workflow edge states remain friendly and safe.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_IncidentWorkflowEdges_HandleMissingSelectionAndDetachedRows()
+    {
+        var disconnected = new DashboardShellViewModel();
+
+        Assert.Equal(string.Empty, disconnected.IncidentSearchText);
+        disconnected.IncidentSearchText = null!;
+        Assert.Equal(string.Empty, disconnected.IncidentSearchText);
+        Assert.Equal("Select an incident to see whether Resolve, Watch, Escalate, or a rule is appropriate.", disconnected.SelectedIncidentRecommendedAction);
+        disconnected.SelectedIncidentNotes = null!;
+        Assert.Equal(string.Empty, disconnected.SelectedIncidentNotes);
+        disconnected.SelectedIncidentStatusFilter = disconnected.SelectedIncidentStatusFilter;
+        Assert.Equal("All", disconnected.SelectedIncidentStatusFilter);
+        disconnected.SelectedIncident = CreateIncidentRow("Detached", "Detached summary.");
+        await disconnected.SaveSelectedIncidentNotesAsync(CancellationToken.None);
+        Assert.Equal("Incident notes are not connected for this dashboard session.", disconnected.StatusMessage);
+
+        var repository = new FakeRepository();
+        var detached = new DashboardShellViewModel(repository)
+        {
+            SelectedIncident = CreateIncidentRow("Detached", "Detached summary.")
+        };
+        detached.SelectedIncidentNotes = " Detached note ";
+
+        await detached.SaveSelectedIncidentNotesAsync(CancellationToken.None);
+
+        Assert.Equal("Detached note", Assert.Single(repository.IncidentUpserts).UserNotes);
+        Assert.Contains("Saved notes", detached.StatusMessage);
     }
     /// <summary>
     /// Verifies selected incident actions persist state and create rule suggestions.

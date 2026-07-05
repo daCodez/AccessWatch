@@ -161,6 +161,19 @@ public partial class MainWindow : Window
         await viewModel.CreateRuleFromSelectedIncidentAsync(CancellationToken.None);
     }
 
+    private async void OnSaveIncidentNotesClick(object sender, RoutedEventArgs e)
+    {
+        await viewModel.SaveSelectedIncidentNotesAsync(CancellationToken.None);
+    }
+
+    private void OnExportIncidentClick(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(viewModel.SelectedIncidentExport))
+        {
+            System.Windows.Clipboard.SetText(viewModel.SelectedIncidentExport);
+            viewModel.PrepareSelectedIncidentExport();
+        }
+    }
     private async void OnReviewIncidentWithAiClick(object sender, RoutedEventArgs e)
     {
         await viewModel.CreateSelectedIncidentAiReviewAsync(CancellationToken.None);

@@ -37,6 +37,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private DashboardIncidentItemViewModel? selectedIncident;
     private string selectedIncidentAiReview = string.Empty;
     private string selectedIncidentRuleSuggestion = string.Empty;
+    private string selectedIncidentNotes = string.Empty;
+    private string incidentSearchText = string.Empty;
+    private string selectedIncidentStatusFilter = "All";
+    private readonly List<DashboardIncidentItemViewModel> allIncidents = [];
     private readonly FirewallEnforcementPlanReviewViewModel enforcementPlanReview = new();
     private string selectedDeviceAlias = string.Empty;
     private bool isLoading;
@@ -399,8 +403,17 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             selectedIncident = value;
             selectedIncidentAiReview = string.Empty;
             selectedIncidentRuleSuggestion = string.Empty;
+            selectedIncidentNotes = value?.UserNotes ?? string.Empty;
             OnPropertyChanged(nameof(SelectedIncident));
             OnPropertyChanged(nameof(SelectedIncidentDetail));
+            OnPropertyChanged(nameof(SelectedIncidentNotes));
+            OnPropertyChanged(nameof(SelectedIncidentTimeline));
+            OnPropertyChanged(nameof(SelectedIncidentEvidence));
+            OnPropertyChanged(nameof(SelectedIncidentSeverityExplanation));
+            OnPropertyChanged(nameof(SelectedIncidentRecommendedAction));
+            OnPropertyChanged(nameof(SelectedIncidentExport));
+            OnPropertyChanged(nameof(CanSaveIncidentNotes));
+            OnPropertyChanged(nameof(CanExportIncident));
             OnPropertyChanged(nameof(SelectedIncidentExplanation));
             OnPropertyChanged(nameof(CanApplyIncidentAction));
             OnPropertyChanged(nameof(CanReviewIncidentWithAi));
@@ -408,6 +421,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(HasIncidentAiReview));
             OnPropertyChanged(nameof(SelectedIncidentRuleSuggestion));
             OnPropertyChanged(nameof(HasIncidentRuleSuggestion));
+            OnPropertyChanged(nameof(SelectedIncidentRuleWizard));
         }
     }
 
@@ -424,6 +438,71 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     public string SelectedIncidentExplanation => selectedIncident is null
         ? "Select an incident to see why AccessWatch grouped it and what to verify next."
         : BuildIncidentExplanation(selectedIncident);
+
+    /// <summary>
+    /// Gets timeline text for the selected incident.
+    /// </summary>
+    public string SelectedIncidentTimeline => selectedIncident is null
+        ? "Select an incident to see when it started, changed, and last updated."
+        : selectedIncident.Timeline;
+
+    /// <summary>
+    /// Gets the local evidence panel for the selected incident.
+    /// </summary>
+    public string SelectedIncidentEvidence => selectedIncident is null
+        ? "Select an incident to see the evidence AccessWatch used."
+        : selectedIncident.Evidence;
+
+    /// <summary>
+    /// Gets the severity explanation for the selected incident.
+    /// </summary>
+    public string SelectedIncidentSeverityExplanation => selectedIncident is null
+        ? "Select an incident to see why this severity was assigned."
+        : selectedIncident.SeverityExplanation;
+
+    /// <summary>
+    /// Gets the recommended action for the selected incident.
+    /// </summary>
+    public string SelectedIncidentRecommendedAction => selectedIncident is null
+        ? "Select an incident to see whether Resolve, Watch, Escalate, or a rule is appropriate."
+        : selectedIncident.RecommendedAction;
+
+    /// <summary>
+    /// Gets or sets editable notes for the selected incident.
+    /// </summary>
+    public string SelectedIncidentNotes
+    {
+        get => selectedIncidentNotes;
+        set
+        {
+            selectedIncidentNotes = value ?? string.Empty;
+            OnPropertyChanged(nameof(SelectedIncidentNotes));
+        }
+    }
+
+    /// <summary>
+    /// Gets whether selected incident notes can be saved.
+    /// </summary>
+    public bool CanSaveIncidentNotes => selectedIncident is not null && repository is not null;
+
+    /// <summary>
+    /// Gets whether the selected incident can be exported.
+    /// </summary>
+    public bool CanExportIncident => selectedIncident is not null;
+
+    /// <summary>
+    /// Gets export text for the selected incident.
+    /// </summary>
+    public string SelectedIncidentExport => selectedIncident is null
+        ? "Select an incident to prepare an export."
+        : selectedIncident.ExportText;
+
+    /// <summary>
+    /// Gets rule creation guidance for the selected incident.
+    /// </summary>
+    public string SelectedIncidentRuleWizard => selectedIncident is null
+        ? "Select an incident to see a rule wizard preview."
+        : BuildIncidentRuleWizard(selectedIncident, selectedIncidentRuleSuggestion);
 
     /// <summary>
     /// Gets whether incident action buttons can run.
@@ -480,6 +559,50 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets recent incidents loaded from storage.
     /// </summary>
     public ObservableCollection<DashboardIncidentItemViewModel> Incidents { get; } = [];
+
+    /// <summary>
+    /// Gets incident status filter choices.
+    /// </summary>
+    public IReadOnlyList<string> IncidentStatusFilterOptions { get; } = ["All", "Open", "Watching", "Resolved"];
+
+    /// <summary>
+    /// Gets or sets the incident search text.
+    /// </summary>
+    public string IncidentSearchText
+    {
+        get => incidentSearchText;
+        set
+        {
+            if (incidentSearchText == (value ?? string.Empty))
+            {
+                return;
+            }
+
+            incidentSearchText = value ?? string.Empty;
+            ApplyIncidentFilters();
+            OnPropertyChanged(nameof(IncidentSearchText));
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the selected incident status filter.
+    /// </summary>
+    public string SelectedIncidentStatusFilter
+    {
+        get => selectedIncidentStatusFilter;
+        set
+        {
+            var next = string.IsNullOrWhiteSpace(value) ? "All" : value;
+            if (selectedIncidentStatusFilter == next)
+            {
+                return;
+            }
+
+            selectedIncidentStatusFilter = next;
+            ApplyIncidentFilters();
+            OnPropertyChanged(nameof(SelectedIncidentStatusFilter));
+        }
+    }
 
     /// <summary>
     /// Gets protection mode choices shown on the Settings page.
@@ -857,7 +980,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public Task ResolveSelectedIncidentAsync(CancellationToken cancellationToken)
     {
-        return ApplySelectedIncidentUpdateAsync(IncidentStatus.Resolved, null, "Resolved", cancellationToken);
+        return ApplySelectedIncidentUpdateAsync(IncidentStatus.Resolved, null, "Resolved", "Resolved means you confirmed this was expected or no longer active; AccessWatch keeps it for history.", cancellationToken);
     }
 
     /// <summary>
@@ -865,7 +988,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public Task WatchSelectedIncidentAsync(CancellationToken cancellationToken)
     {
-        return ApplySelectedIncidentUpdateAsync(IncidentStatus.Watching, null, "Watching", cancellationToken);
+        return ApplySelectedIncidentUpdateAsync(IncidentStatus.Watching, null, "Watching", "Watch keeps this grouped and visible if it repeats, without treating it as solved.", cancellationToken);
     }
 
     /// <summary>
@@ -873,7 +996,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public Task EscalateSelectedIncidentAsync(CancellationToken cancellationToken)
     {
-        return ApplySelectedIncidentUpdateAsync(IncidentStatus.Open, RiskLevel.Critical, "Escalated", cancellationToken);
+        return ApplySelectedIncidentUpdateAsync(IncidentStatus.Open, RiskLevel.Critical, "Escalated", "Escalate marks this as critical because it looks unexpected, sensitive, or worth immediate review.", cancellationToken);
     }
 
     /// <summary>
@@ -975,6 +1098,41 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             : "Review the incident with AI before copying it for ChatGPT.";
     }
 
+    /// <summary>
+    /// Saves notes for the selected incident.
+    /// </summary>
+    public async Task SaveSelectedIncidentNotesAsync(CancellationToken cancellationToken)
+    {
+        if (selectedIncident is null)
+        {
+            StatusMessage = "Select an incident before saving notes.";
+            return;
+        }
+
+        if (repository is null)
+        {
+            StatusMessage = "Incident notes are not connected for this dashboard session.";
+            return;
+        }
+
+        var updatedIncident = selectedIncident with { UserNotes = selectedIncidentNotes.Trim() };
+        await repository.UpsertIncidentAsync(ToIncident(updatedIncident), cancellationToken);
+        ReplaceIncidentRow(selectedIncident, updatedIncident);
+        SelectedIncident = updatedIncident;
+        StatusMessage = $"Saved notes for {updatedIncident.Title}.";
+    }
+
+    /// <summary>
+    /// Prepares export text for the selected incident.
+    /// </summary>
+    public void PrepareSelectedIncidentExport()
+    {
+        StatusMessage = selectedIncident is null
+            ? "Select an incident before preparing an export."
+            : $"Prepared export for {selectedIncident.Title}.";
+        OnPropertyChanged(nameof(SelectedIncidentExport));
+    }
+
     private bool HasAiReviewConnection() => settings.AiMode switch
     {
         AiMode.Off => false,
@@ -986,6 +1144,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         IncidentStatus status,
         RiskLevel? riskLevel,
         string statusVerb,
+        string statusMeaning,
         CancellationToken cancellationToken)
     {
         if (selectedIncident is null)
@@ -1009,7 +1168,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             RiskLevel = updatedRisk.ToString(),
             Status = status.ToString(),
             LastUpdated = FormatTimestamp(now),
-            RawLastUpdatedUtc = now
+            RawLastUpdatedUtc = now,
+            UserNotes = selectedIncidentNotes.Trim()
         };
 
         var incident = ToIncident(updatedIncident, status == IncidentStatus.Resolved ? now : null);
@@ -1021,7 +1181,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
 
         SelectedIncident = updatedIncident;
-        StatusMessage = $"{statusVerb} incident {updatedIncident.Title}.";
+        StatusMessage = $"{statusVerb} incident {updatedIncident.Title}. {statusMeaning}";
     }
 
     private static Incident ToIncident(DashboardIncidentItemViewModel incident, DateTimeOffset? resolvedUtc = null)
@@ -1038,7 +1198,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             EventCount = incident.EventCount,
             StartedUtc = incident.RawStartedUtc,
             LastUpdatedUtc = incident.RawLastUpdatedUtc,
-            ResolvedUtc = resolvedUtc
+            ResolvedUtc = resolvedUtc,
+            UserNotes = string.IsNullOrWhiteSpace(incident.UserNotes) ? null : incident.UserNotes
         };
     }
 
@@ -1053,7 +1214,9 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             mainDeviceId = incident.MainDeviceId,
             mainApplicationId = incident.MainApplicationId,
             riskLevel = incident.RiskLevel,
-            eventCount = incident.EventCount
+            eventCount = incident.EventCount,
+            groupKey = incident.GroupKey,
+            recommendedAction = incident.RecommendedAction
         };
 
         return new AccessWatchRule
@@ -1256,12 +1419,21 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         IReadOnlyList<NetworkDevice> devices,
         IReadOnlyList<AppIdentity> applications)
     {
-        Incidents.Clear();
+        allIncidents.Clear();
         foreach (var incident in incidents.Take(200))
         {
             var device = devices.FirstOrDefault(candidate => incident.MainDeviceId is not null && candidate.DeviceId == incident.MainDeviceId.Value);
             var application = applications.FirstOrDefault(candidate => incident.MainApplicationId is not null && candidate.ApplicationId == incident.MainApplicationId.Value);
-            Incidents.Add(new DashboardIncidentItemViewModel(
+            var target = BuildIncidentTarget(device, application);
+            var title = FirstUseful(incident.Title, "Untitled incident");
+            var summary = FirstUseful(incident.Summary, "No incident summary recorded yet.");
+            var grouping = BuildIncidentGrouping(incident, target);
+            var severityExplanation = BuildIncidentSeverityExplanation(incident.RiskLevel, incident.EventCount);
+            var timeline = BuildIncidentTimeline(incident);
+            var evidence = BuildIncidentEvidence(title, summary, target, grouping, incident.UserNotes);
+            var recommendedAction = BuildIncidentRecommendedAction(incident.RiskLevel, incident.Status, incident.EventCount);
+
+            allIncidents.Add(new DashboardIncidentItemViewModel(
                 incident.IncidentId,
                 incident.MainDeviceId,
                 incident.MainApplicationId,
@@ -1269,17 +1441,71 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 incident.Status,
                 incident.StartedUtc,
                 incident.LastUpdatedUtc,
-                FirstUseful(incident.Title, "Untitled incident"),
+                title,
                 incident.RiskLevel.ToString(),
                 incident.Status.ToString(),
                 incident.EventCount,
-                BuildIncidentTarget(device, application),
+                target,
                 FormatTimestamp(incident.StartedUtc),
                 FormatTimestamp(incident.LastUpdatedUtc),
-                FirstUseful(incident.Summary, "No incident summary recorded yet.")));
+                summary,
+                grouping.Key,
+                grouping.Description,
+                severityExplanation,
+                timeline,
+                evidence,
+                recommendedAction,
+                incident.UserNotes ?? string.Empty,
+                BuildIncidentExport(title, incident, target, grouping.Description, severityExplanation, timeline, evidence, recommendedAction)));
         }
 
-        SelectedIncident = Incidents.FirstOrDefault();
+        ApplyIncidentFilters();
+    }
+
+    private void ApplyIncidentFilters()
+    {
+        var previousSelection = selectedIncident;
+        Incidents.Clear();
+        foreach (var incident in allIncidents.Where(MatchesIncidentFilters))
+        {
+            Incidents.Add(incident);
+        }
+
+        SelectedIncident = previousSelection is not null && Incidents.Contains(previousSelection)
+            ? previousSelection
+            : Incidents.FirstOrDefault();
+    }
+
+    private bool MatchesIncidentFilters(DashboardIncidentItemViewModel incident)
+    {
+        var statusMatches = selectedIncidentStatusFilter == "All" || incident.Status == selectedIncidentStatusFilter;
+        if (!statusMatches)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(incidentSearchText))
+        {
+            return true;
+        }
+
+        return incident.DetailText.Contains(incidentSearchText, StringComparison.OrdinalIgnoreCase) ||
+            incident.GroupKey.Contains(incidentSearchText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ReplaceIncidentRow(DashboardIncidentItemViewModel oldIncident, DashboardIncidentItemViewModel newIncident)
+    {
+        var allIndex = allIncidents.IndexOf(oldIncident);
+        if (allIndex >= 0)
+        {
+            allIncidents[allIndex] = newIncident;
+        }
+
+        var visibleIndex = Incidents.IndexOf(oldIncident);
+        if (visibleIndex >= 0)
+        {
+            Incidents[visibleIndex] = newIncident;
+        }
     }
 
     private void ReplaceRecentActivity(
@@ -1663,6 +1889,115 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             : string.Concat(applicationName, " on ", DisplayDeviceName(device));
     }
 
+    private static (string Key, string Description) BuildIncidentGrouping(Incident incident, string target)
+    {
+        var targetKind = incident.MainApplicationId is not null && incident.MainDeviceId is not null
+            ? "app/device"
+            : incident.MainApplicationId is not null
+                ? "app"
+                : incident.MainDeviceId is not null ? "device" : "event";
+        var targetId = incident.MainApplicationId?.ToString(CultureInfo.InvariantCulture) ??
+            incident.MainDeviceId?.ToString(CultureInfo.InvariantCulture) ??
+            FirstUseful(target, "unknown target");
+        var key = $"{targetKind}:{targetId}:{incident.RiskLevel}";
+        return (key, $"Grouped by {targetKind}, target {target}, and {incident.RiskLevel} severity.");
+    }
+
+    private static string BuildIncidentSeverityExplanation(RiskLevel riskLevel, int eventCount)
+    {
+        var countText = eventCount <= 1
+            ? "single event"
+            : $"{eventCount} related events";
+        return riskLevel switch
+        {
+            RiskLevel.Critical => $"Critical because {countText} may indicate active exposure or sensitive access that needs immediate review.",
+            RiskLevel.High => $"High because {countText} involve sensitive access, remote reachability, or unknown ownership.",
+            RiskLevel.Medium => $"Medium because {countText} deserve visibility while you confirm whether the activity is expected.",
+            _ => $"Low because AccessWatch recorded {countText} for history without strong suspicious signals."
+        };
+    }
+
+    private static string BuildIncidentTimeline(Incident incident)
+    {
+        return string.Join(
+            Environment.NewLine,
+            $"Started: {FormatTimestamp(incident.StartedUtc)}",
+            $"Last updated: {FormatTimestamp(incident.LastUpdatedUtc)}",
+            $"Events grouped: {incident.EventCount}",
+            incident.ResolvedUtc is null ? "Resolved: not resolved" : $"Resolved: {FormatTimestamp(incident.ResolvedUtc.Value)}");
+    }
+
+    private static string BuildIncidentEvidence(string title, string summary, string target, (string Key, string Description) grouping, string? notes)
+    {
+        var noteText = string.IsNullOrWhiteSpace(notes) ? "No analyst notes yet." : notes.Trim();
+        return string.Join(
+            Environment.NewLine,
+            $"Title: {title}",
+            $"Target: {target}",
+            $"Grouping: {grouping.Description}",
+            $"Summary: {summary}",
+            $"Notes: {noteText}");
+    }
+
+    private static string BuildIncidentRecommendedAction(RiskLevel riskLevel, IncidentStatus status, int eventCount)
+    {
+        if (status == IncidentStatus.Resolved)
+        {
+            return "Resolved: keep for history unless the same grouped activity returns.";
+        }
+
+        if (riskLevel >= RiskLevel.High)
+        {
+            return eventCount > 1
+                ? "Escalate if unexpected; repeated high-risk activity should stay visible until confirmed."
+                : "Escalate if unexpected, or Watch while confirming the app, device, and timing.";
+        }
+
+        return status == IncidentStatus.Watching
+            ? "Watching: leave grouped so repeats stay visible without creating extra noise."
+            : "Resolve if expected; Watch if it repeats or you are still unsure.";
+    }
+
+    private static string BuildIncidentExport(
+        string title,
+        Incident incident,
+        string target,
+        string grouping,
+        string severityExplanation,
+        string timeline,
+        string evidence,
+        string recommendedAction)
+    {
+        return string.Join(
+            Environment.NewLine,
+            "AccessWatch incident export",
+            $"Incident: {title}",
+            $"Target: {target}",
+            $"Risk: {incident.RiskLevel}",
+            $"Status: {incident.Status}",
+            $"Grouping: {grouping}",
+            $"Severity: {severityExplanation}",
+            "Timeline:",
+            timeline,
+            "Evidence:",
+            evidence,
+            $"Recommended action: {recommendedAction}");
+    }
+
+    private static string BuildIncidentRuleWizard(DashboardIncidentItemViewModel incident, string ruleSuggestion)
+    {
+        var ruleState = string.IsNullOrWhiteSpace(ruleSuggestion)
+            ? "No rule has been created yet. Use Create rule after you understand the pattern."
+            : "Disabled rule suggestion created. Review it before enabling any automation.";
+        return string.Join(
+            Environment.NewLine,
+            "Rule creation wizard",
+            $"1. Scope: {incident.Grouping}",
+            $"2. Match: {incident.GroupKey}",
+            $"3. Action: {incident.RecommendedAction}",
+            $"4. Safety: keep disabled until this pattern is known and expected.",
+            ruleState);
+    }
     private static IReadOnlyList<NetworkDevice> FilterUsableDevices(IReadOnlyList<NetworkDevice> devices)
     {
         List<NetworkDevice>? filteredDevices = null;
