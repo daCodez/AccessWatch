@@ -5,6 +5,8 @@ using System.Net;
 using System.Text.Json;
 using AccessWatch.Core;
 using AccessWatch.Enforcement;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using AppIdentity = AccessWatch.Core.ApplicationIdentity;
 
 namespace AccessWatch.App.ViewModels;
@@ -21,6 +23,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private readonly IAiInvestigationBridge? aiInvestigationBridge;
     private readonly IFirewallEnforcementPlanner? firewallEnforcementPlanner;
     private readonly IFirewallEnforcementExecutor? firewallEnforcementExecutor;
+    private readonly ILogger<DashboardShellViewModel> logger;
     private readonly AccessWatchSettings settings;
     private DashboardPageViewModel selectedPage;
     private string selectedProtectionMode;
@@ -54,9 +57,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <summary>
     /// Initializes a dashboard shell without live data access.
     /// </summary>
-    public DashboardShellViewModel()
+    /// <param name="logger">Optional logger used to record dashboard operations and handled failures.</param>
+    public DashboardShellViewModel(ILogger<DashboardShellViewModel>? logger = null)
     {
         settings = new AccessWatchSettings();
+        this.logger = logger ?? NullLogger<DashboardShellViewModel>.Instance;
         selectedProtectionMode = settings.ProtectionMode.ToString();
         selectedAiMode = settings.AiMode.ToString();
         selectedSupportBridgeEndpoint = settings.SupportBridgeEndpoint;
@@ -74,6 +79,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <param name="aiInvestigationBridge">Optional bridge used to request in-app AI reviews.</param>
     /// <param name="firewallEnforcementPlanner">Optional planner used to prepare reviewed Windows Firewall actions.</param>
     /// <param name="firewallEnforcementExecutor">Optional executor used to apply reviewed Windows Firewall actions.</param>
+    /// <param name="logger">Optional logger used to record dashboard operations and handled failures.</param>
     public DashboardShellViewModel(
         IAccessWatchRepository repository,
         Func<CancellationToken, Task<int>>? scanAsync = null,
@@ -82,7 +88,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         IAiHandoffService? aiHandoffService = null,
         IAiInvestigationBridge? aiInvestigationBridge = null,
         IFirewallEnforcementPlanner? firewallEnforcementPlanner = null,
-        IFirewallEnforcementExecutor? firewallEnforcementExecutor = null)
+        IFirewallEnforcementExecutor? firewallEnforcementExecutor = null,
+        ILogger<DashboardShellViewModel>? logger = null)
     {
         this.repository = repository;
         this.scanAsync = scanAsync;
@@ -91,6 +98,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         this.aiInvestigationBridge = aiInvestigationBridge;
         this.firewallEnforcementPlanner = firewallEnforcementPlanner;
         this.firewallEnforcementExecutor = firewallEnforcementExecutor;
+        this.logger = logger ?? NullLogger<DashboardShellViewModel>.Instance;
         this.settings = settings ?? new AccessWatchSettings();
         selectedProtectionMode = this.settings.ProtectionMode.ToString();
         selectedAiMode = this.settings.AiMode.ToString();
@@ -893,6 +901,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         if (repository is null)
         {
+            logger.LogWarning("Dashboard load requested without a connected repository.");
             StatusMessage = "Dashboard data is not connected yet.";
             return;
         }
@@ -905,6 +914,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
         try
         {
+            logger.LogInformation("Loading dashboard data.");
             await repository.InitializeAsync(cancellationToken);
             var storedDevices = await repository.ListRecentDevicesAsync(500, cancellationToken);
             var devices = FilterUsableDevices(storedDevices);
@@ -924,9 +934,18 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             StatusMessage = events.Count == 0 && ports.Count == 0 && devices.Count == 0 && incidents.Count == 0
                 ? "No stored activity yet. Start the AccessWatch service to record listening ports and devices."
                 : $"Loaded {events.Count} events, {ports.Count} ports, {incidents.Count} incidents, and {devices.Count} devices.";
+            logger.LogInformation(
+                "Loaded dashboard data with {EventCount} events, {PortCount} ports, {IncidentCount} incidents, {DeviceCount} devices, {ApplicationCount} applications, and {RuleCount} rules.",
+                events.Count,
+                ports.Count,
+                incidents.Count,
+                devices.Count,
+                applications.Count,
+                rules.Count);
         }
         catch (Exception ex)
         {
+            logger.LogError(ex, "Could not load dashboard data.");
             StatusMessage = $"Could not load AccessWatch data: {ex.Message}";
         }
         finally
@@ -1140,12 +1159,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         if (selectedIncident is null)
         {
+            logger.LogWarning("Create rule requested without a selected incident.");
             StatusMessage = "Select an incident before creating a rule suggestion.";
             return;
         }
 
         if (repository is null)
         {
+            logger.LogWarning("Create rule requested without a connected repository.");
             StatusMessage = "Rule suggestions are not connected for this dashboard session.";
             return;
         }
@@ -1159,6 +1180,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         selectedIncidentRuleSuggestion = rule.ConditionJson;
         OnPropertyChanged(nameof(SelectedIncidentRuleSuggestion));
         OnPropertyChanged(nameof(HasIncidentRuleSuggestion));
+        logger.LogInformation("Created disabled rule suggestion {RuleId} from incident {IncidentId}.", ruleId, selectedIncident.IncidentId);
         StatusMessage = $"Created disabled rule suggestion #{ruleId} from {selectedIncident.Title}.";
     }
 
@@ -1169,11 +1191,13 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         if (selectedRule is null)
         {
+            logger.LogWarning("Rule preview requested without a selected rule.");
             StatusMessage = "Select a rule before previewing it.";
             return;
         }
 
         selectedRulePreview = BuildRulePreview(selectedRule);
+        logger.LogInformation("Previewed rule {RuleId}.", selectedRule.RuleId);
         StatusMessage = $"Previewed rule {selectedRule.Name}.";
         OnPropertyChanged(nameof(SelectedRulePreview));
     }
@@ -1198,12 +1222,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         if (selectedRule is null)
         {
+            logger.LogWarning("Rule {RuleAction} requested without a selected rule.", enabled ? "enable" : "disable");
             StatusMessage = enabled ? "Select a rule before enabling it." : "Select a rule before disabling it.";
             return;
         }
 
         if (repository is null)
         {
+            logger.LogWarning("Rule {RuleAction} requested without a connected repository.", enabled ? "enable" : "disable");
             StatusMessage = "Rule actions are not connected for this dashboard session.";
             return;
         }
@@ -1223,6 +1249,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
 
         SelectedRule = displayRule;
+        logger.LogInformation("Set rule {RuleId} enabled state to {Enabled}.", displayRule.RuleId, enabled);
         StatusMessage = enabled
             ? $"Enabled rule {displayRule.Name}. AccessWatch will apply its {displayRule.Action} action when matching activity appears."
             : $"Disabled rule {displayRule.Name}. Matching activity will stay visible, but this rule will not act on it.";
@@ -1352,12 +1379,14 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         if (selectedIncident is null)
         {
+            logger.LogWarning("Incident action {IncidentAction} requested without a selected incident.", statusVerb);
             StatusMessage = "Select an incident before applying an incident action.";
             return;
         }
 
         if (repository is null)
         {
+            logger.LogWarning("Incident action {IncidentAction} requested without a connected repository.", statusVerb);
             StatusMessage = "Incident actions are not connected for this dashboard session.";
             return;
         }
@@ -1384,6 +1413,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         }
 
         SelectedIncident = updatedIncident;
+        logger.LogInformation("Applied incident action {IncidentAction} to incident {IncidentId}; status {IncidentStatus}, risk {RiskLevel}.", statusVerb, updatedIncident.IncidentId, status, updatedRisk);
         StatusMessage = $"{statusVerb} incident {updatedIncident.Title}. {statusMeaning}";
     }
 
@@ -1441,6 +1471,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         if (scanAsync is null)
         {
+            logger.LogWarning("Dashboard scan requested without a connected scan function.");
             StatusMessage = "Dashboard scan is not connected yet.";
             return;
         }
@@ -1448,12 +1479,15 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         BeginLoading("Scan", "Scanning network devices and listening ports...");
         try
         {
+            logger.LogInformation("Running dashboard scan.");
             var createdEvents = await scanAsync(cancellationToken);
             await LoadAsync(cancellationToken);
+            logger.LogInformation("Dashboard scan completed with {CreatedEventCount} new events.", createdEvents);
             StatusMessage = $"Scan completed. Created {createdEvents} new events.";
         }
         catch (Exception ex)
         {
+            logger.LogError(ex, "Could not run dashboard scan.");
             StatusMessage = $"Could not run AccessWatch scan: {ex.Message}";
         }
         finally
@@ -1470,6 +1504,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     {
         if (simulateAsync is null)
         {
+            logger.LogWarning("Dashboard simulation requested without a connected simulator function.");
             StatusMessage = "Event simulator is not connected yet.";
             return;
         }
@@ -1477,12 +1512,15 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         BeginLoading("Simulation", "Creating a simulated network event...");
         try
         {
+            logger.LogInformation("Running dashboard simulation.");
             var createdEvents = await simulateAsync(cancellationToken);
             await LoadAsync(cancellationToken);
+            logger.LogInformation("Dashboard simulation completed with {CreatedEventCount} new events.", createdEvents);
             StatusMessage = $"Simulation completed. Created {createdEvents} event.";
         }
         catch (Exception ex)
         {
+            logger.LogError(ex, "Could not run dashboard simulation.");
             StatusMessage = $"Could not run AccessWatch simulator: {ex.Message}";
         }
         finally
@@ -3054,3 +3092,4 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         string? WhyItMatters = null,
         string? SuggestedAction = null);
 }
+

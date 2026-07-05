@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using AccessWatch.App.ViewModels;
 using AccessWatch.AI;
@@ -5,6 +6,7 @@ using AccessWatch.Core;
 using AccessWatch.Enforcement;
 using AccessWatch.Notifications;
 using AccessWatch.Tray;
+using Microsoft.Extensions.Logging;
 using AppIdentity = AccessWatch.Core.ApplicationIdentity;
 
 namespace AccessWatch.Tests;
@@ -1963,7 +1965,8 @@ public sealed class NotificationAndViewModelTests
                 }
             ]
         };
-        var model = new DashboardShellViewModel(repository);
+        var logger = new CapturingLogger<DashboardShellViewModel>();
+        var model = new DashboardShellViewModel(repository, logger: logger);
         var changed = new List<string?>();
         model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
 
@@ -1975,6 +1978,9 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Select a rule before enabling it.", model.StatusMessage);
         await model.DisableSelectedRuleAsync(CancellationToken.None);
         Assert.Equal("Select a rule before disabling it.", model.StatusMessage);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message == "Rule preview requested without a selected rule.");
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message == "Rule enable requested without a selected rule.");
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message == "Rule disable requested without a selected rule.");
 
         await model.LoadAsync(CancellationToken.None);
 
@@ -1999,11 +2005,13 @@ public sealed class NotificationAndViewModelTests
         model.PreviewSelectedRule();
         Assert.Contains("Previewed rule Watch remote admin", model.StatusMessage);
         Assert.Contains("Action: AskBeforeAllow", model.SelectedRulePreview);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message == "Previewed rule 7.");
 
         await model.EnableSelectedRuleAsync(CancellationToken.None);
         Assert.True(repository.RuleUpserts[^1].Enabled);
         Assert.True(model.SelectedRule!.IsEnabled);
         Assert.Contains("Enabled rule", model.StatusMessage);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message == "Set rule 1 enabled state to True.");
 
         model.SelectedRule = model.Rules.Single(rule => rule.Name == "Device watch");
         Assert.Contains("Temporary until 2026-06-30T12:00:00Z", model.SelectedRule.Duration);
@@ -2067,12 +2075,17 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Select a rule to see its conditions, action, duration, and safety notes.", model.SelectedRuleDetail);
         Assert.Equal("Select a rule to preview what it would affect.", model.SelectedRulePreview);
 
-        var detached = new DashboardShellViewModel
+        var detachedLogger = new CapturingLogger<DashboardShellViewModel>();
+        var detached = new DashboardShellViewModel(logger: detachedLogger)
         {
             SelectedRule = model.Rules[0]
         };
         await detached.EnableSelectedRuleAsync(CancellationToken.None);
         Assert.Equal("Rule actions are not connected for this dashboard session.", detached.StatusMessage);
+        await detached.DisableSelectedRuleAsync(CancellationToken.None);
+        Assert.Equal("Rule actions are not connected for this dashboard session.", detached.StatusMessage);
+        Assert.Contains(detachedLogger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message == "Rule enable requested without a connected repository.");
+        Assert.Contains(detachedLogger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message == "Rule disable requested without a connected repository.");
     }
     /// <summary>
     /// Verifies selected incident actions persist state and create rule suggestions.
@@ -2099,7 +2112,8 @@ public sealed class NotificationAndViewModelTests
                 }
             ]
         };
-        var model = new DashboardShellViewModel(repository);
+        var logger = new CapturingLogger<DashboardShellViewModel>();
+        var model = new DashboardShellViewModel(repository, logger: logger);
         var changed = new List<string?>();
         model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
 
@@ -2116,6 +2130,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Skype accessed the microphone", mediumRule.Description);
         Assert.True(model.HasIncidentRuleSuggestion);
         Assert.Contains("IncidentSuggestion", model.SelectedIncidentRuleSuggestion);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message == "Created disabled rule suggestion 1 from incident 55.");
         using (var document = JsonDocument.Parse(model.SelectedIncidentRuleSuggestion))
         {
             Assert.Equal(55, document.RootElement.GetProperty("incidentId").GetInt64());
@@ -2125,6 +2140,7 @@ public sealed class NotificationAndViewModelTests
 
         await model.WatchSelectedIncidentAsync(CancellationToken.None);
 
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message.Contains("Applied incident action Watching to incident 55; status Watching, risk Medium."));
         Assert.Equal(IncidentStatus.Watching, repository.IncidentUpserts[0].Status);
         Assert.Equal("Watching", model.SelectedIncident!.Status);
         Assert.Contains("Watching incident Microphone activated", model.StatusMessage);
@@ -2886,17 +2902,44 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies dashboard loads emit useful structured operational logs.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_WritesOperationalLogs()
+    {
+        var logger = new CapturingLogger<DashboardShellViewModel>();
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 1, Hostname = "office-laptop", IpAddress = "192.168.1.25", MacAddress = "02:AC:CE:55:20:25" }],
+            Applications = [new AppIdentity { ApplicationId = 2, DisplayName = "Visual Studio", ProcessName = "devenv" }],
+            Ports = [new ListeningPort { PortNumber = 9443, LocalAddress = "0.0.0.0" }],
+            Events = [new NetworkEvent { EventType = "NewListeningPort", RiskLevel = RiskLevel.High, Summary = "Visual Studio opened a port." }],
+            Incidents = [new Incident { IncidentId = 3, Title = "Port opened", Summary = "Visual Studio opened a port.", RiskLevel = RiskLevel.High, Status = IncidentStatus.Open, StartedUtc = DateTimeOffset.UnixEpoch, LastUpdatedUtc = DateTimeOffset.UnixEpoch }],
+            Rules = [new AccessWatchRule { RuleId = 4, Name = "Watch Visual Studio", Description = "Watch the port.", ConditionJson = "{}", RiskLevel = RiskLevel.High, Action = NotificationAction.AskBeforeAllow }]
+        };
+        var model = new DashboardShellViewModel(repository, logger: logger);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message == "Loading dashboard data.");
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message.Contains("Loaded dashboard data with 1 events, 1 ports, 1 incidents, 1 devices, 1 applications, and 1 rules."));
+    }
+
+    /// <summary>
     /// Verifies repository failures are shown as dashboard status instead of crashing the window.
     /// </summary>
     [Fact]
     public async Task DashboardShellViewModel_LoadAsync_ShowsRepositoryFailure()
     {
-        var model = new DashboardShellViewModel(new FakeRepository { Failure = new InvalidOperationException("database offline") });
+        var logger = new CapturingLogger<DashboardShellViewModel>();
+        var failure = new InvalidOperationException("database offline");
+        var model = new DashboardShellViewModel(new FakeRepository { Failure = failure }, logger: logger);
 
         await model.LoadAsync(CancellationToken.None);
 
         Assert.Contains("database offline", model.StatusMessage);
         Assert.False(model.IsLoading);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Error && entry.Exception == failure && entry.Message == "Could not load dashboard data.");
     }
 
 
@@ -2938,11 +2981,13 @@ public sealed class NotificationAndViewModelTests
     [Fact]
     public async Task DashboardShellViewModel_RunScanAsyncWithoutScanner_ShowsDisconnectedState()
     {
-        var model = new DashboardShellViewModel(new FakeRepository());
+        var logger = new CapturingLogger<DashboardShellViewModel>();
+        var model = new DashboardShellViewModel(new FakeRepository(), logger: logger);
 
         await model.RunScanAsync(CancellationToken.None);
 
         Assert.Equal("Dashboard scan is not connected yet.", model.StatusMessage);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message == "Dashboard scan requested without a connected scan function.");
     }
 
     /// <summary>
@@ -2956,11 +3001,12 @@ public sealed class NotificationAndViewModelTests
             Events = [new NetworkEvent { EventType = "NewListeningPort", RiskLevel = RiskLevel.High, Summary = "SSH opened.", DestinationPort = 22 }]
         };
         var scanCount = 0;
+        var logger = new CapturingLogger<DashboardShellViewModel>();
         var model = new DashboardShellViewModel(repository, _ =>
         {
             scanCount++;
             return Task.FromResult(3);
-        });
+        }, logger: logger);
 
         await model.RunScanAsync(CancellationToken.None);
 
@@ -2968,6 +3014,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Single(model.RecentActivity);
         Assert.Equal("Scan completed. Created 3 new events.", model.StatusMessage);
         Assert.False(model.IsLoading);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message == "Running dashboard scan.");
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message == "Dashboard scan completed with 3 new events.");
     }
 
     /// <summary>
@@ -2976,12 +3024,14 @@ public sealed class NotificationAndViewModelTests
     [Fact]
     public async Task DashboardShellViewModel_RunScanAsync_ShowsScanFailure()
     {
-        var model = new DashboardShellViewModel(new FakeRepository(), _ => throw new InvalidOperationException("scan failed"));
+        var logger = new CapturingLogger<DashboardShellViewModel>();
+        var model = new DashboardShellViewModel(new FakeRepository(), _ => throw new InvalidOperationException("scan failed"), logger: logger);
 
         await model.RunScanAsync(CancellationToken.None);
 
         Assert.Contains("scan failed", model.StatusMessage);
         Assert.False(model.IsLoading);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Error && entry.Message == "Could not run dashboard scan." && entry.Exception is InvalidOperationException);
     }
     /// <summary>
     /// Verifies simulator requests report when no simulator function is connected.
@@ -2989,11 +3039,13 @@ public sealed class NotificationAndViewModelTests
     [Fact]
     public async Task DashboardShellViewModel_RunSimulationAsyncWithoutSimulator_ShowsDisconnectedState()
     {
-        var model = new DashboardShellViewModel(new FakeRepository());
+        var logger = new CapturingLogger<DashboardShellViewModel>();
+        var model = new DashboardShellViewModel(new FakeRepository(), logger: logger);
 
         await model.RunSimulationAsync(CancellationToken.None);
 
         Assert.Equal("Event simulator is not connected yet.", model.StatusMessage);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message == "Dashboard simulation requested without a connected simulator function.");
     }
 
     /// <summary>
@@ -3045,6 +3097,7 @@ public sealed class NotificationAndViewModelTests
             Events = [new NetworkEvent { EventType = "NewListeningPort", RiskLevel = RiskLevel.High, Summary = "Simulated event.", DestinationPort = 9443 }]
         };
         var simulationCount = 0;
+        var logger = new CapturingLogger<DashboardShellViewModel>();
         var model = new DashboardShellViewModel(
             repository,
             null,
@@ -3052,7 +3105,8 @@ public sealed class NotificationAndViewModelTests
             {
                 simulationCount++;
                 return Task.FromResult(1);
-            });
+            },
+            logger: logger);
 
         await model.RunSimulationAsync(CancellationToken.None);
 
@@ -3060,6 +3114,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Single(model.RecentActivity);
         Assert.Equal("Simulation completed. Created 1 event.", model.StatusMessage);
         Assert.False(model.IsLoading);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message == "Running dashboard simulation.");
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message == "Dashboard simulation completed with 1 new events.");
     }
 
     /// <summary>
@@ -3068,12 +3124,14 @@ public sealed class NotificationAndViewModelTests
     [Fact]
     public async Task DashboardShellViewModel_RunSimulationAsync_ShowsSimulationFailure()
     {
-        var model = new DashboardShellViewModel(new FakeRepository(), null, _ => throw new InvalidOperationException("simulator failed"));
+        var logger = new CapturingLogger<DashboardShellViewModel>();
+        var model = new DashboardShellViewModel(new FakeRepository(), null, _ => throw new InvalidOperationException("simulator failed"), logger: logger);
 
         await model.RunSimulationAsync(CancellationToken.None);
 
         Assert.Contains("simulator failed", model.StatusMessage);
         Assert.False(model.IsLoading);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Error && entry.Message == "Could not run dashboard simulation." && entry.Exception is InvalidOperationException);
     }
     /// <summary>
     /// Verifies tray quick actions include opening the dashboard.
@@ -3102,6 +3160,39 @@ public sealed class NotificationAndViewModelTests
 
         throw new FileNotFoundException("Could not locate src/AccessWatch.App/MainWindow.xaml from the test output folder.");
     }
+
+    [ExcludeFromCodeCoverage]
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<CapturedLogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            return NullScope.Instance;
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return true;
+        }
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add(new CapturedLogEntry(logLevel, formatter(state, exception), exception));
+        }
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+
+            public void Dispose()
+            {
+            }
+        }
+    }
+
+    [ExcludeFromCodeCoverage]
+    private sealed record CapturedLogEntry(LogLevel Level, string Message, Exception? Exception);
 
     private sealed class ReviewOnlyFirewallPlanner : IFirewallEnforcementPlanner
     {
@@ -3304,3 +3395,4 @@ public sealed class NotificationAndViewModelTests
         }
     }
 }
+
