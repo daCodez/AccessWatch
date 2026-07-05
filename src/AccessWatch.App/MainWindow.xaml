@@ -221,38 +221,35 @@
 
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding PortsVisibility}">
                     <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <DataGrid Grid.Row="0" ItemsSource="{Binding Ports}" SelectedItem="{Binding SelectedPort, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="620" />
+                            <ColumnDefinition Width="360" />
+                        </Grid.ColumnDefinitions>
+                        <DataGrid Grid.Column="0" ItemsSource="{Binding Ports}" SelectedItem="{Binding SelectedPort, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Endpoint" Binding="{Binding Endpoint}" Width="150" />
-                                <DataGridTextColumn Header="Application" Binding="{Binding ApplicationName}" Width="1.5*" />
-                                <DataGridTextColumn Header="Reachability" Binding="{Binding Reachability}" Width="130" />
+                                <DataGridTextColumn Header="Application" Binding="{Binding ApplicationName}" Width="1.4*" />
+                                <DataGridTextColumn Header="Zone" Binding="{Binding NetworkZone}" Width="120" />
+                                <DataGridTextColumn Header="Reachability" Binding="{Binding ReachabilityTest}" Width="1.4*" />
+                                <DataGridTextColumn Header="History" Binding="{Binding HistoryStatus}" Width="1.4*" />
                                 <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
-                                <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
-                                <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="130" />
-                                <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
-                                <DataGridTextColumn Header="Meaning" Binding="{Binding Meaning}" Width="1.8*" />
+                                <DataGridTextColumn Header="Confidence" Binding="{Binding AppConfidence}" Width="150" />
                                 <DataGridTextColumn Header="Next step" Binding="{Binding SuggestedAction}" Width="2*" />
-                                <DataGridTextColumn Header="Identity" Binding="{Binding Detail}" Width="2*" />
+                                <DataGridTextColumn Header="Meaning" Binding="{Binding Meaning}" Width="1.8*" />
                             </DataGrid.Columns>
                         </DataGrid>
-                        <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
+                        <Border Grid.Column="1" BorderBrush="#D0D7DE" BorderThickness="1,0,0,0" Padding="18,0,0,0" Margin="18,0,0,0">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding SelectedPortDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
-                                <Button Grid.Column="1" Content="{Binding PortInvestigationButtonText}" IsEnabled="{Binding CanInvestigateSelectedPort}" Width="112" Height="30" Click="OnInvestigatePortClick" />
-                                <TextBox Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SelectedPortInvestigation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="96" FontSize="12" Margin="0,12,0,0" />
+                                <TextBlock Text="Port details" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
+                                <TextBlock Grid.Row="1" Text="{Binding SelectedPortDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12" />
+                                <Button Grid.Row="2" Content="{Binding PortInvestigationButtonText}" IsEnabled="{Binding CanInvestigateSelectedPort}" Width="128" Height="30" HorizontalAlignment="Left" Click="OnInvestigatePortClick" />
+                                <TextBox Grid.Row="3" Text="{Binding SelectedPortInvestigation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" Margin="0,12,0,0" />
                             </Grid>
                         </Border>
                     </Grid>

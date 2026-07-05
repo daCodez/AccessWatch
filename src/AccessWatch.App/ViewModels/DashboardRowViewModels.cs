@@ -87,13 +87,19 @@ public sealed record DashboardPortItemViewModel(
     string LocalAddress,
     string Meaning,
     string Exposure,
+    string NetworkAdapter,
+    string NetworkZone,
+    string ReachabilityTest,
+    string HistoryStatus,
+    string ExposureChange,
+    string AppConfidence,
     string SuggestedAction,
     string Investigation)
 {
     /// <summary>
     /// Gets the plain-English detail text for this listening port row.
     /// </summary>
-    public string DetailText => $"Port: {Endpoint} | Meaning: {Meaning} | Exposure: {Exposure} | Application: {ApplicationName} | Risk: {RiskStatus} | Trust: {TrustStatus} | First seen: {FirstSeen} | Last seen: {LastSeen} | Identity: {Detail}";
+    public string DetailText => $"Port: {Endpoint} | Meaning: {Meaning} | Exposure: {Exposure} | Adapter: {NetworkAdapter} | Zone: {NetworkZone} | Reachability test: {ReachabilityTest} | History: {HistoryStatus} | Exposure change: {ExposureChange} | App confidence: {AppConfidence} | Application: {ApplicationName} | Risk: {RiskStatus} | Trust: {TrustStatus} | First seen: {FirstSeen} | Last seen: {LastSeen} | Identity: {Detail} | Next: {SuggestedAction}";
 }
 
 /// <summary>

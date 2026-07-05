@@ -108,6 +108,9 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("SelectedItem=\"{Binding SelectedPort, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedPortDetail}\"", xaml);
         Assert.Contains("Header=\"Meaning\"", xaml);
+        Assert.Contains("Header=\"Zone\"", xaml);
+        Assert.Contains("Header=\"Confidence\"", xaml);
+        Assert.Contains("Text=\"Port details\"", xaml);
         Assert.Contains("Header=\"Next step\"", xaml);
         Assert.Contains("Content=\"{Binding PortInvestigationButtonText}\"", xaml);
         Assert.Contains("Click=\"OnInvestigatePortClick\"", xaml);
@@ -1372,7 +1375,14 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("0.0.0.0", port.LocalAddress);
                 Assert.Contains("Alternate HTTPS", port.Meaning);
                 Assert.Contains("all network adapters", port.Exposure);
+                Assert.Equal("All network adapters", port.NetworkAdapter);
+                Assert.Equal("All adapters", port.NetworkZone);
+                Assert.Contains("another device may be able to connect", port.ReachabilityTest);
+                Assert.Contains("Previously seen", port.HistoryStatus);
+                Assert.Contains("High-risk network exposure", port.ExposureChange);
+                Assert.Contains("High (90%)", port.AppConfidence);
                 Assert.Contains("Confirm this application", port.SuggestedAction);
+                Assert.Contains("Application confidence:", port.Investigation);
                 Assert.Contains("Next step:", port.Investigation);
             },
             port =>
@@ -1384,13 +1394,23 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("Application identity unavailable", port.Detail);
                 Assert.Contains("No common profile", port.Meaning);
                 Assert.Contains("Local-only listener", port.Exposure);
+                Assert.Equal("Loopback adapter on this PC", port.NetworkAdapter);
+                Assert.Equal("Loopback", port.NetworkZone);
+                Assert.Contains("bound to this PC only", port.ReachabilityTest);
+                Assert.Contains("No history yet", port.HistoryStatus);
+                Assert.Contains("No high-risk", port.ExposureChange);
+                Assert.Contains("Low (20%)", port.AppConfidence);
                 Assert.Contains("Run a fresh scan", port.SuggestedAction);
             },
             port =>
             {
                 Assert.Equal("TCP 172.22.96.1:139", port.Endpoint);
                 Assert.Contains("NetBIOS", port.Meaning);
-                Assert.Contains("private address 172.22.96.1", port.Exposure);
+                Assert.Contains("private or virtual address 172.22.96.1", port.Exposure);
+                Assert.Equal("WSL or Hyper-V", port.NetworkZone);
+                Assert.Contains("WSL or Hyper-V virtual adapter", port.NetworkAdapter);
+                Assert.Contains("forwarded ports", port.ReachabilityTest);
+                Assert.Contains("High-risk network exposure", port.ExposureChange);
                 Assert.Contains("Run a fresh scan", port.SuggestedAction);
             },
             port =>
@@ -1398,6 +1418,9 @@ public sealed class NotificationAndViewModelTests
                 Assert.Equal("TCP 127.0.0.1:80", port.Endpoint);
                 Assert.Contains("HTTP web service", port.Meaning);
                 Assert.Contains("Local-only listener", port.Exposure);
+                Assert.Equal("Loopback", port.NetworkZone);
+                Assert.Contains("No high-risk", port.ExposureChange);
+                Assert.Contains("High (90%)", port.AppConfidence);
                 Assert.Contains("No action needed", port.SuggestedAction);
             });
         Assert.Same(model.Ports[0], model.SelectedPort);
@@ -1448,6 +1471,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Investigation report", model.SelectedPortInvestigation);
         Assert.Contains("Endpoint: TCP 0.0.0.0:9443", model.SelectedPortInvestigation);
         Assert.Contains("What to check:", model.SelectedPortInvestigation);
+        Assert.Contains("Likely adapter: All network adapters", model.SelectedPortInvestigation);
+        Assert.Contains("Application confidence: High (90%)", model.SelectedPortInvestigation);
         Assert.Contains("Recommended decision: Confirm this application", model.SelectedPortInvestigation);
 
         model.SelectedPort = model.Ports[1];
@@ -1455,6 +1480,139 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click Investigate port", model.SelectedPortInvestigation);
     }
 
+    /// <summary>
+    /// Verifies port rows call out adapter zones, history, exposure changes, and confidence.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_ExplainsPortZonesHistoryAndConfidence()
+    {
+        var openssh = new AppIdentity { DisplayName = "OpenSSH Server", ProcessName = "sshd" };
+        var incompleteApplication = new AppIdentity { DisplayName = string.Empty, ProcessName = string.Empty };
+        var repository = new FakeRepository
+        {
+            Ports =
+            [
+                new ListeningPort
+                {
+                    PortNumber = 22,
+                    Protocol = "TCP",
+                    LocalAddress = "192.168.1.25",
+                    Reachability = PortReachability.NetworkReachable,
+                    RiskStatus = RiskStatus.HighRisk,
+                    Application = openssh
+                },
+                new ListeningPort
+                {
+                    PortNumber = 445,
+                    Protocol = "TCP",
+                    LocalAddress = "172.17.0.2",
+                    Reachability = PortReachability.NetworkReachable,
+                    RiskStatus = RiskStatus.Critical,
+                    Application = openssh
+                },
+                new ListeningPort
+                {
+                    PortNumber = 53,
+                    Protocol = "UDP",
+                    LocalAddress = "172.31.2.4",
+                    Reachability = PortReachability.Unknown,
+                    RiskStatus = RiskStatus.Normal,
+                    FirstSeenUtc = DateTimeOffset.UnixEpoch,
+                    LastSeenUtc = DateTimeOffset.UnixEpoch,
+                    Application = incompleteApplication
+                },
+                new ListeningPort
+                {
+                    PortNumber = 5900,
+                    Protocol = "TCP",
+                    LocalAddress = "169.254.1.8",
+                    Reachability = PortReachability.NetworkReachable,
+                    RiskStatus = RiskStatus.HighRisk
+                },
+                new ListeningPort
+                {
+                    PortNumber = 8080,
+                    Protocol = "TCP",
+                    LocalAddress = "203.0.113.10",
+                    Reachability = PortReachability.NetworkReachable,
+                    RiskStatus = RiskStatus.Normal,
+                    Application = openssh
+                },
+                new ListeningPort
+                {
+                    PortNumber = 25,
+                    Protocol = "TCP",
+                    LocalAddress = "10.0.0.9",
+                    Reachability = PortReachability.NetworkReachable,
+                    RiskStatus = RiskStatus.Normal,
+                    Application = openssh
+                }
+            ],
+            Events =
+            [
+                new NetworkEvent { EventType = "NewListeningPort", DestinationPort = 22, DestinationIp = "192.168.1.25", Protocol = "UDP", CreatedUtc = DateTimeOffset.UnixEpoch.AddSeconds(1) },
+                new NetworkEvent { EventType = "NewListeningPort", DestinationPort = 22, DestinationIp = "192.168.1.25", Protocol = "TCP", CreatedUtc = DateTimeOffset.UnixEpoch.AddSeconds(2) },
+                new NetworkEvent { EventType = "ListeningPortApplicationChanged", DestinationPort = 445, DestinationIp = "172.17.0.2", Protocol = "TCP", CreatedUtc = DateTimeOffset.UnixEpoch.AddSeconds(3) },
+                new NetworkEvent { EventType = "NewListeningPort", DestinationPort = 3389, DestinationIp = "192.168.1.25", Protocol = "TCP", CreatedUtc = DateTimeOffset.UnixEpoch.AddSeconds(4) },
+                new NetworkEvent { EventType = "NewListeningPort", DestinationPort = 8080, DestinationIp = "203.0.113.11", Protocol = "TCP", CreatedUtc = DateTimeOffset.UnixEpoch.AddSeconds(5) },
+                new NetworkEvent { EventType = "NewListeningPort", DestinationPort = 8080, Protocol = string.Empty, CreatedUtc = DateTimeOffset.UnixEpoch.AddSeconds(6) }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.Ports,
+            ssh =>
+            {
+                Assert.Contains("SSH remote shell", ssh.Meaning);
+                Assert.Equal("LAN", ssh.NetworkZone);
+                Assert.Contains("LAN adapter", ssh.NetworkAdapter);
+                Assert.Contains("network address", ssh.ReachabilityTest);
+                Assert.Contains("Newly opened", ssh.HistoryStatus);
+                Assert.Contains("New high-risk exposure", ssh.ExposureChange);
+                Assert.Contains("Medium (60%)", ssh.AppConfidence);
+                Assert.Contains("Treat this as new exposure", ssh.SuggestedAction);
+            },
+            smb =>
+            {
+                Assert.Contains("SMB file sharing", smb.Meaning);
+                Assert.Equal("Docker", smb.NetworkZone);
+                Assert.Contains("Docker virtual adapter", smb.NetworkAdapter);
+                Assert.Contains("forwarded ports", smb.ReachabilityTest);
+                Assert.Contains("Owning application changed", smb.HistoryStatus);
+                Assert.Contains("High-risk port changed", smb.ExposureChange);
+            },
+            dns =>
+            {
+                Assert.Contains("DNS service", dns.Meaning);
+                Assert.Equal("VPN or private virtual network", dns.NetworkZone);
+                Assert.Contains("Unknown from this scan", dns.ReachabilityTest);
+                Assert.Contains("Opened once", dns.HistoryStatus);
+                Assert.Contains("Low (20%) - application identity is incomplete", dns.AppConfidence);
+            },
+            vnc =>
+            {
+                Assert.Contains("VNC remote screen sharing", vnc.Meaning);
+                Assert.Equal("Link-local", vnc.NetworkZone);
+                Assert.Contains("Link-local adapter", vnc.NetworkAdapter);
+                Assert.Contains("High-risk network exposure", vnc.ExposureChange);
+            },
+            web =>
+            {
+                Assert.Contains("Alternate HTTP", web.Meaning);
+                Assert.Equal("Public or unknown network", web.NetworkZone);
+                Assert.Contains("Possibly reachable", web.ReachabilityTest);
+                Assert.Contains("Newly opened", web.HistoryStatus);
+            },
+            smtp =>
+            {
+                Assert.Contains("SMTP mail service", smtp.Meaning);
+                Assert.Equal("LAN", smtp.NetworkZone);
+                Assert.Contains("LAN adapter", smtp.NetworkAdapter);
+            });
+    }
     /// <summary>
     /// Verifies port investigation guidance explains the empty-selection state.
     /// </summary>

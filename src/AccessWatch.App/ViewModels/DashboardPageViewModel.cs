@@ -668,7 +668,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             ReplaceMetrics(devices.Count, applications.Count, ports.Count, events.Count);
             ReplaceDevices(devices);
             ReplaceApplications(applications);
-            ReplacePorts(ports);
+            ReplacePorts(ports, events);
             ReplaceIncidents(incidents, devices, applications);
             ReplaceRecentActivity(events, applications, ports, devices);
             StatusMessage = events.Count == 0 && ports.Count == 0 && devices.Count == 0 && incidents.Count == 0
@@ -1207,26 +1207,45 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         SelectedApplication = Applications.FirstOrDefault();
     }
 
-    private void ReplacePorts(IReadOnlyList<ListeningPort> ports)
+    private void ReplacePorts(IReadOnlyList<ListeningPort> ports, IReadOnlyList<NetworkEvent> events)
     {
         Ports.Clear();
         foreach (var port in ports.Take(200))
         {
+            var latestPortEvent = FindLatestPortEvent(port, events);
+            var meaning = DescribePortMeaning(port.PortNumber);
+            var exposure = DescribePortExposure(port);
+            var networkZone = DescribeNetworkZone(port.LocalAddress);
+            var networkAdapter = DescribeNetworkAdapter(port.LocalAddress, networkZone);
+            var reachabilityTest = DescribeReachabilityTest(port, networkZone);
+            var historyStatus = DescribePortHistory(port, latestPortEvent);
+            var exposureChange = DescribeExposureChange(port, latestPortEvent);
+            var appConfidence = DescribePortAppConfidence(port.Application);
+            var suggestedAction = SuggestPortAction(port, latestPortEvent);
+            var applicationName = FirstUseful(port.Application?.DisplayName, port.Application?.ProcessName, "Unknown application");
+            var identity = BuildApplicationIdentity(port.Application, port.Application?.ProcessName);
+
             Ports.Add(new DashboardPortItemViewModel(
                 $"{port.Protocol} {port.LocalAddress}:{port.PortNumber}",
-                FirstUseful(port.Application?.DisplayName, port.Application?.ProcessName, "Unknown application"),
+                applicationName,
                 port.Reachability.ToString(),
                 port.RiskStatus.ToString(),
                 port.TrustStatus.ToString(),
                 FormatTimestamp(port.FirstSeenUtc),
                 FormatTimestamp(port.LastSeenUtc),
-                BuildApplicationIdentity(port.Application, port.Application?.ProcessName),
+                identity,
                 port.PortNumber,
                 port.LocalAddress,
-                DescribePortMeaning(port.PortNumber),
-                DescribePortExposure(port),
-                SuggestPortAction(port),
-                BuildPortInvestigation(port)));
+                meaning,
+                exposure,
+                networkAdapter,
+                networkZone,
+                reachabilityTest,
+                historyStatus,
+                exposureChange,
+                appConfidence,
+                suggestedAction,
+                BuildPortInvestigation(port, meaning, exposure, networkAdapter, networkZone, reachabilityTest, historyStatus, exposureChange, appConfidence, suggestedAction)));
         }
 
         SelectedPort = Ports.FirstOrDefault();
@@ -1312,24 +1331,56 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private static readonly IReadOnlyDictionary<int, string> KnownPortMeanings = new Dictionary<int, string>
     {
+        [21] = "FTP file transfer. This sends credentials in older plain-text setups and should not be exposed unless you intentionally run it.",
+        [22] = "SSH remote shell. Useful for administration, but it allows sign-in attempts from other devices when reachable.",
+        [23] = "Telnet remote shell. This is legacy and usually unsafe because it is commonly unencrypted.",
+        [25] = "SMTP mail service. Home PCs rarely need to expose this directly.",
+        [53] = "DNS service. Usually belongs to resolvers, VPN tools, containers, or development environments.",
         [80] = "HTTP web service. This may be IIS, a local web app, a router/admin page, or development tooling.",
+        [135] = "Windows RPC endpoint mapper. This is a Windows service endpoint and should stay limited to trusted private networks.",
+        [137] = "NetBIOS name service. This is legacy Windows discovery and is normally only expected on private networks.",
         [139] = "NetBIOS session service. This is usually legacy Windows file/printer sharing discovery.",
+        [443] = "HTTPS web service. This can be a browser-facing site, admin page, sync tool, or local development server.",
         [445] = "SMB file sharing. This is Windows file sharing and should normally be limited to trusted private networks.",
+        [1433] = "Microsoft SQL Server. Database ports should rarely be reachable from ordinary home or public networks.",
+        [3306] = "MySQL or MariaDB database. Database ports should stay local or limited to trusted systems.",
         [3389] = "Remote Desktop. This allows remote sign-in when enabled and deserves careful review.",
+        [5432] = "PostgreSQL database. Database ports should stay local or limited to trusted systems.",
+        [5900] = "VNC remote screen sharing. This allows remote desktop-style access when enabled.",
+        [5985] = "Windows Remote Management over HTTP. This is administrative access and should be limited to trusted networks.",
+        [5986] = "Windows Remote Management over HTTPS. This is administrative access and should be limited to trusted networks.",
+        [8080] = "Alternate HTTP web service. Common for development servers, proxies, device tools, and admin consoles.",
+        [8443] = "Alternate HTTPS web service. Common for secure admin consoles, development servers, and local services.",
         [9443] = "Alternate HTTPS/admin service. Many tools use this for local dashboards, admin consoles, or development servers.",
         [47001] = "Windows remote management helper service. Often related to local Windows service management.",
         [60000] = "High dynamic/private port. Often assigned by an app, device sync tool, VM, container, or local service."
     };
 
-    private static string BuildPortInvestigation(ListeningPort port)
+    private static string BuildPortInvestigation(
+        ListeningPort port,
+        string meaning,
+        string exposure,
+        string networkAdapter,
+        string networkZone,
+        string reachabilityTest,
+        string historyStatus,
+        string exposureChange,
+        string appConfidence,
+        string suggestedAction)
     {
         return string.Join(
             Environment.NewLine,
-            $"Meaning: {DescribePortMeaning(port.PortNumber)}",
-            $"Exposure: {DescribePortExposure(port)}",
+            $"Meaning: {meaning}",
+            $"Exposure: {exposure}",
+            $"Likely adapter: {networkAdapter}",
+            $"Network zone: {networkZone}",
+            $"Reachability check: {reachabilityTest}",
+            $"History: {historyStatus}",
+            $"Exposure change: {exposureChange}",
             $"Application: {FirstUseful(port.Application?.DisplayName, port.Application?.ProcessName, "Unknown application")}",
+            $"Application confidence: {appConfidence}",
             $"Identity: {BuildApplicationIdentity(port.Application, port.Application?.ProcessName)}",
-            $"Next step: {SuggestPortAction(port)}");
+            $"Next step: {suggestedAction}");
     }
 
     private static string BuildPortInvestigationReport(DashboardPortItemViewModel port)
@@ -1339,15 +1390,22 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             "Investigation report",
             $"Endpoint: {port.Endpoint}",
             $"Application: {port.ApplicationName}",
+            $"Application confidence: {port.AppConfidence}",
             $"Meaning: {port.Meaning}",
             $"Exposure: {port.Exposure}",
+            $"Likely adapter: {port.NetworkAdapter}",
+            $"Network zone: {port.NetworkZone}",
+            $"Reachability check: {port.ReachabilityTest}",
+            $"History: {port.HistoryStatus}",
+            $"Exposure change: {port.ExposureChange}",
             $"Identity: {port.Detail}",
             "What to check:",
             $"- Confirm {port.ApplicationName} is expected to own {port.Endpoint}.",
-            "- Confirm the bind address matches the network adapter you expect.",
+            $"- Confirm {port.NetworkAdapter} is the adapter you expect.",
             "- If this is unexpected, close the app or service and run another scan.",
             $"Recommended decision: {port.SuggestedAction}");
     }
+
     private static string DescribePortMeaning(int portNumber)
     {
         return KnownPortMeanings.TryGetValue(portNumber, out var meaning)
@@ -1362,17 +1420,190 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             return "Local-only listener. Other devices should not be able to connect to this bind address.";
         }
 
-        if (port.LocalAddress is "0.0.0.0" or "::" or "[::]")
+        if (IsAllAdaptersAddress(port.LocalAddress))
         {
             return "Listening on all network adapters. This can include Wi-Fi, Ethernet, VPN, WSL, Docker, and virtual adapters.";
         }
 
         if (IsPrivateOrVirtualAddress(port.LocalAddress))
         {
-            return $"Listening on private address {port.LocalAddress}. Confirm which adapter owns this address before treating it as real LAN exposure.";
+            return $"Listening on private or virtual address {port.LocalAddress}. Confirm which adapter owns this address before treating it as real LAN exposure.";
         }
 
         return $"Listening on {port.LocalAddress}. Confirm whether this address is reachable from another device.";
+    }
+
+    private static string DescribeNetworkZone(string localAddress)
+    {
+        if (IsAllAdaptersAddress(localAddress))
+        {
+            return "All adapters";
+        }
+
+        if (IsLoopbackAddress(localAddress))
+        {
+            return "Loopback";
+        }
+
+        if (localAddress.StartsWith("172.17.", StringComparison.Ordinal) || localAddress.StartsWith("172.18.", StringComparison.Ordinal))
+        {
+            return "Docker";
+        }
+
+        if (localAddress.StartsWith("172.22.", StringComparison.Ordinal) || localAddress.StartsWith("172.24.", StringComparison.Ordinal) || localAddress.StartsWith("172.25.", StringComparison.Ordinal))
+        {
+            return "WSL or Hyper-V";
+        }
+
+        if (localAddress.StartsWith("10.", StringComparison.Ordinal) || localAddress.StartsWith("192.168.", StringComparison.Ordinal))
+        {
+            return "LAN";
+        }
+
+        if (localAddress.StartsWith("172.", StringComparison.Ordinal))
+        {
+            return "VPN or private virtual network";
+        }
+
+        if (localAddress.StartsWith("169.254.", StringComparison.Ordinal) || localAddress.StartsWith("fe80", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Link-local";
+        }
+
+        return "Public or unknown network";
+    }
+
+    private static string DescribeNetworkAdapter(string localAddress, string networkZone)
+    {
+        return networkZone switch
+        {
+            "All adapters" => "All network adapters",
+            "Loopback" => "Loopback adapter on this PC",
+            "LAN" => $"LAN adapter with address {localAddress}",
+            "Docker" => $"Docker virtual adapter with address {localAddress}",
+            "WSL or Hyper-V" => $"WSL or Hyper-V virtual adapter with address {localAddress}",
+            "VPN or private virtual network" => $"VPN or private virtual adapter with address {localAddress}",
+            "Link-local" => $"Link-local adapter with address {localAddress}",
+            _ => $"Adapter for {localAddress}"
+        };
+    }
+
+    private static string DescribeReachabilityTest(ListeningPort port, string networkZone)
+    {
+        if (port.Reachability == PortReachability.LocalOnly)
+        {
+            return "No. It is bound to this PC only.";
+        }
+
+        if (port.Reachability == PortReachability.Unknown)
+        {
+            return "Unknown from this scan. Run another scan or test from a second device to confirm.";
+        }
+
+        if (networkZone == "All adapters")
+        {
+            return "Possibly. It listens on all adapters, so another device may be able to connect if the firewall allows it.";
+        }
+
+        if (networkZone is "LAN" or "VPN or private virtual network")
+        {
+            return "Possibly. It is bound to a network address; verify from another device or block it if unexpected.";
+        }
+
+        if (networkZone is "Docker" or "WSL or Hyper-V")
+        {
+            return "Usually limited to a virtual network, but forwarded ports can still expose it. Verify if unexpected.";
+        }
+
+        return "Possibly reachable. Confirm from another device before trusting it.";
+    }
+
+    private static string DescribePortHistory(ListeningPort port, NetworkEvent? latestPortEvent)
+    {
+        if (latestPortEvent?.EventType == "NewListeningPort")
+        {
+            return "Newly opened since the latest recorded scan.";
+        }
+
+        if (latestPortEvent?.EventType == "ListeningPortApplicationChanged")
+        {
+            return "Owning application changed since this port was first seen.";
+        }
+
+        if (port.FirstSeenUtc == default || port.LastSeenUtc == default)
+        {
+            return "No history yet; run another scan to compare changes.";
+        }
+
+        if (port.FirstSeenUtc == port.LastSeenUtc)
+        {
+            return "Opened once; waiting for another scan to confirm whether it stays open.";
+        }
+
+        return "Previously seen and still open on the latest scan.";
+    }
+
+    private static string DescribeExposureChange(ListeningPort port, NetworkEvent? latestPortEvent)
+    {
+        if (latestPortEvent?.EventType == "NewListeningPort" && IsHighRiskStatus(port.RiskStatus))
+        {
+            return "New high-risk exposure since the last scan.";
+        }
+
+        if (latestPortEvent?.EventType == "ListeningPortApplicationChanged" && IsHighRiskStatus(port.RiskStatus))
+        {
+            return "High-risk port changed owning application.";
+        }
+
+        if (port.Reachability == PortReachability.NetworkReachable && IsHighRiskStatus(port.RiskStatus))
+        {
+            return "High-risk network exposure; verify it is expected.";
+        }
+
+        return "No high-risk exposure change detected.";
+    }
+
+    private static string DescribePortAppConfidence(AppIdentity? application)
+    {
+        if (application is null || application.DisplayName == "Unknown application")
+        {
+            return "Low (20%) - application identity is unavailable.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(application.FilePath) && application.SignatureStatus == SignatureStatus.TrustedSigned)
+        {
+            return "High (90%) - signed executable path is known.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(application.ProcessName) || !string.IsNullOrWhiteSpace(application.DisplayName))
+        {
+            return "Medium (60%) - process identity is known, but publisher or signature is incomplete.";
+        }
+
+        return "Low (20%) - application identity is incomplete.";
+    }
+
+    private static NetworkEvent? FindLatestPortEvent(ListeningPort port, IReadOnlyList<NetworkEvent> events)
+    {
+        return events
+            .Where(networkEvent => MatchesPortEvent(port, networkEvent))
+            .OrderByDescending(networkEvent => networkEvent.CreatedUtc)
+            .FirstOrDefault();
+    }
+
+    private static bool MatchesPortEvent(ListeningPort port, NetworkEvent networkEvent)
+    {
+        if (networkEvent.DestinationPort != port.PortNumber)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(networkEvent.Protocol) && !string.Equals(networkEvent.Protocol, port.Protocol, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.IsNullOrWhiteSpace(networkEvent.DestinationIp) || string.Equals(networkEvent.DestinationIp, port.LocalAddress, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsPrivateOrVirtualAddress(string localAddress)
@@ -1382,8 +1613,30 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             localAddress.StartsWith("192.168.", StringComparison.Ordinal);
     }
 
-    private static string SuggestPortAction(ListeningPort port)
+    private static bool IsAllAdaptersAddress(string localAddress)
     {
+        return localAddress is "0.0.0.0" or "::" or "[::]";
+    }
+
+    private static bool IsLoopbackAddress(string localAddress)
+    {
+        return localAddress.StartsWith("127.", StringComparison.Ordinal) ||
+            localAddress.Equals("::1", StringComparison.OrdinalIgnoreCase) ||
+            localAddress.Equals("[::1]", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHighRiskStatus(RiskStatus riskStatus)
+    {
+        return riskStatus is RiskStatus.HighRisk or RiskStatus.Critical;
+    }
+
+    private static string SuggestPortAction(ListeningPort port, NetworkEvent? latestPortEvent)
+    {
+        if (latestPortEvent?.EventType == "NewListeningPort" && IsHighRiskStatus(port.RiskStatus))
+        {
+            return "Treat this as new exposure: confirm the app, then watch or block it if you did not expect it.";
+        }
+
         if (port.Application is null || port.Application.DisplayName == "Unknown application")
         {
             return "Run a fresh scan and confirm the owning process, executable path, publisher, and adapter before trusting it.";
@@ -1396,6 +1649,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
         return "No action needed if you recognize the app; watch it if the listener keeps reappearing unexpectedly.";
     }
+
     private static string BuildIncidentTarget(NetworkDevice? device, AppIdentity? application)
     {
         if (application is null)
