@@ -124,6 +124,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("ItemsSource=\"{Binding Rules}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedRule, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedRuleDetail}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedRuleDetail}\" Foreground=\"#57606A\" FontSize=\"12\" TextWrapping=\"Wrap\" Margin=\"0,0,0,10\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedRulePreview, Mode=OneWay}\"", xaml);
         Assert.Contains("Click=\"OnPreviewRuleClick\"", xaml);
         Assert.Contains("Click=\"OnEnableRuleClick\"", xaml);
@@ -147,8 +148,11 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Header=\"Confirmed\"", xaml);
         Assert.Contains("Header=\"Next step\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedDeviceDetail}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedDeviceDetail}\" Foreground=\"#57606A\" FontSize=\"12\" TextWrapping=\"Wrap\" Margin=\"0,0,0,10\"", xaml);
+        Assert.Contains("<WrapPanel Grid.Row=\"1\" HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\">", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedApplication, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedApplicationDetail}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedApplicationDetail}\" Foreground=\"#57606A\" FontSize=\"12\" TextWrapping=\"Wrap\" Margin=\"0,0,0,10\"", xaml);
         Assert.Contains("Content=\"This is OK\"", xaml);
         Assert.Contains("Content=\"Keep watching\"", xaml);
         Assert.Contains("Content=\"Mark as guest\"", xaml);
@@ -172,6 +176,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Text=\"{Binding SelectedIncident.RecommendedAction}\"", xaml);
         Assert.Contains("<WrapPanel Grid.Row=\"2\" HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\">", xaml);
         Assert.DoesNotContain("<DockPanel Grid.Row=\"1\" LastChildFill=\"True\">", xaml);
+        Assert.DoesNotContain("<StackPanel Grid.Column=\"1\" Orientation=\"Horizontal\" VerticalAlignment=\"Top\">", xaml);
+        Assert.DoesNotContain("Margin=\"0,0,16,0\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentExplanation, Mode=OneWay}\"", xaml);
         Assert.Contains("Text=\"{Binding IncidentSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncidentStatusFilter, Mode=TwoWay}\"", xaml);

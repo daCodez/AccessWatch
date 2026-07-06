@@ -206,28 +206,25 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding SelectedDeviceDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                                    <Button Content="This is OK" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,0" Click="OnTrustDeviceClick" />
-                                    <Button Content="Keep watching" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="98" Height="30" Margin="0,0,8,0" Click="OnWatchDeviceClick" />
-                                    <Button Content="Mark as guest" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="98" Height="30" Margin="0,0,8,0" Click="OnGuestDeviceClick" />
-                                    <Button Content="Block it" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,0" Click="OnBlockDeviceClick" />
-                                    <Button Content="Trace device" IsEnabled="{Binding CanTraceSelectedDevice}" Width="96" Height="30" Margin="0,0,8,0" Click="OnTraceDeviceClick" />
-                                    <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="116" Height="30" Click="OnApplyProtectionClick" />
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">
+                                <TextBlock Text="{Binding SelectedDeviceDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <WrapPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                    <Button Content="This is OK" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,8" Click="OnTrustDeviceClick" />
+                                    <Button Content="Keep watching" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnWatchDeviceClick" />
+                                    <Button Content="Mark as guest" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnGuestDeviceClick" />
+                                    <Button Content="Block it" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,8" Click="OnBlockDeviceClick" />
+                                    <Button Content="Trace device" IsEnabled="{Binding CanTraceSelectedDevice}" Width="104" Height="30" Margin="0,0,8,8" Click="OnTraceDeviceClick" />
+                                    <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="124" Height="30" Margin="0,0,0,8" Click="OnApplyProtectionClick" />
+                                </WrapPanel>
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,4,0,0">
                                     <TextBlock Text="Alias" Foreground="#57606A" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
                                     <TextBox Text="{Binding SelectedDeviceAlias, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="220" Height="30" Margin="0,0,8,0" />
                                     <Button Content="Save alias" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="88" Height="30" Margin="0,0,8,0" Click="OnSaveDeviceAliasClick" />
                                     <Button Content="Clear" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="64" Height="30" Click="OnClearDeviceAliasClick" />
                                 </StackPanel>
-                                <TextBox Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding SelectedDeviceTrace, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="88" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
-                                <TextBox Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
+                                <TextBox Grid.Row="3" Text="{Binding SelectedDeviceTrace, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="88" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
+                                <TextBox Grid.Row="4" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
                             </Grid>
                         </Border>
                     </Grid>
@@ -255,19 +252,16 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding SelectedApplicationDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                                    <Button Content="This is OK" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="84" Height="30" Margin="0,0,8,0" Click="OnTrustApplicationClick" />
-                                    <Button Content="Keep watching" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="86" Height="30" Margin="0,0,8,0" Click="OnWatchApplicationClick" />
-                                    <Button Content="Block it" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="84" Height="30" Margin="0,0,8,0" Click="OnBlockApplicationClick" />
-                                    <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="116" Height="30" Click="OnApplyProtectionClick" />
-                                </StackPanel>
-                                <TextBox Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
+                                <TextBlock Text="{Binding SelectedApplicationDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <WrapPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                    <Button Content="This is OK" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="84" Height="30" Margin="0,0,8,8" Click="OnTrustApplicationClick" />
+                                    <Button Content="Keep watching" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnWatchApplicationClick" />
+                                    <Button Content="Block it" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="84" Height="30" Margin="0,0,8,8" Click="OnBlockApplicationClick" />
+                                    <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="124" Height="30" Margin="0,0,0,8" Click="OnApplyProtectionClick" />
+                                </WrapPanel>
+                                <TextBox Grid.Row="2" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
                             </Grid>
                         </Border>
                     </Grid>
@@ -447,16 +441,16 @@
                         </Border>
                         <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding SelectedRuleDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                                    <Button Content="Preview" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Margin="0,0,8,0" Click="OnPreviewRuleClick" />
-                                    <Button Content="Enable" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Margin="0,0,8,0" Click="OnEnableRuleClick" />
-                                    <Button Content="Disable" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Click="OnDisableRuleClick" />
-                                </StackPanel>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding SelectedRuleDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <WrapPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                    <Button Content="Preview" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Margin="0,0,8,8" Click="OnPreviewRuleClick" />
+                                    <Button Content="Enable" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Margin="0,0,8,8" Click="OnEnableRuleClick" />
+                                    <Button Content="Disable" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Margin="0,0,0,8" Click="OnDisableRuleClick" />
+                                </WrapPanel>
                             </Grid>
                         </Border>
                         <Grid Grid.Row="2" Margin="0,12,0,0">
