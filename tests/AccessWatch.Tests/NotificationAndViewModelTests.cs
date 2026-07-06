@@ -94,7 +94,9 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Text=\"{Binding SelectedPageTitle}\"", xaml);
         Assert.DoesNotContain("Text=\"Overview\" FontSize=\"26\"", xaml);
         Assert.Contains("Height=\"760\" Width=\"1280\" MinHeight=\"680\" MinWidth=\"1120\"", xaml);
-        Assert.Contains("<ColumnDefinition Width=\"200\" />", xaml);
+        Assert.Contains("<ColumnDefinition Width=\"250\" />", xaml);
+        Assert.Contains("ScrollViewer.HorizontalScrollBarVisibility=\"Disabled\"", xaml);
+        Assert.Contains("HorizontalContentAlignment=\"Stretch\"", xaml);
         Assert.Contains("<Grid Grid.Column=\"1\" Margin=\"18\">", xaml);
         Assert.Contains("Content=\"{Binding ScanButtonText}\"", xaml);
         Assert.Contains("Content=\"{Binding SimulateButtonText}\"", xaml);

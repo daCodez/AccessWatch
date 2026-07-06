@@ -24,7 +24,7 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="200" />
+                <ColumnDefinition Width="250" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
@@ -33,12 +33,13 @@
                          SelectedItem="{Binding SelectedPage, Mode=TwoWay}"
                          BorderThickness="0"
                          Background="Transparent"
-                         HorizontalContentAlignment="Stretch">
+                         HorizontalContentAlignment="Stretch"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Border Margin="0,2" Padding="10,8">
                                 <StackPanel>
-                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" />
+                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="#24292F" TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding Summary}" Margin="0,3,0,0" FontSize="11" Foreground="#57606A" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
@@ -117,14 +118,19 @@
                                 <TextBlock Text="AccessWatch will show plain alerts here when something needs your attention." FontSize="13" Foreground="#57606A" Margin="0,6,0,0" TextWrapping="Wrap" TextAlignment="Center" />
                             </StackPanel>
                         </Border>
-                        <ListView Grid.Row="1" ItemsSource="{Binding SafetyItems}" Margin="0,10,0,0" BorderThickness="0" Visibility="{Binding SafetyItemsVisibility}">
+                        <ListView Grid.Row="1" ItemsSource="{Binding SafetyItems}" Margin="0,10,0,0" BorderThickness="0" Visibility="{Binding SafetyItemsVisibility}" HorizontalContentAlignment="Stretch">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Margin="0,8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="110" />
                                             <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="210" />
+                                            <ColumnDefinition Width="240" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Urgency}" Foreground="#0969DA" FontWeight="SemiBold" TextWrapping="Wrap" />
                                         <StackPanel Grid.Column="1" Margin="0,0,18,0">
