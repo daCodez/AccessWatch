@@ -110,6 +110,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Visibility=\"{Binding IncidentsVisibility}\"", xaml);
         Assert.Contains("Header=\"Show counts\"", xaml);
         Assert.Contains("Header=\"Why am I seeing this?\"", xaml);
+        Assert.Contains("Click=\"OnSafetyPrimaryActionClick\"", xaml);
+        Assert.Contains("Click=\"OnSafetySecondaryActionClick\"", xaml);
         Assert.Contains("Text=\"What happened\"", xaml);
         Assert.Contains("Text=\"What to do\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Ports}\"", xaml);
@@ -558,6 +560,179 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies camera alerts still render when the app inventory has not resolved the source yet.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_BuildsCameraSafetyItemWithoutResolvedApplication()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository
+        {
+            Events =
+            [
+                new NetworkEvent
+                {
+                    EventType = "CameraActivated",
+                    RiskLevel = RiskLevel.High,
+                    DetailsJson = "{\"app\":\"Unknown Camera App\"}",
+                    CreatedUtc = DateTimeOffset.UtcNow
+                }
+            ]
+        });
+
+        await model.LoadAsync(CancellationToken.None);
+
+        var item = Assert.Single(model.SafetyItems);
+        Assert.Equal("Someone may be using your camera", item.Headline);
+        Assert.Equal("Unknown Camera App", item.Target);
+        Assert.Equal("Application", item.SourceType);
+        Assert.Null(item.SourceId);
+    }
+
+    /// <summary>
+    /// Verifies Safety Center app buttons run the same trust decisions as the detailed app page.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplySafetyItemActions_UpdatesApplicationTrust()
+    {
+        var repository = new FakeRepository
+        {
+            Applications = [new AppIdentity { ApplicationId = 7, DisplayName = "Sound Recorder", ProcessName = "soundrecorder" }],
+            Events =
+            [
+                new NetworkEvent
+                {
+                    EventType = "MicrophoneActivated",
+                    ApplicationId = 7,
+                    RiskLevel = RiskLevel.High,
+                    CreatedUtc = DateTimeOffset.UtcNow
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+        var item = Assert.Single(model.SafetyItems);
+        Assert.Equal("Application", item.SourceType);
+        Assert.Equal(7, item.SourceId);
+
+        await model.ApplySafetyItemPrimaryActionAsync(item, CancellationToken.None);
+
+        Assert.Equal("Applications", model.SelectedPageTitle);
+        Assert.Equal("Blocked", model.SelectedApplication?.TrustStatus);
+        var decision = Assert.Single(repository.TrustDecisions);
+        Assert.Equal("Application", decision.TargetType);
+        Assert.Equal(7, decision.TargetId);
+        Assert.Equal(TrustStatus.Blocked, decision.Decision);
+    }
+
+    /// <summary>
+    /// Verifies the Safety Center secondary app action marks expected activity as OK.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplySafetyItemSecondaryAction_TrustsApplication()
+    {
+        var repository = new FakeRepository
+        {
+            Applications = [new AppIdentity { ApplicationId = 8, DisplayName = "Meeting App", ProcessName = "meeting" }],
+            Events =
+            [
+                new NetworkEvent
+                {
+                    EventType = "CameraActivated",
+                    ApplicationId = 8,
+                    RiskLevel = RiskLevel.High,
+                    CreatedUtc = DateTimeOffset.UtcNow
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySafetyItemSecondaryActionAsync(Assert.Single(model.SafetyItems), CancellationToken.None);
+
+        Assert.Equal("Applications", model.SelectedPageTitle);
+        Assert.Equal("Trusted", model.SelectedApplication?.TrustStatus);
+        var decision = Assert.Single(repository.TrustDecisions);
+        Assert.Equal(TrustStatus.Trusted, decision.Decision);
+    }
+
+    /// <summary>
+    /// Verifies Safety Center device and port buttons open the right investigation flows.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplySafetyItemActions_InvestigatesDevicesAndPorts()
+    {
+        var repository = new FakeRepository
+        {
+            Devices = [new NetworkDevice { DeviceId = 11, Hostname = "unknown-phone", IpAddress = "192.168.1.55", TrustStatus = TrustStatus.Unknown, RiskStatus = RiskStatus.Suspicious }],
+            Ports = [new ListeningPort { PortNumber = 9443, LocalAddress = "0.0.0.0", Protocol = "TCP", Reachability = PortReachability.NetworkReachable, RiskStatus = RiskStatus.HighRisk }],
+            Events =
+            [
+                new NetworkEvent { EventType = "NewDeviceObserved", SourceDeviceId = 11, RiskLevel = RiskLevel.Medium, CreatedUtc = DateTimeOffset.UtcNow },
+                new NetworkEvent { EventType = "NewListeningPort", DestinationPort = 9443, DestinationIp = "0.0.0.0", RiskLevel = RiskLevel.High, CreatedUtc = DateTimeOffset.UtcNow }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySafetyItemPrimaryActionAsync(model.SafetyItems[0], CancellationToken.None);
+
+        Assert.Equal("Devices", model.SelectedPageTitle);
+        Assert.Equal("unknown-phone", model.SelectedDevice?.Name);
+        Assert.Contains("Trace report: unknown-phone", model.SelectedDeviceTrace);
+
+        await model.ApplySafetyItemPrimaryActionAsync(model.SafetyItems[1], CancellationToken.None);
+
+        Assert.Equal("Ports", model.SelectedPageTitle);
+        Assert.Equal(9443, model.SelectedPort?.PortNumber);
+        Assert.Contains("Endpoint: TCP 0.0.0.0:9443", model.SelectedPortInvestigation);
+    }
+    /// <summary>
+    /// Verifies Safety Center actions handle manual device, incident, fallback, and port choices.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplySafetyItemActions_CoversRemainingChoices()
+    {
+        var repository = new FakeRepository
+        {
+            Devices =
+            [
+                new NetworkDevice { DeviceId = 21, Hostname = "front-door-tablet", IpAddress = "192.168.1.21", TrustStatus = TrustStatus.Unknown, RiskStatus = RiskStatus.Suspicious },
+                new NetworkDevice { DeviceId = 22, Hostname = "guest-tablet", IpAddress = "192.168.1.22", TrustStatus = TrustStatus.Unknown, RiskStatus = RiskStatus.Suspicious }
+            ],
+            Applications = [new AppIdentity { ApplicationId = 31, DisplayName = "Name Matched App", ProcessName = "named" }],
+            Ports = [new ListeningPort { PortNumber = 445, LocalAddress = "0.0.0.0", Protocol = "TCP", Reachability = PortReachability.NetworkReachable, RiskStatus = RiskStatus.HighRisk }],
+            Incidents =
+            [
+                new Incident { IncidentId = 41, Title = "Critical remote access", Summary = "Remote access needs review.", RiskLevel = RiskLevel.Critical, Status = IncidentStatus.Open, EventCount = 1, StartedUtc = DateTimeOffset.UtcNow, LastUpdatedUtc = DateTimeOffset.UtcNow },
+                new Incident { IncidentId = 42, Title = "High microphone use", Summary = "Microphone needs review.", RiskLevel = RiskLevel.High, Status = IncidentStatus.Open, EventCount = 1, StartedUtc = DateTimeOffset.UtcNow, LastUpdatedUtc = DateTimeOffset.UtcNow }
+            ]
+        };
+        var aiBridge = new FakeAiInvestigationBridge(new AiInvestigationResult(true, "Test Bridge", "AI summary", "AI next", "High", "{}"));
+        var model = new DashboardShellViewModel(repository, aiInvestigationBridge: aiBridge);
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySafetyItemPrimaryActionAsync(new DashboardSafetyItemViewModel("Act now", "Block device", "front-door-tablet", "", "", "Block it", "", "Device", 21), CancellationToken.None);
+        await model.ApplySafetyItemSecondaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Trust device", "front-door-tablet", "", "", "", "This is OK", "Device", 21), CancellationToken.None);
+        await model.ApplySafetyItemSecondaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Watch device", "guest-tablet", "", "", "", "Keep watching", "Device", null), CancellationToken.None);
+        await model.ApplySafetyItemPrimaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Name matched app", "Name Matched App", "", "", "Block it", "", "Application"), CancellationToken.None);
+        await model.ApplySafetyItemSecondaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Watch incident", "Incident", "", "", "", "Keep watching", "Incident", 42), CancellationToken.None);
+        await model.ApplySafetyItemPrimaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "High microphone use", "Incident", "", "", "Help me decide", "", "Incident", null), CancellationToken.None);
+        await model.ApplySafetyItemPrimaryActionAsync(new DashboardSafetyItemViewModel("Act now", "Critical remote access", "Incident", "", "", "Act now", "", "Incident", 41), CancellationToken.None);
+        await model.ApplySafetyItemSecondaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Port block", "SMB", "", "", "", "Block it", "Port", null, 445, "192.168.1.99"), CancellationToken.None);
+        await model.ApplySafetyItemPrimaryActionAsync(null, CancellationToken.None);
+        await model.ApplySafetyItemSecondaryActionAsync(null, CancellationToken.None);
+        await model.ApplySafetyItemPrimaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Unknown", "missing target", "", "", "Investigate", ""), CancellationToken.None);
+
+        Assert.Contains(repository.TrustDecisions, decision => decision.TargetType == "Device" && decision.TargetId == 21 && decision.Decision == TrustStatus.Blocked);
+        Assert.Contains(repository.TrustDecisions, decision => decision.TargetType == "Device" && decision.TargetId == 21 && decision.Decision == TrustStatus.Trusted);
+        Assert.Contains(repository.TrustDecisions, decision => decision.TargetType == "Device" && decision.TargetId == 22 && decision.Decision == TrustStatus.KnownWatched);
+        Assert.Contains(repository.TrustDecisions, decision => decision.TargetType == "Application" && decision.TargetId == 31 && decision.Decision == TrustStatus.Blocked);
+        Assert.Contains(repository.IncidentUpserts, incident => incident.IncidentId == 42 && incident.Status == IncidentStatus.Watching);
+        Assert.Contains(repository.IncidentUpserts, incident => incident.IncidentId == 41 && incident.RiskLevel == RiskLevel.Critical);
+        Assert.Contains("Open missing target", model.StatusMessage);
+    }
+    /// <summary>
     /// Verifies the Safety Center handles a single microphone alert without plural wording.
     /// </summary>
     [Fact]
@@ -583,6 +758,8 @@ public sealed class NotificationAndViewModelTests
         var item = Assert.Single(model.SafetyItems);
         Assert.Equal("Someone may be using your microphone", item.Headline);
         Assert.Equal("Meeting App", item.Target);
+        Assert.Equal("Application", item.SourceType);
+        Assert.Null(item.SourceId);
     }
 
     /// <summary>

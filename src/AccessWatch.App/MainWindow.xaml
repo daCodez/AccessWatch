@@ -148,8 +148,8 @@
                                             </Expander>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                            <Button Content="{Binding PrimaryAction}" Width="96" Height="30" Margin="0,0,8,0" />
-                                            <Button Content="{Binding SecondaryAction}" Width="96" Height="30" />
+                                            <Button Content="{Binding PrimaryAction}" Width="96" Height="30" Margin="0,0,8,0" Click="OnSafetyPrimaryActionClick" />
+                                            <Button Content="{Binding SecondaryAction}" Width="96" Height="30" Click="OnSafetySecondaryActionClick" />
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>

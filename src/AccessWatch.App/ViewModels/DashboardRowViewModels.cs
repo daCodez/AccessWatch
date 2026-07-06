@@ -22,7 +22,11 @@ public sealed record DashboardSafetyItemViewModel(
     string WhatHappened,
     string RecommendedAction,
     string PrimaryAction,
-    string SecondaryAction);
+    string SecondaryAction,
+    string SourceType = "",
+    long? SourceId = null,
+    int? PortNumber = null,
+    string LocalAddress = "");
 
 /// <summary>
 /// Represents a recent dashboard activity row.

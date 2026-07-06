@@ -1168,6 +1168,112 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Runs the main action for a Safety Center item.
+    /// </summary>
+    public Task ApplySafetyItemPrimaryActionAsync(DashboardSafetyItemViewModel? item, CancellationToken cancellationToken)
+    {
+        return ApplySafetyItemActionAsync(item, item?.PrimaryAction, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the secondary action for a Safety Center item.
+    /// </summary>
+    public Task ApplySafetyItemSecondaryActionAsync(DashboardSafetyItemViewModel? item, CancellationToken cancellationToken)
+    {
+        return ApplySafetyItemActionAsync(item, item?.SecondaryAction, cancellationToken);
+    }
+
+    private async Task ApplySafetyItemActionAsync(DashboardSafetyItemViewModel? item, string? action, CancellationToken cancellationToken)
+    {
+        if (item is null || string.IsNullOrWhiteSpace(action))
+        {
+            StatusMessage = "Select an alert before choosing an action.";
+            return;
+        }
+
+        SelectSafetyItemTarget(item);
+        switch (action)
+        {
+            case "Block it" when selectedApplication is not null:
+                await ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Blocked, cancellationToken);
+                break;
+            case "Block it" when selectedDevice is not null:
+                await ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Blocked, cancellationToken);
+                break;
+            case "This is OK" when selectedApplication is not null:
+                await ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Trusted, cancellationToken);
+                break;
+            case "This is OK" when selectedDevice is not null:
+                await ApplySelectedDeviceTrustDecisionAsync(TrustStatus.Trusted, cancellationToken);
+                break;
+            case "Keep watching" when selectedDevice is not null:
+                await ApplySelectedDeviceTrustDecisionAsync(TrustStatus.KnownWatched, cancellationToken);
+                break;
+            case "Keep watching" when selectedIncident is not null:
+                await WatchSelectedIncidentAsync(cancellationToken);
+                break;
+            case "Trace device" when selectedDevice is not null:
+                TraceSelectedDevice();
+                break;
+            case "Investigate" when selectedPort is not null:
+                InvestigateSelectedPort();
+                break;
+            case "Investigate" when selectedIncident is not null:
+            case "Help me decide" when selectedIncident is not null:
+                await CreateSelectedIncidentAiReviewAsync(cancellationToken);
+                break;
+            case "Act now" when selectedIncident is not null:
+                await EscalateSelectedIncidentAsync(cancellationToken);
+                break;
+            default:
+                StatusMessage = $"Open {item.Target} for more options before choosing {action}.";
+                break;
+        }
+    }
+
+    private void SelectSafetyItemTarget(DashboardSafetyItemViewModel item)
+    {
+        SelectedApplication = null;
+        SelectedDevice = null;
+        SelectedPort = null;
+        SelectedIncident = null;
+
+        switch (item.SourceType)
+        {
+            case "Application":
+                SelectedApplication = FindSafetyApplication(item);
+                SelectedPage = Pages.First(page => page.Name == "Applications");
+                break;
+            case "Device":
+                SelectedDevice = item.SourceId is null
+                    ? Devices.FirstOrDefault(device => string.Equals(device.Name, item.Target, StringComparison.OrdinalIgnoreCase))
+                    : Devices.FirstOrDefault(device => device.DeviceId == item.SourceId.Value);
+                SelectedPage = Pages.First(page => page.Name == "Devices");
+                break;
+            case "Port":
+                SelectedPort = Ports.FirstOrDefault(port =>
+                    item.PortNumber is not null
+                    && port.PortNumber == item.PortNumber.Value
+                    && (string.IsNullOrWhiteSpace(item.LocalAddress) || string.Equals(port.LocalAddress, item.LocalAddress, StringComparison.OrdinalIgnoreCase)))
+                    ?? Ports.FirstOrDefault(port => item.PortNumber is not null && port.PortNumber == item.PortNumber.Value);
+                SelectedPage = Pages.First(page => page.Name == "Ports");
+                break;
+            case "Incident":
+                SelectedIncident = item.SourceId is null
+                    ? Incidents.FirstOrDefault(incident => string.Equals(incident.Title, item.Headline, StringComparison.OrdinalIgnoreCase))
+                    : Incidents.FirstOrDefault(incident => incident.IncidentId == item.SourceId.Value);
+                SelectedPage = Pages.First(page => page.Name == "Incidents");
+                break;
+        }
+    }
+
+    private DashboardApplicationItemViewModel? FindSafetyApplication(DashboardSafetyItemViewModel item)
+    {
+        return item.SourceId is null
+            ? Applications.FirstOrDefault(application => string.Equals(application.Name, item.Target, StringComparison.OrdinalIgnoreCase))
+            : Applications.FirstOrDefault(application => application.ApplicationId == item.SourceId.Value);
+    }
+    /// <summary>
     /// Marks the selected incident as resolved.
     /// </summary>
     public Task ResolveSelectedIncidentAsync(CancellationToken cancellationToken)
@@ -2083,7 +2189,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 "An app is using the camera on this PC.",
                 "If you did not open it, close the app and block or watch it.",
                 "Block it",
-                "This is OK"),
+                "This is OK", "Application", application?.ApplicationId),
             "MicrophoneActivated" => new DashboardSafetyItemViewModel(
                 "Act now",
                 "Someone may be using your microphone",
@@ -2091,7 +2197,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 "An app is using the microphone on this PC.",
                 "If you did not open it, close the app and block or watch it.",
                 "Block it",
-                "This is OK"),
+                "This is OK", "Application", application?.ApplicationId),
             "NewDeviceObserved" => new DashboardSafetyItemViewModel(
                 "Needs review",
                 "A new device joined your network",
@@ -2099,7 +2205,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 "AccessWatch saw a device that is not recognized yet.",
                 "Trace it before naming, trusting, or blocking it.",
                 "Trace device",
-                "Keep watching"),
+                "Keep watching", "Device", device?.DeviceId),
             "NewListeningPort" or "ListeningPortApplicationChanged" => new DashboardSafetyItemViewModel(
                 networkEvent.RiskLevel >= RiskLevel.Critical ? "Act now" : "Needs review",
                 "Someone may be able to connect to this PC",
@@ -2107,7 +2213,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 "An app opened a path that other devices may reach.",
                 "If you do not recognize it, investigate first and block it if unexpected.",
                 "Investigate",
-                "Block it"),
+                "Block it", "Port", null, networkEvent.DestinationPort, networkEvent.DestinationIp ?? string.Empty),
             _ => new DashboardSafetyItemViewModel(
                 "Needs review",
                 FirstUseful(networkEvent.Summary, FriendlyEventType(networkEvent.EventType)),
@@ -2128,7 +2234,9 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             FirstUseful(incident.Summary, "AccessWatch grouped related activity."),
             BuildIncidentRecommendedAction(incident.RiskLevel, incident.Status, incident.EventCount),
             incident.RiskLevel >= RiskLevel.Critical ? "Act now" : "Help me decide",
-            "Keep watching");
+            "Keep watching",
+            "Incident",
+            incident.IncidentId);
     }
 
     private static DashboardSafetyItemViewModel CreateSafetyItemForPort(ListeningPort port)
@@ -2141,7 +2249,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             $"{applicationName} is listening on port {port.PortNumber}.",
             "Investigate this port before trusting it.",
             "Investigate",
-            "Block it");
+            "Block it",
+            "Port",
+            null,
+            port.PortNumber,
+            port.LocalAddress);
     }
 
     private static DashboardSafetyItemViewModel CreateSafetyItemForDevice(NetworkDevice device)
@@ -2153,7 +2265,9 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             $"AccessWatch saw this device at {device.IpAddress}.",
             DeviceRecommendedAction(device),
             "Trace device",
-            "Keep watching");
+            "Keep watching",
+            "Device",
+            device.DeviceId);
     }
 
     private void ReplaceRecentActivity(

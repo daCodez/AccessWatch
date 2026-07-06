@@ -83,6 +83,21 @@ public partial class MainWindow : Window
     {
         await viewModel.RunSimulationAsync(CancellationToken.None);
     }
+    private async void OnSafetyPrimaryActionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DashboardSafetyItemViewModel item })
+        {
+            await viewModel.ApplySafetyItemPrimaryActionAsync(item, CancellationToken.None);
+        }
+    }
+
+    private async void OnSafetySecondaryActionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DashboardSafetyItemViewModel item })
+        {
+            await viewModel.ApplySafetyItemSecondaryActionAsync(item, CancellationToken.None);
+        }
+    }
 
     private async void OnSaveDeviceAliasClick(object sender, RoutedEventArgs e)
     {
