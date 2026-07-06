@@ -108,6 +108,10 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click=\"OnSimulateEventClick\"", xaml);
         Assert.Contains("Visibility=\"{Binding PortsVisibility}\"", xaml);
         Assert.Contains("Visibility=\"{Binding IncidentsVisibility}\"", xaml);
+        Assert.Contains("Header=\"Show counts\"", xaml);
+        Assert.Contains("Header=\"Why am I seeing this?\"", xaml);
+        Assert.Contains("Text=\"What happened\"", xaml);
+        Assert.Contains("Text=\"What to do\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Ports}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedPort, Mode=TwoWay}\"", xaml);
         Assert.DoesNotContain("Text=\"{Binding SelectedPortDetail}\"", xaml);

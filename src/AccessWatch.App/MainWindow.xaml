@@ -85,23 +85,25 @@
                             <TextBlock Text="{Binding SafetyRecommendation}" Foreground="#24292F" FontSize="13" FontWeight="SemiBold" Margin="0,12,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
-                    <ItemsControl Grid.Column="2" ItemsSource="{Binding Metrics}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <UniformGrid Columns="2" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,8,8">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Name}" Foreground="#57606A" FontSize="12" />
-                                        <TextBlock Text="{Binding Count}" Foreground="#24292F" FontSize="22" FontWeight="SemiBold" Margin="0,4,0,0" />
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <Expander Grid.Column="2" Header="Show counts" IsExpanded="False" VerticalAlignment="Top">
+                        <ItemsControl ItemsSource="{Binding Metrics}" Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="2" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,8,8">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" Foreground="#57606A" FontSize="12" />
+                                            <TextBlock Text="{Binding Count}" Foreground="#24292F" FontSize="22" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Expander>
                 </Grid>
 
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding OverviewVisibility}">
@@ -136,8 +138,14 @@
                                         <StackPanel Grid.Column="1" Margin="0,0,18,0">
                                             <TextBlock Text="{Binding Headline}" Foreground="#24292F" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Target}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding WhatHappened}" Foreground="#57606A" FontSize="13" Margin="0,8,0,0" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding RecommendedAction}" Foreground="#24292F" FontSize="13" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                            <Expander Header="Why am I seeing this?" IsExpanded="False" Margin="0,8,0,0">
+                                                <StackPanel Margin="0,6,0,0">
+                                                    <TextBlock Text="What happened" Foreground="#57606A" FontSize="11" />
+                                                    <TextBlock Text="{Binding WhatHappened}" Foreground="#57606A" FontSize="13" Margin="0,2,0,8" TextWrapping="Wrap" />
+                                                    <TextBlock Text="What to do" Foreground="#57606A" FontSize="11" />
+                                                    <TextBlock Text="{Binding RecommendedAction}" Foreground="#24292F" FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Expander>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
                                             <Button Content="{Binding PrimaryAction}" Width="96" Height="30" Margin="0,0,8,0" />
