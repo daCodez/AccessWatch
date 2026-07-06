@@ -99,6 +99,10 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnDismissToastClick(object sender, RoutedEventArgs e)
+    {
+        viewModel.DismissToast();
+    }
     private async void OnSaveDeviceAliasClick(object sender, RoutedEventArgs e)
     {
         await viewModel.SaveSelectedDeviceAliasAsync(CancellationToken.None);

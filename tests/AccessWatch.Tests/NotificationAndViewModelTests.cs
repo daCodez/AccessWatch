@@ -112,6 +112,9 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Header=\"Why am I seeing this?\"", xaml);
         Assert.Contains("Click=\"OnSafetyPrimaryActionClick\"", xaml);
         Assert.Contains("Click=\"OnSafetySecondaryActionClick\"", xaml);
+        Assert.Contains("Visibility=\"{Binding ToastVisibility}\"", xaml);
+        Assert.Contains("Text=\"{Binding ToastMessage}\"", xaml);
+        Assert.Contains("Click=\"OnDismissToastClick\"", xaml);
         Assert.Contains("Text=\"What happened\"", xaml);
         Assert.Contains("Text=\"What to do\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Ports}\"", xaml);
@@ -656,6 +659,64 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal(TrustStatus.Trusted, decision.Decision);
     }
 
+    /// <summary>
+    /// Verifies unknown future Safety Center actions still produce a useful confirmation.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_CreateSafetyActionToast_HandlesUnknownActionLabels()
+    {
+        var method = typeof(DashboardShellViewModel).GetMethod("CreateSafetyActionToast", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var item = new DashboardSafetyItemViewModel("Needs review", "Future action", "Test target", "", "", "Future action", "");
+
+        var message = Assert.IsType<string>(method?.Invoke(null, [item, "Future action"]));
+
+        Assert.Equal("Future action completed for Test target.", message);
+    }
+    /// <summary>
+    /// Verifies Safety Center actions show a dismissible plain-language confirmation.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplySafetyItemActions_ShowsDismissibleToast()
+    {
+        var repository = new FakeRepository
+        {
+            Applications = [new AppIdentity { ApplicationId = 9, DisplayName = "Sound Recorder", ProcessName = "soundrecorder" }],
+            Events =
+            [
+                new NetworkEvent
+                {
+                    EventType = "MicrophoneActivated",
+                    ApplicationId = 9,
+                    RiskLevel = RiskLevel.High,
+                    CreatedUtc = DateTimeOffset.UtcNow
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+        var changed = new List<string>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName ?? string.Empty);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("Collapsed", model.ToastVisibility);
+
+        var item = Assert.Single(model.SafetyItems);
+        await model.ApplySafetyItemPrimaryActionAsync(item, CancellationToken.None);
+
+        Assert.Equal("Visible", model.ToastVisibility);
+        Assert.Equal("Blocked Sound Recorder. Review and apply the protection plan when you are ready.", model.ToastMessage);
+        Assert.Contains(nameof(DashboardShellViewModel.ToastMessage), changed);
+        Assert.Contains(nameof(DashboardShellViewModel.ToastVisibility), changed);
+
+        await model.ApplySafetyItemSecondaryActionAsync(item, CancellationToken.None);
+
+        Assert.Equal("Marked Sound Recorder as OK.", model.ToastMessage);
+
+        model.DismissToast();
+
+        Assert.Equal(string.Empty, model.ToastMessage);
+        Assert.Equal("Collapsed", model.ToastVisibility);
+    }
     /// <summary>
     /// Verifies Safety Center device and port buttons open the right investigation flows.
     /// </summary>

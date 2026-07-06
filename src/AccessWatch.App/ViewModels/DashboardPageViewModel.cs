@@ -35,6 +35,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     private string currentNetworkProfile = "Home";
     private string settingsStatus = "Settings match the running configuration.";
     private string statusMessage = "Connect the service or run a scan to load AccessWatch activity.";
+    private string toastMessage = string.Empty;
     private string activeOperation = string.Empty;
     private DashboardDeviceItemViewModel? selectedDevice;
     private DashboardApplicationItemViewModel? selectedApplication;
@@ -877,6 +878,25 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Gets the most recent plain-language confirmation shown in the dashboard.
+    /// </summary>
+    public string ToastMessage
+    {
+        get => toastMessage;
+        private set
+        {
+            toastMessage = value;
+            OnPropertyChanged(nameof(ToastMessage));
+            OnPropertyChanged(nameof(ToastVisibility));
+        }
+    }
+
+    /// <summary>
+    /// Gets WPF visibility text for the current confirmation banner.
+    /// </summary>
+    public string ToastVisibility => ToVisibility(!string.IsNullOrWhiteSpace(ToastMessage));
+
+    /// <summary>
     /// Gets whether data is currently loading.
     /// </summary>
     public bool IsLoading
@@ -1183,15 +1203,25 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         return ApplySafetyItemActionAsync(item, item?.SecondaryAction, cancellationToken);
     }
 
+    /// <summary>
+    /// Hides the current confirmation banner.
+    /// </summary>
+    public void DismissToast()
+    {
+        ToastMessage = string.Empty;
+    }
+
     private async Task ApplySafetyItemActionAsync(DashboardSafetyItemViewModel? item, string? action, CancellationToken cancellationToken)
     {
         if (item is null || string.IsNullOrWhiteSpace(action))
         {
             StatusMessage = "Select an alert before choosing an action.";
+            ToastMessage = "Choose an alert first.";
             return;
         }
 
         SelectSafetyItemTarget(item);
+        var handled = true;
         switch (action)
         {
             case "Block it" when selectedApplication is not null:
@@ -1226,9 +1256,29 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 await EscalateSelectedIncidentAsync(cancellationToken);
                 break;
             default:
+                handled = false;
                 StatusMessage = $"Open {item.Target} for more options before choosing {action}.";
                 break;
         }
+
+        ToastMessage = handled
+            ? CreateSafetyActionToast(item, action)
+            : $"Open {item.Target} for more options.";
+    }
+
+    private static string CreateSafetyActionToast(DashboardSafetyItemViewModel item, string action)
+    {
+        return action switch
+        {
+            "Block it" => $"Blocked {item.Target}. Review and apply the protection plan when you are ready.",
+            "This is OK" => $"Marked {item.Target} as OK.",
+            "Keep watching" => $"Watching {item.Target}. AccessWatch will keep it visible.",
+            "Trace device" => $"Trace ready for {item.Target}.",
+            "Investigate" => $"Investigation ready for {item.Target}.",
+            "Help me decide" => $"AI review ready for {item.Target}.",
+            "Act now" => $"Escalated {item.Target}.",
+            _ => $"{action} completed for {item.Target}."
+        };
     }
 
     private void SelectSafetyItemTarget(DashboardSafetyItemViewModel item)
