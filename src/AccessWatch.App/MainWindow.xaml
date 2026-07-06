@@ -208,7 +208,38 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <TextBlock Text="{Binding SelectedDeviceDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <StackPanel Margin="0,0,0,10">
+                                    <UniformGrid Columns="6" Margin="0,0,0,8">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Device" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedDevice.Name}" FontSize="13" FontWeight="SemiBold" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="IP address" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedDevice.IpAddress}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Trust" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedDevice.TrustStatus}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Risk" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedDevice.RiskStatus}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="State" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedDevice.InventoryState}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="Last seen" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedDevice.LastSeen}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </UniformGrid>
+                                    <TextBlock Text="Next step" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedDevice.RecommendedAction}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,6" />
+                                    <TextBlock Text="Details" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedDevice.Detail}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                </StackPanel>
                                 <WrapPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top">
                                     <Button Content="This is OK" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,8" Click="OnTrustDeviceClick" />
                                     <Button Content="Keep watching" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnWatchDeviceClick" />
@@ -254,7 +285,36 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <TextBlock Text="{Binding SelectedApplicationDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <StackPanel Margin="0,0,0,10">
+                                    <UniformGrid Columns="6" Margin="0,0,0,8">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Application" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedApplication.Name}" FontSize="13" FontWeight="SemiBold" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Process" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedApplication.ProcessName}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Publisher" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedApplication.Publisher}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Signature" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedApplication.SignatureStatus}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Trust" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedApplication.TrustStatus}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="Last seen" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedApplication.LastSeen}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </UniformGrid>
+                                    <TextBlock Text="Identity" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedApplication.Detail}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                </StackPanel>
                                 <WrapPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top">
                                     <Button Content="This is OK" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="84" Height="30" Margin="0,0,8,8" Click="OnTrustApplicationClick" />
                                     <Button Content="Keep watching" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnWatchApplicationClick" />
@@ -295,7 +355,18 @@
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
                                 <TextBlock Text="Port details" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
-                                <TextBlock Grid.Row="1" Text="{Binding SelectedPortDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12" />
+                                <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                                    <TextBlock Text="Endpoint" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedPort.Endpoint}" FontSize="13" FontWeight="SemiBold" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,8" />
+                                    <TextBlock Text="Application" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedPort.ApplicationName}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,8" />
+                                    <TextBlock Text="Meaning" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedPort.Meaning}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,8" />
+                                    <TextBlock Text="Reachability" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedPort.ReachabilityTest}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,8" />
+                                    <TextBlock Text="Next step" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedPort.SuggestedAction}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                </StackPanel>
                                 <Button Grid.Row="2" Content="{Binding PortInvestigationButtonText}" IsEnabled="{Binding CanInvestigateSelectedPort}" Width="128" Height="30" HorizontalAlignment="Left" Click="OnInvestigatePortClick" />
                                 <TextBox Grid.Row="3" Text="{Binding SelectedPortInvestigation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" Margin="0,12,0,0" />
                             </Grid>
@@ -445,7 +516,38 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <TextBlock Text="{Binding SelectedRuleDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <StackPanel Margin="0,0,0,10">
+                                    <UniformGrid Columns="6" Margin="0,0,0,8">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Rule" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedRule.Name}" FontSize="13" FontWeight="SemiBold" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="State" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedRule.Enabled}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Action" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedRule.Action}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Risk" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedRule.RiskLevel}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Network" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedRule.NetworkProfile}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="Duration" FontSize="11" Foreground="#57606A" />
+                                            <TextBlock Text="{Binding SelectedRule.Duration}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </UniformGrid>
+                                    <TextBlock Text="Conditions" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedRule.Conditions}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,6" />
+                                    <TextBlock Text="Description" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedRule.Description}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                </StackPanel>
                                 <WrapPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top">
                                     <Button Content="Preview" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Margin="0,0,8,8" Click="OnPreviewRuleClick" />
                                     <Button Content="Enable" IsEnabled="{Binding CanApplyRuleAction}" Width="76" Height="30" Margin="0,0,8,8" Click="OnEnableRuleClick" />
