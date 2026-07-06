@@ -348,6 +348,7 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <UniformGrid Columns="6" Margin="0,0,0,10">
                                     <StackPanel Margin="0,0,12,0">
@@ -375,19 +376,20 @@
                                         <TextBlock Text="{Binding SelectedIncident.LastUpdated}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </UniformGrid>
-                                <DockPanel Grid.Row="1" LastChildFill="True">
-                                    <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                        <Button Content="This is OK" IsEnabled="{Binding CanApplyIncidentAction}" Width="84" Height="30" Margin="0,0,8,8" Click="OnResolveIncidentClick" />
-                                        <Button Content="Keep watching" IsEnabled="{Binding CanApplyIncidentAction}" Width="108" Height="30" Margin="0,0,8,8" Click="OnWatchIncidentClick" />
-                                        <Button Content="Act now" IsEnabled="{Binding CanApplyIncidentAction}" Width="84" Height="30" Margin="0,0,8,8" Click="OnEscalateIncidentClick" />
-                                        <Button Content="Make automatic" IsEnabled="{Binding CanApplyIncidentAction}" Width="120" Height="30" Margin="0,0,8,8" Click="OnCreateIncidentRuleClick" />
-                                        <Button Content="Save notes" IsEnabled="{Binding CanSaveIncidentNotes}" Width="96" Height="30" Margin="0,0,8,8" Click="OnSaveIncidentNotesClick" />
-                                        <Button Content="Export" IsEnabled="{Binding CanExportIncident}" Width="76" Height="30" Margin="0,0,8,8" Click="OnExportIncidentClick" />
-                                        <Button Content="Review with AI" IsEnabled="{Binding CanReviewIncidentWithAi}" Width="118" Height="30" Margin="0,0,8,8" Click="OnReviewIncidentWithAiClick" />
-                                        <Button Content="Copy for ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="126" Height="30" Margin="0,0,0,8" Click="OnCopyIncidentForChatGptClick" />
-                                    </WrapPanel>
-                                    <TextBlock Text="{Binding SelectedIncident.RecommendedAction}" Foreground="#24292F" FontSize="13" TextWrapping="Wrap" Margin="0,5,16,0" />
-                                </DockPanel>
+                                <StackPanel Grid.Row="1" Margin="0,2,0,10">
+                                    <TextBlock Text="Next step" FontSize="11" Foreground="#57606A" />
+                                    <TextBlock Text="{Binding SelectedIncident.RecommendedAction}" Foreground="#24292F" FontSize="13" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <WrapPanel Grid.Row="2" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                    <Button Content="This is OK" IsEnabled="{Binding CanApplyIncidentAction}" Width="84" Height="30" Margin="0,0,8,8" Click="OnResolveIncidentClick" />
+                                    <Button Content="Keep watching" IsEnabled="{Binding CanApplyIncidentAction}" Width="108" Height="30" Margin="0,0,8,8" Click="OnWatchIncidentClick" />
+                                    <Button Content="Act now" IsEnabled="{Binding CanApplyIncidentAction}" Width="84" Height="30" Margin="0,0,8,8" Click="OnEscalateIncidentClick" />
+                                    <Button Content="Make automatic" IsEnabled="{Binding CanApplyIncidentAction}" Width="120" Height="30" Margin="0,0,8,8" Click="OnCreateIncidentRuleClick" />
+                                    <Button Content="Save notes" IsEnabled="{Binding CanSaveIncidentNotes}" Width="96" Height="30" Margin="0,0,8,8" Click="OnSaveIncidentNotesClick" />
+                                    <Button Content="Export" IsEnabled="{Binding CanExportIncident}" Width="76" Height="30" Margin="0,0,8,8" Click="OnExportIncidentClick" />
+                                    <Button Content="Review with AI" IsEnabled="{Binding CanReviewIncidentWithAi}" Width="118" Height="30" Margin="0,0,8,8" Click="OnReviewIncidentWithAiClick" />
+                                    <Button Content="Copy for ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="126" Height="30" Margin="0,0,0,8" Click="OnCopyIncidentForChatGptClick" />
+                                </WrapPanel>
                             </Grid>
                         </Border>
                         <Grid Grid.Row="3" Margin="0,12,0,0">

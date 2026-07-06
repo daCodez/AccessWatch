@@ -168,8 +168,10 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("<UniformGrid Columns=\"6\" Margin=\"0,0,0,10\">", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncident.Title}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncident.MainTarget}\"", xaml);
+        Assert.Contains("Text=\"Next step\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncident.RecommendedAction}\"", xaml);
-        Assert.Contains("<WrapPanel DockPanel.Dock=\"Right\" HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\">", xaml);
+        Assert.Contains("<WrapPanel Grid.Row=\"2\" HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\">", xaml);
+        Assert.DoesNotContain("<DockPanel Grid.Row=\"1\" LastChildFill=\"True\">", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentExplanation, Mode=OneWay}\"", xaml);
         Assert.Contains("Text=\"{Binding IncidentSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncidentStatusFilter, Mode=TwoWay}\"", xaml);
