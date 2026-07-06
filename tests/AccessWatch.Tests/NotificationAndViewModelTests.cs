@@ -163,8 +163,13 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Content=\"Apply protection\"", xaml);
         Assert.Contains("IsEnabled=\"{Binding CanApplyEnforcementPlan}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
-        Assert.Contains("Text=\"{Binding SelectedIncidentDetail}\"", xaml);
-        Assert.Contains("<WrapPanel Grid.Row=\"1\" HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\">", xaml);
+        Assert.Contains("MinHeight=\"220\"", xaml);
+        Assert.Contains("<RowDefinition Height=\"260\" />", xaml);
+        Assert.Contains("<UniformGrid Columns=\"6\" Margin=\"0,0,0,10\">", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncident.Title}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncident.MainTarget}\"", xaml);
+        Assert.Contains("Text=\"{Binding SelectedIncident.RecommendedAction}\"", xaml);
+        Assert.Contains("<WrapPanel DockPanel.Dock=\"Right\" HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\">", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentExplanation, Mode=OneWay}\"", xaml);
         Assert.Contains("Text=\"{Binding IncidentSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncidentStatusFilter, Mode=TwoWay}\"", xaml);
