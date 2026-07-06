@@ -173,7 +173,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("IsEnabled=\"{Binding CanApplyEnforcementPlan}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
         Assert.Contains("MinHeight=\"220\"", xaml);
-        Assert.Contains("<RowDefinition Height=\"260\" />", xaml);
+        Assert.Contains("<RowDefinition Height=\"*\" />", xaml);
         Assert.Contains("<UniformGrid Columns=\"6\" Margin=\"0,0,0,10\">", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncident.Title}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncident.MainTarget}\"", xaml);
@@ -187,6 +187,13 @@ public sealed class NotificationAndViewModelTests
         Assert.DoesNotContain("Text=\"{Binding SelectedApplicationDetail}\"", xaml);
         Assert.DoesNotContain("Text=\"{Binding SelectedPortDetail}\"", xaml);
         Assert.DoesNotContain("Text=\"{Binding SelectedRuleDetail}\"", xaml);
+        Assert.Contains("<Expander Grid.Row=\"3\" Header=\"Show investigation details\" IsExpanded=\"False\"", xaml);
+        Assert.Contains("Text=\"Why AccessWatch flagged it\"", xaml);
+        Assert.Contains("Text=\"Timeline\"", xaml);
+        Assert.Contains("Text=\"Evidence\"", xaml);
+        Assert.Contains("Text=\"Notes\"", xaml);
+        Assert.Contains("Text=\"Rule wizard\"", xaml);
+        Assert.Contains("Text=\"AI review\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentExplanation, Mode=OneWay}\"", xaml);
         Assert.Contains("Text=\"{Binding IncidentSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncidentStatusFilter, Mode=TwoWay}\"", xaml);

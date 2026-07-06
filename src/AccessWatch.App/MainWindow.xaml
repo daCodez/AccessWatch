@@ -378,9 +378,9 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="260" />
-                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid Grid.Row="0" Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
@@ -457,31 +457,60 @@
                                 </WrapPanel>
                             </Grid>
                         </Border>
-                        <Grid Grid.Row="3" Margin="0,12,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="10" />
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="10" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <TextBox Grid.Column="0" Text="{Binding SelectedIncidentExplanation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
-                            <TextBox Grid.Column="2" Text="{Binding SelectedIncidentTimeline, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
-                            <TextBox Grid.Column="4" Text="{Binding SelectedIncidentEvidence, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
-                            <TextBox Grid.Row="2" Grid.Column="0" Text="{Binding SelectedIncidentNotes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
-                            <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding SelectedIncidentRuleWizard, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" />
-                            <TextBox Grid.Row="2" Grid.Column="4" Text="{Binding SelectedIncidentExport, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" />
-                            <TextBox Grid.Row="4" Grid.Column="0" Text="{Binding SelectedIncidentSeverityExplanation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
-                            <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding SelectedIncidentAiReview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" />
-                            <TextBox Grid.Row="4" Grid.Column="4" Text="{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" />
-                        </Grid>
+                        <Expander Grid.Row="3" Header="Show investigation details" IsExpanded="False" Margin="0,12,0,0">
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="10" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="10" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Why AccessWatch flagged it" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedIncidentExplanation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Timeline" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedIncidentTimeline, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="4">
+                                    <TextBlock Text="Evidence" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedIncidentEvidence, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="0">
+                                    <TextBlock Text="Notes" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedIncidentNotes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="2">
+                                    <TextBlock Text="Rule wizard" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedIncidentRuleWizard, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontFamily="Consolas" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="4">
+                                    <TextBlock Text="Export" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedIncidentExport, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontFamily="Consolas" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="4" Grid.Column="0">
+                                    <TextBlock Text="Severity explanation" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedIncidentSeverityExplanation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="4" Grid.Column="2">
+                                    <TextBlock Text="AI review" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedIncidentAiReview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontFamily="Consolas" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="4" Grid.Column="4">
+                                    <TextBlock Text="Rule suggestion" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontFamily="Consolas" FontSize="12" />
+                                </StackPanel>
+                            </Grid>
+                        </Expander>
                     </Grid>
                 </Border>
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding RulesVisibility}">
