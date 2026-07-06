@@ -77,7 +77,7 @@ public sealed class NotificationAndViewModelTests
     {
         var model = new DashboardShellViewModel();
 
-        Assert.Equal(["Overview", "Devices", "Applications", "Ports", "Incidents", "Rules", "Settings"], model.Pages.Select(page => page.Name));
+        Assert.Equal(["Safety Center", "Devices", "Applications", "Ports", "Incidents", "Rules", "Settings"], model.Pages.Select(page => page.Name));
         Assert.All(model.Pages, page => Assert.False(string.IsNullOrWhiteSpace(page.Summary)));
     }
 
@@ -147,13 +147,13 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Text=\"{Binding SelectedDeviceDetail}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedApplication, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedApplicationDetail}\"", xaml);
-        Assert.Contains("Content=\"Trust device\"", xaml);
-        Assert.Contains("Content=\"Watch device\"", xaml);
-        Assert.Contains("Content=\"Guest device\"", xaml);
-        Assert.Contains("Content=\"Block device\"", xaml);
-        Assert.Contains("Content=\"Trust app\"", xaml);
-        Assert.Contains("Content=\"Watch app\"", xaml);
-        Assert.Contains("Content=\"Block app\"", xaml);
+        Assert.Contains("Content=\"This is OK\"", xaml);
+        Assert.Contains("Content=\"Keep watching\"", xaml);
+        Assert.Contains("Content=\"Mark as guest\"", xaml);
+        Assert.Contains("Content=\"Block it\"", xaml);
+        Assert.Contains("Content=\"This is OK\"", xaml);
+        Assert.Contains("Content=\"Keep watching\"", xaml);
+        Assert.Contains("Content=\"Block it\"", xaml);
         Assert.Contains("Click=\"OnTrustDeviceClick\"", xaml);
         Assert.Contains("Click=\"OnGuestDeviceClick\"", xaml);
         Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
@@ -172,10 +172,10 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Text=\"{Binding SelectedIncidentNotes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentExport, Mode=OneWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentRuleWizard, Mode=OneWay}\"", xaml);
-        Assert.Contains("Content=\"Resolve\"", xaml);
-        Assert.Contains("Content=\"Watch\"", xaml);
-        Assert.Contains("Content=\"Escalate\"", xaml);
-        Assert.Contains("Content=\"Create rule\"", xaml);
+        Assert.Contains("Content=\"This is OK\"", xaml);
+        Assert.Contains("Content=\"Keep watching\"", xaml);
+        Assert.Contains("Content=\"Act now\"", xaml);
+        Assert.Contains("Content=\"Make automatic\"", xaml);
         Assert.Contains("Content=\"Save notes\"", xaml);
         Assert.Contains("Content=\"Export\"", xaml);
         Assert.Contains("Content=\"Review with AI\"", xaml);
@@ -202,8 +202,8 @@ public sealed class NotificationAndViewModelTests
         var changed = new List<string?>();
         model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
 
-        Assert.Equal("Overview", model.SelectedPageTitle);
-        Assert.Equal("Recent risk posture and service status.", model.SelectedPageSummary);
+        Assert.Equal("Safety Center", model.SelectedPageTitle);
+        Assert.Equal("Plain-language protection status and next steps.", model.SelectedPageSummary);
         Assert.True(model.IsOverviewSelected);
         Assert.False(model.IsDevicesSelected);
         Assert.False(model.IsApplicationsSelected);
@@ -329,7 +329,7 @@ public sealed class NotificationAndViewModelTests
 
         model.SelectedPage = null;
 
-        Assert.Equal("Overview", model.SelectedPageTitle);
+        Assert.Equal("Safety Center", model.SelectedPageTitle);
         Assert.True(model.IsOverviewSelected);
     }
     /// <summary>
@@ -413,6 +413,219 @@ public sealed class NotificationAndViewModelTests
 
         Assert.Equal("Dashboard data is not connected yet.", model.StatusMessage);
         Assert.Empty(model.Metrics);
+    }
+
+    /// <summary>
+    /// Verifies the dashboard loads counts and recent network events.
+    /// </summary>
+    /// <summary>
+    /// Verifies the Safety Center gives a calm empty state when nothing needs action.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_ShowsSimpleSafeState()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository());
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("You look safe right now", model.SafetyHeadline);
+        Assert.Contains("No urgent camera", model.SafetyExplanation);
+        Assert.Contains("leave AccessWatch running", model.SafetyRecommendation);
+        Assert.Equal("Visible", model.SafetyEmptyVisibility);
+        Assert.Equal("Collapsed", model.SafetyItemsVisibility);
+        Assert.Empty(model.SafetyItems);
+    }
+
+    /// <summary>
+    /// Verifies high-risk activity becomes plain-language Safety Center action items.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_BuildsSimpleSafetyItems()
+    {
+        var repository = new FakeRepository
+        {
+            Applications = [new AppIdentity { ApplicationId = 7, DisplayName = "Video Chat", ProcessName = "videochat" }],
+            Devices = [new NetworkDevice { DeviceId = 9, IpAddress = "192.168.1.45", Hostname = "new-phone", TrustStatus = TrustStatus.Unknown, RiskStatus = RiskStatus.Suspicious }],
+            Events =
+            [
+                new NetworkEvent
+                {
+                    EventType = "CameraActivated",
+                    ApplicationId = 7,
+                    RiskLevel = RiskLevel.High,
+                    DetailsJson = "{\"app\":\"Video Chat\"}",
+                    CreatedUtc = DateTimeOffset.UtcNow
+                },
+                new NetworkEvent
+                {
+                    EventType = "NewDeviceObserved",
+                    SourceDeviceId = 9,
+                    RiskLevel = RiskLevel.Medium,
+                    DetailsJson = "{\"deviceName\":\"new-phone\"}",
+                    CreatedUtc = DateTimeOffset.UtcNow
+                }
+            ],
+            Ports =
+            [
+                new ListeningPort
+                {
+                    PortNumber = 9443,
+                    LocalAddress = "0.0.0.0",
+                    Protocol = "TCP",
+                    Reachability = PortReachability.NetworkReachable,
+                    RiskStatus = RiskStatus.HighRisk,
+                    Application = new AppIdentity { DisplayName = "Remote Tool", ProcessName = "remote" }
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("3 things need your attention", model.SafetyHeadline);
+        Assert.Contains("may affect privacy", model.SafetyExplanation);
+        Assert.Contains("Start with the first item", model.SafetyRecommendation);
+        Assert.Equal("Collapsed", model.SafetyEmptyVisibility);
+        Assert.Equal("Visible", model.SafetyItemsVisibility);
+        Assert.Collection(
+            model.SafetyItems,
+            camera =>
+            {
+                Assert.Equal("Act now", camera.Urgency);
+                Assert.Equal("Someone may be using your camera", camera.Headline);
+                Assert.Equal("Video Chat", camera.Target);
+                Assert.Equal("Block it", camera.PrimaryAction);
+                Assert.Equal("This is OK", camera.SecondaryAction);
+            },
+            device =>
+            {
+                Assert.Equal("Needs review", device.Urgency);
+                Assert.Equal("A new device joined your network", device.Headline);
+                Assert.Equal("Trace device", device.PrimaryAction);
+            },
+            port =>
+            {
+                Assert.Equal("Someone may be able to connect to this PC", port.Headline);
+                Assert.Equal("Remote Tool", port.Target);
+                Assert.Equal("Investigate", port.PrimaryAction);
+            });
+    }
+
+    /// <summary>
+    /// Verifies the Safety Center handles a single microphone alert without plural wording.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_BuildsSingleMicrophoneSafetyItem()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository
+        {
+            Events =
+            [
+                new NetworkEvent
+                {
+                    EventType = "MicrophoneActivated",
+                    RiskLevel = RiskLevel.High,
+                    DetailsJson = "{\"app\":\"Meeting App\"}",
+                    CreatedUtc = DateTimeOffset.UtcNow
+                }
+            ]
+        });
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("1 thing needs your attention", model.SafetyHeadline);
+        var item = Assert.Single(model.SafetyItems);
+        Assert.Equal("Someone may be using your microphone", item.Headline);
+        Assert.Equal("Meeting App", item.Target);
+    }
+
+    /// <summary>
+    /// Verifies critical connection and unusual events still get simple Safety Center wording.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_BuildsConnectionAndFallbackSafetyItems()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository
+        {
+            Events =
+            [
+                new NetworkEvent
+                {
+                    EventType = "NewListeningPort",
+                    RiskLevel = RiskLevel.Critical,
+                    ApplicationId = 4,
+                    DetailsJson = "{\"app\":\"Remote Admin\"}",
+                    CreatedUtc = DateTimeOffset.UtcNow
+                },
+                new NetworkEvent
+                {
+                    EventType = "UnusualActivity",
+                    RiskLevel = RiskLevel.High,
+                    Summary = "Something unusual happened",
+                    DetailsJson = "{\"whatHappened\":\"A sensitive setting changed.\",\"suggestedAction\":\"Review this change.\"}",
+                    CreatedUtc = DateTimeOffset.UtcNow
+                },
+                new NetworkEvent
+                {
+                    EventType = "NewDeviceObserved",
+                    RiskLevel = RiskLevel.Medium,
+                    DetailsJson = "{\"deviceName\":\"living-room-tv\"}",
+                    CreatedUtc = DateTimeOffset.UtcNow
+                }
+            ]
+        });
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.SafetyItems,
+            connection =>
+            {
+                Assert.Equal("Act now", connection.Urgency);
+                Assert.Equal("Someone may be able to connect to this PC", connection.Headline);
+                Assert.Equal("Remote Admin", connection.Target);
+            },
+            fallback =>
+            {
+                Assert.Equal("Needs review", fallback.Urgency);
+                Assert.Equal("Something unusual happened", fallback.Headline);
+                Assert.Equal("A sensitive setting changed.", fallback.WhatHappened);
+                Assert.Equal("Review this change.", fallback.RecommendedAction);
+            },
+            device =>
+            {
+                Assert.Equal("A new device joined your network", device.Headline);
+                Assert.Equal("living-room-tv", device.Target);
+            });
+    }
+
+    /// <summary>
+    /// Verifies incident and device fallback sources can populate the Safety Center.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_BuildsFallbackSafetyItems()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository
+        {
+            Incidents = [new Incident { IncidentId = 8, Title = "Critical remote access", Summary = "Remote access needs review.", RiskLevel = RiskLevel.Critical, Status = IncidentStatus.Open, EventCount = 2, StartedUtc = DateTimeOffset.UtcNow, LastUpdatedUtc = DateTimeOffset.UtcNow }],
+            Devices = [new NetworkDevice { DeviceId = 5, IpAddress = "192.168.1.88", Hostname = "unknown-tablet", TrustStatus = TrustStatus.Unknown, RiskStatus = RiskStatus.Suspicious }]
+        });
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.SafetyItems,
+            incident =>
+            {
+                Assert.Equal("Act now", incident.Urgency);
+                Assert.Equal("Critical remote access", incident.Headline);
+                Assert.Equal("Act now", incident.PrimaryAction);
+            },
+            device =>
+            {
+                Assert.Equal("A device needs your attention", device.Headline);
+                Assert.Equal("Trace device", device.PrimaryAction);
+            });
     }
 
     /// <summary>
@@ -3395,4 +3608,6 @@ public sealed class NotificationAndViewModelTests
         }
     }
 }
+
+
 

@@ -116,7 +116,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public IReadOnlyList<DashboardPageViewModel> Pages { get; } =
     [
-        new("Overview", "Recent risk posture and service status."),
+        new("Safety Center", "Plain-language protection status and next steps."),
         new("Devices", "Known, guest, watched, and blocked devices."),
         new("Applications", "Resolved app identities and trust decisions."),
         new("Ports", "Current and historical listening ports."),
@@ -174,7 +174,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// <summary>
     /// Gets whether the overview page is selected.
     /// </summary>
-    public bool IsOverviewSelected => SelectedPageTitle == "Overview";
+    public bool IsOverviewSelected => SelectedPageTitle == "Safety Center";
 
     /// <summary>
     /// Gets whether the devices page is selected.
@@ -260,6 +260,44 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// Gets recent activity loaded from storage.
     /// </summary>
     public ObservableCollection<DashboardActivityItemViewModel> RecentActivity { get; } = [];
+
+    /// <summary>
+    /// Gets plain-language safety items that need attention first.
+    /// </summary>
+    public ObservableCollection<DashboardSafetyItemViewModel> SafetyItems { get; } = [];
+
+    /// <summary>
+    /// Gets the plain-language safety headline for the landing page.
+    /// </summary>
+    public string SafetyHeadline => SafetyItems.Count == 0
+        ? "You look safe right now"
+        : SafetyItems.Count == 1
+            ? "1 thing needs your attention"
+            : $"{SafetyItems.Count} things need your attention";
+
+    /// <summary>
+    /// Gets the simple explanation for the current safety state.
+    /// </summary>
+    public string SafetyExplanation => SafetyItems.Count == 0
+        ? "No urgent camera, microphone, device, or outside-connection alerts are waiting."
+        : "AccessWatch found activity that may affect privacy, outside access, or a device you have not recognized yet.";
+
+    /// <summary>
+    /// Gets the next best user action for the current safety state.
+    /// </summary>
+    public string SafetyRecommendation => SafetyItems.Count == 0
+        ? "You can leave AccessWatch running. It will tell you when something needs attention."
+        : "Start with the first item. If you did not cause it, choose Block it or Keep watching.";
+
+    /// <summary>
+    /// Gets WPF visibility text for the no-attention safety state.
+    /// </summary>
+    public string SafetyEmptyVisibility => ToVisibility(SafetyItems.Count == 0);
+
+    /// <summary>
+    /// Gets WPF visibility text for safety items that need attention.
+    /// </summary>
+    public string SafetyItemsVisibility => ToVisibility(SafetyItems.Count > 0);
 
     /// <summary>
     /// Gets recent devices loaded from storage.
@@ -930,6 +968,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             ReplacePorts(ports, events);
             ReplaceIncidents(incidents, devices, applications);
             ReplaceRules(rules);
+            ReplaceSafetyCenter(events, incidents, applications, ports, devices);
             ReplaceRecentActivity(events, applications, ports, devices);
             StatusMessage = events.Count == 0 && ports.Count == 0 && devices.Count == 0 && incidents.Count == 0
                 ? "No stored activity yet. Start the AccessWatch service to record listening ports and devices."
@@ -1967,6 +2006,156 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             _ => property.GetRawText()
         };
     }
+    private void ReplaceSafetyCenter(
+        IReadOnlyList<NetworkEvent> events,
+        IReadOnlyList<Incident> incidents,
+        IReadOnlyList<AppIdentity> applications,
+        IReadOnlyList<ListeningPort> ports,
+        IReadOnlyList<NetworkDevice> devices)
+    {
+        SafetyItems.Clear();
+        var representedDeviceIds = events
+            .Where(networkEvent => networkEvent.EventType == "NewDeviceObserved" && networkEvent.SourceDeviceId is not null)
+            .Select(networkEvent => networkEvent.SourceDeviceId!.Value)
+            .ToHashSet();
+        foreach (var networkEvent in events.Where(IsAttentionEvent).Take(5))
+        {
+            SafetyItems.Add(CreateSafetyItemForEvent(networkEvent, applications, devices));
+        }
+
+        foreach (var incident in incidents.Where(IsAttentionIncident).Take(5 - SafetyItems.Count))
+        {
+            SafetyItems.Add(CreateSafetyItemForIncident(incident));
+        }
+
+        foreach (var port in ports.Where(IsAttentionPort).Take(5 - SafetyItems.Count))
+        {
+            SafetyItems.Add(CreateSafetyItemForPort(port));
+        }
+
+        foreach (var device in devices.Where(IsAttentionDevice).ExceptBy(representedDeviceIds, device => device.DeviceId).Take(5 - SafetyItems.Count))
+        {
+            SafetyItems.Add(CreateSafetyItemForDevice(device));
+        }
+
+        OnPropertyChanged(nameof(SafetyHeadline));
+        OnPropertyChanged(nameof(SafetyExplanation));
+        OnPropertyChanged(nameof(SafetyRecommendation));
+        OnPropertyChanged(nameof(SafetyEmptyVisibility));
+        OnPropertyChanged(nameof(SafetyItemsVisibility));
+    }
+
+    private static bool IsAttentionEvent(NetworkEvent networkEvent)
+    {
+        return networkEvent.RiskLevel >= RiskLevel.High || networkEvent.EventType is "CameraActivated" or "MicrophoneActivated" or "NewDeviceObserved";
+    }
+
+    private static bool IsAttentionIncident(Incident incident)
+    {
+        return incident.Status != IncidentStatus.Resolved && incident.RiskLevel >= RiskLevel.High;
+    }
+
+    private static bool IsAttentionPort(ListeningPort port)
+    {
+        return port.Reachability == PortReachability.NetworkReachable && port.RiskStatus is RiskStatus.HighRisk or RiskStatus.Critical;
+    }
+
+    private static bool IsAttentionDevice(NetworkDevice device)
+    {
+        return device.TrustStatus == TrustStatus.Unknown && device.RiskStatus != RiskStatus.Normal;
+    }
+
+    private static DashboardSafetyItemViewModel CreateSafetyItemForEvent(
+        NetworkEvent networkEvent,
+        IReadOnlyList<AppIdentity> applications,
+        IReadOnlyList<NetworkDevice> devices)
+    {
+        var details = ParseEventDetails(networkEvent.DetailsJson);
+        var application = applications.FirstOrDefault(candidate => candidate.ApplicationId == networkEvent.ApplicationId);
+        var device = devices.FirstOrDefault(candidate => networkEvent.SourceDeviceId is not null && candidate.DeviceId == networkEvent.SourceDeviceId.Value);
+        var target = FirstUseful(application?.DisplayName, details.App, device is null ? null : DisplayDeviceName(device), details.DeviceName, "Unknown item");
+        return networkEvent.EventType switch
+        {
+            "CameraActivated" => new DashboardSafetyItemViewModel(
+                "Act now",
+                "Someone may be using your camera",
+                target,
+                "An app is using the camera on this PC.",
+                "If you did not open it, close the app and block or watch it.",
+                "Block it",
+                "This is OK"),
+            "MicrophoneActivated" => new DashboardSafetyItemViewModel(
+                "Act now",
+                "Someone may be using your microphone",
+                target,
+                "An app is using the microphone on this PC.",
+                "If you did not open it, close the app and block or watch it.",
+                "Block it",
+                "This is OK"),
+            "NewDeviceObserved" => new DashboardSafetyItemViewModel(
+                "Needs review",
+                "A new device joined your network",
+                target,
+                "AccessWatch saw a device that is not recognized yet.",
+                "Trace it before naming, trusting, or blocking it.",
+                "Trace device",
+                "Keep watching"),
+            "NewListeningPort" or "ListeningPortApplicationChanged" => new DashboardSafetyItemViewModel(
+                networkEvent.RiskLevel >= RiskLevel.Critical ? "Act now" : "Needs review",
+                "Someone may be able to connect to this PC",
+                target,
+                "An app opened a path that other devices may reach.",
+                "If you do not recognize it, investigate first and block it if unexpected.",
+                "Investigate",
+                "Block it"),
+            _ => new DashboardSafetyItemViewModel(
+                "Needs review",
+                FirstUseful(networkEvent.Summary, FriendlyEventType(networkEvent.EventType)),
+                target,
+                FirstUseful(details.WhatHappened, "AccessWatch noticed activity."),
+                FirstUseful(details.SuggestedAction, DefaultSuggestedAction(networkEvent.RiskLevel)),
+                "Investigate",
+                "Keep watching")
+        };
+    }
+
+    private static DashboardSafetyItemViewModel CreateSafetyItemForIncident(Incident incident)
+    {
+        return new DashboardSafetyItemViewModel(
+            incident.RiskLevel >= RiskLevel.Critical ? "Act now" : "Needs review",
+            FirstUseful(incident.Title, "Something needs review"),
+            "Incident",
+            FirstUseful(incident.Summary, "AccessWatch grouped related activity."),
+            BuildIncidentRecommendedAction(incident.RiskLevel, incident.Status, incident.EventCount),
+            incident.RiskLevel >= RiskLevel.Critical ? "Act now" : "Help me decide",
+            "Keep watching");
+    }
+
+    private static DashboardSafetyItemViewModel CreateSafetyItemForPort(ListeningPort port)
+    {
+        var applicationName = FirstUseful(port.Application?.DisplayName, port.Application?.ProcessName, "Unknown application");
+        return new DashboardSafetyItemViewModel(
+            port.RiskStatus == RiskStatus.Critical ? "Act now" : "Needs review",
+            "Someone may be able to connect to this PC",
+            applicationName,
+            $"{applicationName} is listening on port {port.PortNumber}.",
+            "Investigate this port before trusting it.",
+            "Investigate",
+            "Block it");
+    }
+
+    private static DashboardSafetyItemViewModel CreateSafetyItemForDevice(NetworkDevice device)
+    {
+        return new DashboardSafetyItemViewModel(
+            "Needs review",
+            "A device needs your attention",
+            DisplayDeviceName(device),
+            $"AccessWatch saw this device at {device.IpAddress}.",
+            DeviceRecommendedAction(device),
+            "Trace device",
+            "Keep watching");
+    }
+
     private void ReplaceRecentActivity(
         IReadOnlyList<NetworkEvent> events,
         IReadOnlyList<AppIdentity> applications,
@@ -3092,4 +3281,5 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         string? WhyItMatters = null,
         string? SuggestedAction = null);
 }
+
 

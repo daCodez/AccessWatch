@@ -13,6 +13,18 @@ public sealed record DashboardPageViewModel(string Name, string Summary);
 public sealed record DashboardMetricViewModel(string Name, int Count);
 
 /// <summary>
+/// Represents a plain-language safety item shown on the Safety Center.
+/// </summary>
+public sealed record DashboardSafetyItemViewModel(
+    string Urgency,
+    string Headline,
+    string Target,
+    string WhatHappened,
+    string RecommendedAction,
+    string PrimaryAction,
+    string SecondaryAction);
+
+/// <summary>
 /// Represents a recent dashboard activity row.
 /// </summary>
 public sealed record DashboardActivityItemViewModel(
