@@ -345,21 +345,21 @@
                         </DataGrid>
                         <Border Grid.Row="2" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding SelectedIncidentDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0" />
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                                    <Button Content="This is OK" IsEnabled="{Binding CanApplyIncidentAction}" Width="72" Height="30" Margin="0,0,8,0" Click="OnResolveIncidentClick" />
-                                    <Button Content="Keep watching" IsEnabled="{Binding CanApplyIncidentAction}" Width="68" Height="30" Margin="0,0,8,0" Click="OnWatchIncidentClick" />
-                                    <Button Content="Act now" IsEnabled="{Binding CanApplyIncidentAction}" Width="78" Height="30" Margin="0,0,8,0" Click="OnEscalateIncidentClick" />
-                                    <Button Content="Make automatic" IsEnabled="{Binding CanApplyIncidentAction}" Width="92" Height="30" Margin="0,0,8,0" Click="OnCreateIncidentRuleClick" />
-                                    <Button Content="Save notes" IsEnabled="{Binding CanSaveIncidentNotes}" Width="90" Height="30" Margin="0,0,8,0" Click="OnSaveIncidentNotesClick" />
-                                    <Button Content="Export" IsEnabled="{Binding CanExportIncident}" Width="72" Height="30" Margin="0,0,8,0" Click="OnExportIncidentClick" />
-                                    <Button Content="Review with AI" IsEnabled="{Binding CanReviewIncidentWithAi}" Width="112" Height="30" Margin="0,0,8,0" Click="OnReviewIncidentWithAiClick" />
-                                    <Button Content="Copy for ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="116" Height="30" Click="OnCopyIncidentForChatGptClick" />
-                                </StackPanel>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding SelectedIncidentDetail}" Foreground="#57606A" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <WrapPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                    <Button Content="This is OK" IsEnabled="{Binding CanApplyIncidentAction}" Width="84" Height="30" Margin="0,0,8,8" Click="OnResolveIncidentClick" />
+                                    <Button Content="Keep watching" IsEnabled="{Binding CanApplyIncidentAction}" Width="108" Height="30" Margin="0,0,8,8" Click="OnWatchIncidentClick" />
+                                    <Button Content="Act now" IsEnabled="{Binding CanApplyIncidentAction}" Width="84" Height="30" Margin="0,0,8,8" Click="OnEscalateIncidentClick" />
+                                    <Button Content="Make automatic" IsEnabled="{Binding CanApplyIncidentAction}" Width="120" Height="30" Margin="0,0,8,8" Click="OnCreateIncidentRuleClick" />
+                                    <Button Content="Save notes" IsEnabled="{Binding CanSaveIncidentNotes}" Width="96" Height="30" Margin="0,0,8,8" Click="OnSaveIncidentNotesClick" />
+                                    <Button Content="Export" IsEnabled="{Binding CanExportIncident}" Width="76" Height="30" Margin="0,0,8,8" Click="OnExportIncidentClick" />
+                                    <Button Content="Review with AI" IsEnabled="{Binding CanReviewIncidentWithAi}" Width="118" Height="30" Margin="0,0,8,8" Click="OnReviewIncidentWithAiClick" />
+                                    <Button Content="Copy for ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="126" Height="30" Margin="0,0,0,8" Click="OnCopyIncidentForChatGptClick" />
+                                </WrapPanel>
                             </Grid>
                         </Border>
                         <Grid Grid.Row="3" Margin="0,12,0,0">

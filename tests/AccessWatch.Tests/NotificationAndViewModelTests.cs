@@ -164,6 +164,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("IsEnabled=\"{Binding CanApplyEnforcementPlan}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentDetail}\"", xaml);
+        Assert.Contains("<WrapPanel Grid.Row=\"1\" HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\">", xaml);
         Assert.Contains("Text=\"{Binding SelectedIncidentExplanation, Mode=OneWay}\"", xaml);
         Assert.Contains("Text=\"{Binding IncidentSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncidentStatusFilter, Mode=TwoWay}\"", xaml);
