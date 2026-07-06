@@ -243,10 +243,7 @@
                                 <WrapPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top">
                                     <Button Content="This is OK" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,8" Click="OnTrustDeviceClick" />
                                     <Button Content="Keep watching" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnWatchDeviceClick" />
-                                    <Button Content="Mark as guest" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnGuestDeviceClick" />
                                     <Button Content="Block it" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="96" Height="30" Margin="0,0,8,8" Click="OnBlockDeviceClick" />
-                                    <Button Content="Trace device" IsEnabled="{Binding CanTraceSelectedDevice}" Width="104" Height="30" Margin="0,0,8,8" Click="OnTraceDeviceClick" />
-                                    <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="124" Height="30" Margin="0,0,0,8" Click="OnApplyProtectionClick" />
                                 </WrapPanel>
                                 <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,4,0,0">
                                     <TextBlock Text="Alias" Foreground="#57606A" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -254,8 +251,19 @@
                                     <Button Content="Save alias" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="88" Height="30" Margin="0,0,8,0" Click="OnSaveDeviceAliasClick" />
                                     <Button Content="Clear" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="64" Height="30" Click="OnClearDeviceAliasClick" />
                                 </StackPanel>
-                                <TextBox Grid.Row="3" Text="{Binding SelectedDeviceTrace, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="88" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
-                                <TextBox Grid.Row="4" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
+                                <Expander Grid.Row="3" Header="Show device tools" IsExpanded="False" Margin="0,12,0,0">
+                                    <StackPanel Margin="0,8,0,0">
+                                        <WrapPanel HorizontalAlignment="Right" Margin="0,0,0,8">
+                                            <Button Content="Mark as guest" IsEnabled="{Binding CanApplyDeviceTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnGuestDeviceClick" />
+                                            <Button Content="Trace device" IsEnabled="{Binding CanTraceSelectedDevice}" Width="104" Height="30" Margin="0,0,8,8" Click="OnTraceDeviceClick" />
+                                            <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="124" Height="30" Margin="0,0,0,8" Click="OnApplyProtectionClick" />
+                                        </WrapPanel>
+                                        <TextBlock Text="Trace result" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding SelectedDeviceTrace, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontFamily="Consolas" FontSize="12" />
+                                        <TextBlock Text="Protection plan" FontSize="11" Foreground="#57606A" Margin="0,10,0,4" />
+                                        <TextBox Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontFamily="Consolas" FontSize="12" />
+                                    </StackPanel>
+                                </Expander>
                             </Grid>
                         </Border>
                     </Grid>
@@ -319,9 +327,16 @@
                                     <Button Content="This is OK" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="84" Height="30" Margin="0,0,8,8" Click="OnTrustApplicationClick" />
                                     <Button Content="Keep watching" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnWatchApplicationClick" />
                                     <Button Content="Block it" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="84" Height="30" Margin="0,0,8,8" Click="OnBlockApplicationClick" />
-                                    <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="124" Height="30" Margin="0,0,0,8" Click="OnApplyProtectionClick" />
                                 </WrapPanel>
-                                <TextBox Grid.Row="2" Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" Margin="0,12,0,0" FontFamily="Consolas" FontSize="12" />
+                                <Expander Grid.Row="2" Header="Show app protection tools" IsExpanded="False" Margin="0,12,0,0">
+                                    <StackPanel Margin="0,8,0,0">
+                                        <WrapPanel HorizontalAlignment="Right" Margin="0,0,0,8">
+                                            <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="124" Height="30" Click="OnApplyProtectionClick" />
+                                        </WrapPanel>
+                                        <TextBlock Text="Protection plan" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding SelectedEnforcementPlan, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontFamily="Consolas" FontSize="12" />
+                                    </StackPanel>
+                                </Expander>
                             </Grid>
                         </Border>
                     </Grid>
@@ -368,7 +383,12 @@
                                     <TextBlock Text="{Binding SelectedPort.SuggestedAction}" FontSize="13" Foreground="#24292F" TextWrapping="Wrap" Margin="0,2,0,0" />
                                 </StackPanel>
                                 <Button Grid.Row="2" Content="{Binding PortInvestigationButtonText}" IsEnabled="{Binding CanInvestigateSelectedPort}" Width="128" Height="30" HorizontalAlignment="Left" Click="OnInvestigatePortClick" />
-                                <TextBox Grid.Row="3" Text="{Binding SelectedPortInvestigation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" Margin="0,12,0,0" />
+                                <Expander Grid.Row="3" Header="Show port investigation" IsExpanded="False" Margin="0,12,0,0">
+                                    <StackPanel Margin="0,8,0,0">
+                                        <TextBlock Text="Investigation result" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding SelectedPortInvestigation, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="120" FontSize="12" />
+                                    </StackPanel>
+                                </Expander>
                             </Grid>
                         </Border>
                     </Grid>
@@ -449,16 +469,19 @@
                                     <Button Content="This is OK" IsEnabled="{Binding CanApplyIncidentAction}" Width="84" Height="30" Margin="0,0,8,8" Click="OnResolveIncidentClick" />
                                     <Button Content="Keep watching" IsEnabled="{Binding CanApplyIncidentAction}" Width="108" Height="30" Margin="0,0,8,8" Click="OnWatchIncidentClick" />
                                     <Button Content="Act now" IsEnabled="{Binding CanApplyIncidentAction}" Width="84" Height="30" Margin="0,0,8,8" Click="OnEscalateIncidentClick" />
-                                    <Button Content="Make automatic" IsEnabled="{Binding CanApplyIncidentAction}" Width="120" Height="30" Margin="0,0,8,8" Click="OnCreateIncidentRuleClick" />
-                                    <Button Content="Save notes" IsEnabled="{Binding CanSaveIncidentNotes}" Width="96" Height="30" Margin="0,0,8,8" Click="OnSaveIncidentNotesClick" />
-                                    <Button Content="Export" IsEnabled="{Binding CanExportIncident}" Width="76" Height="30" Margin="0,0,8,8" Click="OnExportIncidentClick" />
                                     <Button Content="Review with AI" IsEnabled="{Binding CanReviewIncidentWithAi}" Width="118" Height="30" Margin="0,0,8,8" Click="OnReviewIncidentWithAiClick" />
-                                    <Button Content="Copy for ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="126" Height="30" Margin="0,0,0,8" Click="OnCopyIncidentForChatGptClick" />
                                 </WrapPanel>
                             </Grid>
                         </Border>
                         <Expander Grid.Row="3" Header="Show investigation details" IsExpanded="False" Margin="0,12,0,0">
-                            <Grid Margin="0,10,0,0">
+                            <StackPanel Margin="0,10,0,0">
+                                <WrapPanel HorizontalAlignment="Right" Margin="0,0,0,8">
+                                    <Button Content="Make automatic" IsEnabled="{Binding CanApplyIncidentAction}" Width="120" Height="30" Margin="0,0,8,8" Click="OnCreateIncidentRuleClick" />
+                                    <Button Content="Save notes" IsEnabled="{Binding CanSaveIncidentNotes}" Width="96" Height="30" Margin="0,0,8,8" Click="OnSaveIncidentNotesClick" />
+                                    <Button Content="Export" IsEnabled="{Binding CanExportIncident}" Width="76" Height="30" Margin="0,0,8,8" Click="OnExportIncidentClick" />
+                                    <Button Content="Copy for ChatGPT" IsEnabled="{Binding HasIncidentAiReview}" Width="126" Height="30" Margin="0,0,0,8" Click="OnCopyIncidentForChatGptClick" />
+                                </WrapPanel>
+                                <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="12" />
@@ -509,7 +532,8 @@
                                     <TextBlock Text="Rule suggestion" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
                                     <TextBox Text="{Binding SelectedIncidentRuleSuggestion, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="76" FontFamily="Consolas" FontSize="12" />
                                 </StackPanel>
-                            </Grid>
+                                </Grid>
+                            </StackPanel>
                         </Expander>
                     </Grid>
                 </Border>
@@ -518,7 +542,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="170" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <DataGrid Grid.Row="0" ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
                             <DataGrid.Columns>
@@ -584,15 +608,23 @@
                                 </WrapPanel>
                             </Grid>
                         </Border>
-                        <Grid Grid.Row="2" Margin="0,12,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Text="{Binding SelectedRulePreview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
-                            <TextBox Grid.Column="2" Text="{Binding SelectedRule.AiSummary, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12" />
-                        </Grid>
+                        <Expander Grid.Row="2" Header="Show rule details" IsExpanded="False" Margin="0,12,0,0">
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Rule preview" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedRulePreview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="96" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="AI summary" FontSize="11" Foreground="#57606A" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding SelectedRule.AiSummary, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="96" FontSize="12" />
+                                </StackPanel>
+                            </Grid>
+                        </Expander>
                     </Grid>
                 </Border>
                 <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="18" Visibility="{Binding SettingsVisibility}">

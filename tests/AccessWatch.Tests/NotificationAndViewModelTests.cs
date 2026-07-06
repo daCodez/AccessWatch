@@ -120,6 +120,8 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Header=\"Next step\"", xaml);
         Assert.Contains("Content=\"{Binding PortInvestigationButtonText}\"", xaml);
         Assert.Contains("Click=\"OnInvestigatePortClick\"", xaml);
+        Assert.Contains("Header=\"Show port investigation\"", xaml);
+        Assert.Contains("Text=\"Investigation result\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedPortInvestigation, Mode=OneWay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding Incidents}\"", xaml);
         Assert.Contains("Visibility=\"{Binding RulesVisibility}\"", xaml);
@@ -128,6 +130,9 @@ public sealed class NotificationAndViewModelTests
         Assert.DoesNotContain("Text=\"{Binding SelectedRuleDetail}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedRule.Name}\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedRule.Conditions}\"", xaml);
+        Assert.Contains("Header=\"Show rule details\"", xaml);
+        Assert.Contains("Text=\"Rule preview\"", xaml);
+        Assert.Contains("Text=\"AI summary\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedRulePreview, Mode=OneWay}\"", xaml);
         Assert.Contains("Click=\"OnPreviewRuleClick\"", xaml);
         Assert.Contains("Click=\"OnEnableRuleClick\"", xaml);
@@ -166,9 +171,13 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Content=\"Keep watching\"", xaml);
         Assert.Contains("Content=\"Block it\"", xaml);
         Assert.Contains("Click=\"OnTrustDeviceClick\"", xaml);
+        Assert.Contains("<Expander Grid.Row=\"3\" Header=\"Show device tools\" IsExpanded=\"False\"", xaml);
+        Assert.Contains("Text=\"Trace result\"", xaml);
+        Assert.Contains("Text=\"Protection plan\"", xaml);
         Assert.Contains("Click=\"OnGuestDeviceClick\"", xaml);
         Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedEnforcementPlan, Mode=OneWay}\"", xaml);
+        Assert.Contains("Header=\"Show app protection tools\"", xaml);
         Assert.Contains("Content=\"Apply protection\"", xaml);
         Assert.Contains("IsEnabled=\"{Binding CanApplyEnforcementPlan}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
@@ -208,6 +217,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Content=\"Keep watching\"", xaml);
         Assert.Contains("Content=\"Act now\"", xaml);
         Assert.Contains("Content=\"Make automatic\"", xaml);
+        Assert.Contains("<WrapPanel HorizontalAlignment=\"Right\" Margin=\"0,0,0,8\">", xaml);
         Assert.Contains("Content=\"Save notes\"", xaml);
         Assert.Contains("Content=\"Export\"", xaml);
         Assert.Contains("Content=\"Review with AI\"", xaml);
