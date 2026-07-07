@@ -1221,7 +1221,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        SelectSafetyItemTarget(item);
+        SelectSafetyItemTarget(item, ShouldOpenTargetPage(action));
         var handled = true;
         switch (action)
         {
@@ -1267,6 +1267,11 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             : $"Open {item.Target} for more options.";
     }
 
+    private static bool ShouldOpenTargetPage(string action)
+    {
+        return action is "Trace device" or "Investigate" or "Help me decide";
+    }
+
     private static string CreateSafetyActionToast(DashboardSafetyItemViewModel item, string action)
     {
         return action switch
@@ -1295,7 +1300,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         };
     }
 
-    private void SelectSafetyItemTarget(DashboardSafetyItemViewModel item)
+    private void SelectSafetyItemTarget(DashboardSafetyItemViewModel item, bool openTargetPage)
     {
         SelectedApplication = null;
         SelectedDevice = null;
@@ -1306,13 +1311,21 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         {
             case "Application":
                 SelectedApplication = FindSafetyApplication(item);
-                SelectedPage = Pages.First(page => page.Name == "Applications");
+                if (openTargetPage)
+                {
+                    SelectedPage = Pages.First(page => page.Name == "Applications");
+                }
+
                 break;
             case "Device":
                 SelectedDevice = item.SourceId is null
                     ? Devices.FirstOrDefault(device => string.Equals(device.Name, item.Target, StringComparison.OrdinalIgnoreCase))
                     : Devices.FirstOrDefault(device => device.DeviceId == item.SourceId.Value);
-                SelectedPage = Pages.First(page => page.Name == "Devices");
+                if (openTargetPage)
+                {
+                    SelectedPage = Pages.First(page => page.Name == "Devices");
+                }
+
                 break;
             case "Port":
                 SelectedPort = Ports.FirstOrDefault(port =>
@@ -1320,13 +1333,21 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                     && port.PortNumber == item.PortNumber.Value
                     && (string.IsNullOrWhiteSpace(item.LocalAddress) || string.Equals(port.LocalAddress, item.LocalAddress, StringComparison.OrdinalIgnoreCase)))
                     ?? Ports.FirstOrDefault(port => item.PortNumber is not null && port.PortNumber == item.PortNumber.Value);
-                SelectedPage = Pages.First(page => page.Name == "Ports");
+                if (openTargetPage)
+                {
+                    SelectedPage = Pages.First(page => page.Name == "Ports");
+                }
+
                 break;
             case "Incident":
                 SelectedIncident = item.SourceId is null
                     ? Incidents.FirstOrDefault(incident => string.Equals(incident.Title, item.Headline, StringComparison.OrdinalIgnoreCase))
                     : Incidents.FirstOrDefault(incident => incident.IncidentId == item.SourceId.Value);
-                SelectedPage = Pages.First(page => page.Name == "Incidents");
+                if (openTargetPage)
+                {
+                    SelectedPage = Pages.First(page => page.Name == "Incidents");
+                }
+
                 break;
         }
     }
@@ -3459,5 +3480,4 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         string? WhyItMatters = null,
         string? SuggestedAction = null);
 }
-
 

@@ -621,7 +621,7 @@ public sealed class NotificationAndViewModelTests
 
         await model.ApplySafetyItemPrimaryActionAsync(item, CancellationToken.None);
 
-        Assert.Equal("Applications", model.SelectedPageTitle);
+        Assert.Equal("Safety Center", model.SelectedPageTitle);
         Assert.Equal("Blocked", model.SelectedApplication?.TrustStatus);
         var decision = Assert.Single(repository.TrustDecisions);
         Assert.Equal("Application", decision.TargetType);
@@ -654,7 +654,7 @@ public sealed class NotificationAndViewModelTests
         await model.LoadAsync(CancellationToken.None);
         await model.ApplySafetyItemSecondaryActionAsync(Assert.Single(model.SafetyItems), CancellationToken.None);
 
-        Assert.Equal("Applications", model.SelectedPageTitle);
+        Assert.Equal("Safety Center", model.SelectedPageTitle);
         Assert.Equal("Trusted", model.SelectedApplication?.TrustStatus);
         var decision = Assert.Single(repository.TrustDecisions);
         Assert.Equal(TrustStatus.Trusted, decision.Decision);
@@ -778,6 +778,7 @@ public sealed class NotificationAndViewModelTests
         await model.ApplySafetyItemSecondaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Trust device", "front-door-tablet", "", "", "", "This is OK", "Device", 21), CancellationToken.None);
         await model.ApplySafetyItemSecondaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Watch device", "guest-tablet", "", "", "", "Keep watching", "Device", null), CancellationToken.None);
         await model.ApplySafetyItemPrimaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Name matched app", "Name Matched App", "", "", "Block it", "", "Application"), CancellationToken.None);
+        await model.ApplySafetyItemPrimaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Open app details", "Name Matched App", "", "", "Investigate", "", "Application", 31), CancellationToken.None);
         await model.ApplySafetyItemSecondaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "Watch incident", "Incident", "", "", "", "Keep watching", "Incident", 42), CancellationToken.None);
         await model.ApplySafetyItemPrimaryActionAsync(new DashboardSafetyItemViewModel("Needs review", "High microphone use", "Incident", "", "", "Help me decide", "", "Incident", null), CancellationToken.None);
         await model.ApplySafetyItemPrimaryActionAsync(new DashboardSafetyItemViewModel("Act now", "Critical remote access", "Incident", "", "", "Act now", "", "Incident", 41), CancellationToken.None);
@@ -3938,6 +3939,4 @@ public sealed class NotificationAndViewModelTests
         }
     }
 }
-
-
 
