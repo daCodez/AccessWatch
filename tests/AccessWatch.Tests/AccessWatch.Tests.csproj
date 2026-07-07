@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -11,7 +11,7 @@
     <ThresholdType>line,branch,method</ThresholdType>
     <ThresholdStat>total</ThresholdStat>
     <ExcludeByAttribute>GeneratedCode,GeneratedCodeAttribute,CompilerGenerated,CompilerGeneratedAttribute,ExcludeFromCodeCoverage,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
-    <ExcludeByFile>**/Program.cs,**/Worker.cs,**/*Window.xaml.cs,**/App.xaml.cs,**/AssemblyInfo.cs,**/*.g.cs</ExcludeByFile>
+    <ExcludeByFile>**/Program.cs,**/Worker.cs,**/*Window.xaml.cs,**/App.xaml.cs,**/AssemblyInfo.cs,**/*.g.cs,**/*.xaml,**\Program.cs,**\Worker.cs,**\*Window.xaml.cs,**\App.xaml.cs,**\AssemblyInfo.cs,**\*.g.cs,**\*.xaml</ExcludeByFile>
   </PropertyGroup>
 
   <ItemGroup>

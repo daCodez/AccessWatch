@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Diagnostics.CodeAnalysis;
 using AccessWatch.AI;
 using AccessWatch.App.ViewModels;
 using AccessWatch.Core;
@@ -15,6 +16,7 @@ namespace AccessWatch.App;
 /// <summary>
 /// Interaction logic for the AccessWatch dashboard window.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public partial class MainWindow : Window
 {
     private readonly DashboardShellViewModel viewModel;

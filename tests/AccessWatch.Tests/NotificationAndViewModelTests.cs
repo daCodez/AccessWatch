@@ -575,6 +575,92 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies Safety Center handled indicators are restored from saved decisions after reload.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_LoadAsync_RestoresHandledSafetyItemsFromSavedDecisions()
+    {
+        var repository = new FakeRepository
+        {
+            Applications =
+            [
+                new AppIdentity { ApplicationId = 7, DisplayName = "Sound Recorder", ProcessName = "soundrecorder", TrustStatus = TrustStatus.Blocked },
+                new AppIdentity { ApplicationId = 8, DisplayName = "Camera", ProcessName = "camera", TrustStatus = TrustStatus.Trusted }
+            ],
+            Devices =
+            [
+                new NetworkDevice { DeviceId = 9, IpAddress = "192.168.1.45", Hostname = "new-phone", TrustStatus = TrustStatus.KnownWatched, RiskStatus = RiskStatus.Suspicious },
+                new NetworkDevice { DeviceId = 10, IpAddress = "192.168.1.46", Hostname = "guest-phone", TrustStatus = TrustStatus.Guest, RiskStatus = RiskStatus.Suspicious }
+            ],
+            Events =
+            [
+                new NetworkEvent
+                {
+                    EventType = "MicrophoneActivated",
+                    ApplicationId = 7,
+                    RiskLevel = RiskLevel.High,
+                    CreatedUtc = DateTimeOffset.UtcNow
+                },
+                new NetworkEvent
+                {
+                    EventType = "NewDeviceObserved",
+                    SourceDeviceId = 9,
+                    RiskLevel = RiskLevel.Medium,
+                    CreatedUtc = DateTimeOffset.UtcNow
+                },
+                new NetworkEvent
+                {
+                    EventType = "CameraActivated",
+                    ApplicationId = 8,
+                    RiskLevel = RiskLevel.High,
+                    CreatedUtc = DateTimeOffset.UtcNow
+                },
+                new NetworkEvent
+                {
+                    EventType = "NewDeviceObserved",
+                    SourceDeviceId = 10,
+                    RiskLevel = RiskLevel.Medium,
+                    CreatedUtc = DateTimeOffset.UtcNow
+                }
+            ],
+            Incidents =
+            [
+                new Incident
+                {
+                    IncidentId = 77,
+                    Title = "Repeated microphone access",
+                    Summary = "Microphone access was watched earlier.",
+                    RiskLevel = RiskLevel.High,
+                    Status = IncidentStatus.Watching,
+                    EventCount = 2,
+                    StartedUtc = DateTimeOffset.UtcNow,
+                    LastUpdatedUtc = DateTimeOffset.UtcNow
+                }
+            ]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+
+        Assert.Collection(
+            model.SafetyItems,
+            app => AssertHandledSafetyItem(app, "✓ Blocked"),
+            device => AssertHandledSafetyItem(device, "✓ Watching"),
+            trustedApp => AssertHandledSafetyItem(trustedApp, "✓ Marked OK"),
+            guestDevice => AssertHandledSafetyItem(guestDevice, "✓ Marked guest"),
+            incident => AssertHandledSafetyItem(incident, "✓ Watching"));
+    }
+
+    private static void AssertHandledSafetyItem(DashboardSafetyItemViewModel item, string actionResult)
+    {
+        Assert.Equal("Handled", item.Urgency);
+        Assert.Equal(actionResult, item.ActionResult);
+        Assert.Equal("Visible", item.ActionResultVisibility);
+        Assert.False(item.ActionButtonsEnabled);
+        Assert.Equal("#EAF7EF", item.CardBackground);
+        Assert.Equal("#2DA44E", item.CardBorderBrush);
+    }
+    /// <summary>
     /// Verifies camera alerts still render when the app inventory has not resolved the source yet.
     /// </summary>
     [Fact]
@@ -696,6 +782,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("✓ Blocked", Assert.IsType<string>(method?.Invoke(null, ["Block it"])));
         Assert.Equal("✓ Marked OK", Assert.IsType<string>(method?.Invoke(null, ["This is OK"])));
         Assert.Equal("✓ Watching", Assert.IsType<string>(method?.Invoke(null, ["Keep watching"])));
+        Assert.Equal("✓ Marked guest", Assert.IsType<string>(method?.Invoke(null, ["Mark as guest"])));
         Assert.Equal("✓ Trace opened", Assert.IsType<string>(method?.Invoke(null, ["Trace device"])));
         Assert.Equal("✓ Investigation opened", Assert.IsType<string>(method?.Invoke(null, ["Investigate"])));
         Assert.Equal("✓ Review opened", Assert.IsType<string>(method?.Invoke(null, ["Help me decide"])));
@@ -3991,4 +4078,3 @@ public sealed class NotificationAndViewModelTests
         }
     }
 }
-

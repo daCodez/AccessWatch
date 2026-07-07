@@ -1280,7 +1280,12 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        SafetyItems[index] = SafetyItems[index] with
+        SafetyItems[index] = CreateHandledSafetyItem(SafetyItems[index], action);
+    }
+
+    private static DashboardSafetyItemViewModel CreateHandledSafetyItem(DashboardSafetyItemViewModel item, string action)
+    {
+        return item with
         {
             Urgency = "Handled",
             ActionResult = CreateSafetyActionResult(action),
@@ -1317,6 +1322,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             "Block it" => "✓ Blocked",
             "This is OK" => "✓ Marked OK",
             "Keep watching" => "✓ Watching",
+            "Mark as guest" => "✓ Marked guest",
             "Trace device" => "✓ Trace opened",
             "Investigate" => "✓ Investigation opened",
             "Help me decide" => "✓ Review opened",
@@ -1325,6 +1331,33 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         };
     }
 
+    private static DashboardSafetyItemViewModel RestoreHandledStateFromTrust(DashboardSafetyItemViewModel item, TrustStatus trustStatus)
+    {
+        return TryGetHandledAction(trustStatus, out var action)
+            ? CreateHandledSafetyItem(item, action)
+            : item;
+    }
+
+    private static DashboardSafetyItemViewModel RestoreHandledStateFromIncident(DashboardSafetyItemViewModel item, IncidentStatus status)
+    {
+        return status == IncidentStatus.Watching
+            ? CreateHandledSafetyItem(item, "Keep watching")
+            : item;
+    }
+
+    private static bool TryGetHandledAction(TrustStatus trustStatus, out string action)
+    {
+        action = trustStatus switch
+        {
+            TrustStatus.Trusted => "This is OK",
+            TrustStatus.KnownWatched => "Keep watching",
+            TrustStatus.Guest => "Mark as guest",
+            TrustStatus.Blocked => "Block it",
+            _ => string.Empty
+        };
+
+        return !string.IsNullOrWhiteSpace(action);
+    }
     private static bool ShouldOpenTargetPage(string action)
     {
         return action is "Trace device" or "Investigate" or "Help me decide";
@@ -2323,7 +2356,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         var application = applications.FirstOrDefault(candidate => candidate.ApplicationId == networkEvent.ApplicationId);
         var device = devices.FirstOrDefault(candidate => networkEvent.SourceDeviceId is not null && candidate.DeviceId == networkEvent.SourceDeviceId.Value);
         var target = FirstUseful(application?.DisplayName, details.App, device is null ? null : DisplayDeviceName(device), details.DeviceName, "Unknown item");
-        return networkEvent.EventType switch
+        var item = networkEvent.EventType switch
         {
             "CameraActivated" => new DashboardSafetyItemViewModel(
                 "Act now",
@@ -2366,11 +2399,20 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
                 "Investigate",
                 "Keep watching")
         };
+
+        if (application is not null)
+        {
+            return RestoreHandledStateFromTrust(item, application.TrustStatus);
+        }
+
+        return device is null
+            ? item
+            : RestoreHandledStateFromTrust(item, device.TrustStatus);
     }
 
     private static DashboardSafetyItemViewModel CreateSafetyItemForIncident(Incident incident)
     {
-        return new DashboardSafetyItemViewModel(
+        var item = new DashboardSafetyItemViewModel(
             incident.RiskLevel >= RiskLevel.Critical ? "Act now" : "Needs review",
             FirstUseful(incident.Title, "Something needs review"),
             "Incident",
@@ -2380,6 +2422,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             "Keep watching",
             "Incident",
             incident.IncidentId);
+
+        return RestoreHandledStateFromIncident(item, incident.Status);
     }
 
     private static DashboardSafetyItemViewModel CreateSafetyItemForPort(ListeningPort port)
@@ -2401,7 +2445,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
 
     private static DashboardSafetyItemViewModel CreateSafetyItemForDevice(NetworkDevice device)
     {
-        return new DashboardSafetyItemViewModel(
+        var item = new DashboardSafetyItemViewModel(
             "Needs review",
             "A device needs your attention",
             DisplayDeviceName(device),
@@ -2411,6 +2455,8 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             "Keep watching",
             "Device",
             device.DeviceId);
+
+        return RestoreHandledStateFromTrust(item, device.TrustStatus);
     }
 
     private void ReplaceRecentActivity(
@@ -3538,4 +3584,3 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         string? WhyItMatters = null,
         string? SuggestedAction = null);
 }
-
