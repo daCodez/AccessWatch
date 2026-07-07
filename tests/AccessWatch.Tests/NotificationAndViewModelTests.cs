@@ -187,6 +187,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Click=\"OnBlockApplicationClick\"", xaml);
         Assert.Contains("Text=\"{Binding SelectedEnforcementPlan, Mode=OneWay}\"", xaml);
         Assert.Contains("Header=\"Show app protection tools\"", xaml);
+        Assert.Contains("Grid.Row=\"3\" Header=\"Show app protection tools\"", xaml);
         Assert.Contains("Content=\"Apply protection\"", xaml);
         Assert.Contains("IsEnabled=\"{Binding CanApplyEnforcementPlan}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedIncident, Mode=TwoWay}\"", xaml);
@@ -1367,6 +1368,7 @@ public sealed class NotificationAndViewModelTests
         Assert.Equal("Blocked", Assert.Single(model.Applications).TrustStatus);
         Assert.Equal("Blocked", model.SelectedApplication?.TrustStatus);
         Assert.Contains("Blocked Visual Studio", model.StatusMessage);
+        Assert.Equal("Blocked Visual Studio.", model.ToastMessage);
         Assert.Collection(
             repository.TrustDecisions,
             decision =>
@@ -1383,6 +1385,50 @@ public sealed class NotificationAndViewModelTests
             });
     }
 
+    /// <summary>
+    /// Verifies application action buttons show immediate plain-language feedback.
+    /// </summary>
+    [Fact]
+    public async Task DashboardShellViewModel_ApplyApplicationTrustDecision_ShowsActionFeedback()
+    {
+        var repository = new FakeRepository
+        {
+            Applications = [new AppIdentity { ApplicationId = 85, DisplayName = "Sound Recorder", ProcessName = "soundrecorder", TrustStatus = TrustStatus.Trusted }]
+        };
+        var model = new DashboardShellViewModel(repository);
+
+        await model.LoadAsync(CancellationToken.None);
+        await model.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.Trusted, CancellationToken.None);
+
+        Assert.Equal("Marked Sound Recorder as OK.", model.ToastMessage);
+        Assert.Equal("Visible", model.ToastVisibility);
+
+        await model.ApplySelectedApplicationTrustDecisionAsync(TrustStatus.KnownWatched, CancellationToken.None);
+
+        Assert.Equal("KnownWatched", model.SelectedApplication?.TrustStatus);
+        Assert.Equal("Watching Sound Recorder. AccessWatch will keep it visible.", model.ToastMessage);
+    }
+
+    /// <summary>
+    /// Verifies trust decision confirmations cover every trust decision label.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_CreateTrustDecisionToast_CoversTrustDecisions()
+    {
+        var method = typeof(DashboardShellViewModel).GetMethod("CreateTrustDecisionToast", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.Equal("Marked Target App as OK.", InvokeTrustToast(method, TrustStatus.Trusted, false));
+        Assert.Equal("Watching Target App. AccessWatch will keep it visible.", InvokeTrustToast(method, TrustStatus.KnownWatched, false));
+        Assert.Equal("Blocked Target App. Review and apply the protection plan when you are ready.", InvokeTrustToast(method, TrustStatus.Blocked, true));
+        Assert.Equal("Blocked Target App.", InvokeTrustToast(method, TrustStatus.Blocked, false));
+        Assert.Equal("Marked Target App as a guest.", InvokeTrustToast(method, TrustStatus.Guest, false));
+        Assert.Equal("Updated Target App.", InvokeTrustToast(method, TrustStatus.Unknown, false));
+    }
+
+    private static string InvokeTrustToast(System.Reflection.MethodInfo? method, TrustStatus decision, bool protectionPlanPrepared)
+    {
+        return Assert.IsType<string>(method?.Invoke(null, ["Target App", decision, protectionPlanPrepared]));
+    }
     /// <summary>
     /// Verifies blocked inventory decisions prepare reviewed firewall protection plans.
     /// </summary>

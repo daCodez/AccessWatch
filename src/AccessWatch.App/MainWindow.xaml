@@ -307,6 +307,7 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <StackPanel Margin="0,0,0,10">
                                     <UniformGrid Columns="6" Margin="0,0,0,8">
@@ -343,7 +344,13 @@
                                     <Button Content="Keep watching" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="104" Height="30" Margin="0,0,8,8" Click="OnWatchApplicationClick" />
                                     <Button Content="Block it" IsEnabled="{Binding CanApplyApplicationTrustDecision}" Width="84" Height="30" Margin="0,0,8,8" Click="OnBlockApplicationClick" />
                                 </WrapPanel>
-                                <Expander Grid.Row="2" Header="Show app protection tools" IsExpanded="False" Margin="0,12,0,0">
+                                <Border Grid.Row="2" Margin="0,4,0,8" Padding="10" Background="#EAF7EF" BorderBrush="#2DA44E" BorderThickness="1" CornerRadius="6" Visibility="{Binding ToastVisibility}">
+                                    <DockPanel LastChildFill="True">
+                                        <Button DockPanel.Dock="Right" Content="Dismiss" Width="76" Height="28" Margin="12,0,0,0" Click="OnDismissToastClick" />
+                                        <TextBlock Text="{Binding ToastMessage}" Foreground="#1A7F37" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </Border>
+                                <Expander Grid.Row="3" Header="Show app protection tools" IsExpanded="False" Margin="0,12,0,0">
                                     <StackPanel Margin="0,8,0,0">
                                         <WrapPanel HorizontalAlignment="Right" Margin="0,0,0,8">
                                             <Button Content="Apply protection" IsEnabled="{Binding CanApplyEnforcementPlan}" Width="124" Height="30" Click="OnApplyProtectionClick" />

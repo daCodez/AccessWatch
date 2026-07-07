@@ -1141,6 +1141,7 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         StatusMessage = decision == TrustStatus.Blocked && firewallEnforcementPlanner is not null
             ? $"Blocked {updatedApplication.Name}; protection plan prepared."
             : $"{TrustDecisionVerb(decision)} {updatedApplication.Name}.";
+        ToastMessage = CreateTrustDecisionToast(updatedApplication.Name, decision, decision == TrustStatus.Blocked && firewallEnforcementPlanner is not null);
     }
 
     /// <summary>
@@ -1278,6 +1279,19 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
             "Help me decide" => $"AI review ready for {item.Target}.",
             "Act now" => $"Escalated {item.Target}.",
             _ => $"{action} completed for {item.Target}."
+        };
+    }
+
+    private static string CreateTrustDecisionToast(string targetName, TrustStatus decision, bool protectionPlanPrepared)
+    {
+        return decision switch
+        {
+            TrustStatus.Trusted => $"Marked {targetName} as OK.",
+            TrustStatus.KnownWatched => $"Watching {targetName}. AccessWatch will keep it visible.",
+            TrustStatus.Blocked when protectionPlanPrepared => $"Blocked {targetName}. Review and apply the protection plan when you are ready.",
+            TrustStatus.Blocked => $"Blocked {targetName}.",
+            TrustStatus.Guest => $"Marked {targetName} as a guest.",
+            _ => $"Updated {targetName}."
         };
     }
 
