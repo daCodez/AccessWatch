@@ -202,23 +202,46 @@
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <DataGrid ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Device" Binding="{Binding Name}" Width="220" MinWidth="180" />
-                                <DataGridTextColumn Header="Name source" Binding="{Binding NameSource}" Width="130" />
-                                <DataGridTextColumn Header="IP address" Binding="{Binding IpAddress}" Width="130" />
-                                <DataGridTextColumn Header="MAC" Binding="{Binding MacAddress}" Width="150" />
-                                <DataGridTextColumn Header="Vendor" Binding="{Binding Vendor}" Width="150" />
-                                <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
-                                <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
-                                <DataGridTextColumn Header="State" Binding="{Binding InventoryState}" Width="130" />
-                                <DataGridTextColumn Header="First seen" Binding="{Binding FirstSeen}" Width="130" />
-                                <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
-                                <DataGridTextColumn Header="Confirmed" Binding="{Binding LastConfirmed}" Width="130" />
-                                <DataGridTextColumn Header="Next step" Binding="{Binding RecommendedAction}" Width="2*" />
-                                <DataGridTextColumn Header="Details" Binding="{Binding Detail}" Width="2*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                        <ListView ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,10" Padding="14" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Background="#FFFFFF">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}" Foreground="#24292F" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                                                <TextBlock Text="{Binding TrustStatus}" Foreground="#0969DA" FontWeight="SemiBold" Margin="0,0,10,0" />
+                                                <TextBlock Text="{Binding RiskStatus}" Foreground="#57606A" FontWeight="SemiBold" />
+                                            </StackPanel>
+                                            <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                                                <TextBlock Text="IP " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding IpAddress}" Foreground="#24292F" FontSize="12" FontWeight="SemiBold" Margin="0,0,14,0" />
+                                                <TextBlock Text="MAC " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding MacAddress}" Foreground="#24292F" FontSize="12" Margin="0,0,14,0" />
+                                                <TextBlock Text="Vendor " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding Vendor}" Foreground="#24292F" FontSize="12" Margin="0,0,14,0" />
+                                                <TextBlock Text="Seen " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding LastSeen}" Foreground="#24292F" FontSize="12" />
+                                            </WrapPanel>
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding RecommendedAction, StringFormat=Next: {0}}" Foreground="#24292F" FontSize="13" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                         <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
                                 <Grid.RowDefinitions>
@@ -295,17 +318,43 @@
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <DataGrid ItemsSource="{Binding Applications}" SelectedItem="{Binding SelectedApplication, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Application" Binding="{Binding Name}" Width="1.5*" />
-                                <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="130" />
-                                <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="1.2*" />
-                                <DataGridTextColumn Header="Signature" Binding="{Binding SignatureStatus}" Width="150" />
-                                <DataGridTextColumn Header="Trust" Binding="{Binding TrustStatus}" Width="90" />
-                                <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="130" />
-                                <DataGridTextColumn Header="Identity" Binding="{Binding Detail}" Width="2.5*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                        <ListView ItemsSource="{Binding Applications}" SelectedItem="{Binding SelectedApplication, Mode=TwoWay}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,10" Padding="14" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Background="#FFFFFF">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}" Foreground="#24292F" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Grid.Column="1" Text="{Binding TrustStatus}" Foreground="#0969DA" FontWeight="SemiBold" Margin="12,0,0,0" />
+                                            <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                                                <TextBlock Text="Process " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding ProcessName}" Foreground="#24292F" FontSize="12" FontWeight="SemiBold" Margin="0,0,14,0" />
+                                                <TextBlock Text="Publisher " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding Publisher}" Foreground="#24292F" FontSize="12" Margin="0,0,14,0" />
+                                                <TextBlock Text="Signature " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding SignatureStatus}" Foreground="#24292F" FontSize="12" Margin="0,0,14,0" />
+                                                <TextBlock Text="Last seen " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding LastSeen}" Foreground="#24292F" FontSize="12" />
+                                            </WrapPanel>
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Detail}" Foreground="#57606A" FontSize="13" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                         <Border Grid.Row="1" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
                                 <Grid.RowDefinitions>
@@ -375,19 +424,44 @@
                             <ColumnDefinition Width="*" MinWidth="620" />
                             <ColumnDefinition Width="360" />
                         </Grid.ColumnDefinitions>
-                        <DataGrid Grid.Column="0" ItemsSource="{Binding Ports}" SelectedItem="{Binding SelectedPort, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Endpoint" Binding="{Binding Endpoint}" Width="150" />
-                                <DataGridTextColumn Header="Application" Binding="{Binding ApplicationName}" Width="1.4*" />
-                                <DataGridTextColumn Header="Zone" Binding="{Binding NetworkZone}" Width="120" />
-                                <DataGridTextColumn Header="Reachability" Binding="{Binding ReachabilityTest}" Width="1.4*" />
-                                <DataGridTextColumn Header="History" Binding="{Binding HistoryStatus}" Width="1.4*" />
-                                <DataGridTextColumn Header="Risk" Binding="{Binding RiskStatus}" Width="90" />
-                                <DataGridTextColumn Header="Confidence" Binding="{Binding AppConfidence}" Width="150" />
-                                <DataGridTextColumn Header="Next step" Binding="{Binding SuggestedAction}" Width="2*" />
-                                <DataGridTextColumn Header="Meaning" Binding="{Binding Meaning}" Width="1.8*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                        <ListView Grid.Column="0" ItemsSource="{Binding Ports}" SelectedItem="{Binding SelectedPort, Mode=TwoWay}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,10" Padding="14" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Background="#FFFFFF">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Endpoint}" Foreground="#24292F" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                                                <TextBlock Text="{Binding RiskStatus}" Foreground="#0969DA" FontWeight="SemiBold" Margin="0,0,10,0" />
+                                                <TextBlock Text="{Binding NetworkZone}" Foreground="#57606A" FontWeight="SemiBold" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding ApplicationName}" Foreground="#57606A" FontSize="13" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                            <WrapPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                                                <TextBlock Text="Reachability " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding ReachabilityTest}" Foreground="#24292F" FontSize="12" Margin="0,0,14,0" />
+                                                <TextBlock Text="History " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding HistoryStatus}" Foreground="#24292F" FontSize="12" Margin="0,0,14,0" />
+                                                <TextBlock Text="Confidence " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding AppConfidence}" Foreground="#24292F" FontSize="12" />
+                                            </WrapPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                         <Border Grid.Column="1" BorderBrush="#D0D7DE" BorderThickness="1,0,0,0" Padding="18,0,0,0" Margin="18,0,0,0">
                             <Grid>
                                 <Grid.RowDefinitions>
@@ -443,18 +517,44 @@
                             <TextBlock Grid.Column="3" Text="Status" FontSize="12" Foreground="#57606A" VerticalAlignment="Center" />
                             <ComboBox Grid.Column="4" ItemsSource="{Binding IncidentStatusFilterOptions}" SelectedItem="{Binding SelectedIncidentStatusFilter, Mode=TwoWay}" Height="30" />
                         </Grid>
-                        <DataGrid Grid.Row="1" ItemsSource="{Binding Incidents}" SelectedItem="{Binding SelectedIncident, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0" MinHeight="220">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Incident" Binding="{Binding Title}" Width="1.4*" />
-                                <DataGridTextColumn Header="Group" Binding="{Binding Grouping}" Width="1.6*" />
-                                <DataGridTextColumn Header="Severity" Binding="{Binding SeverityExplanation}" Width="1.7*" />
-                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
-                                <DataGridTextColumn Header="Events" Binding="{Binding EventCount}" Width="70" />
-                                <DataGridTextColumn Header="Target" Binding="{Binding MainTarget}" Width="1.2*" />
-                                <DataGridTextColumn Header="Updated" Binding="{Binding LastUpdated}" Width="130" />
-                                <DataGridTextColumn Header="Next" Binding="{Binding RecommendedAction}" Width="1.7*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                        <ListView Grid.Row="1" ItemsSource="{Binding Incidents}" SelectedItem="{Binding SelectedIncident, Mode=TwoWay}" BorderThickness="0" MinHeight="220" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,10" Padding="14" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Background="#FFFFFF">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Title}" Foreground="#24292F" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                                                <TextBlock Text="{Binding RiskLevel}" Foreground="#0969DA" FontWeight="SemiBold" Margin="0,0,10,0" />
+                                                <TextBlock Text="{Binding Status}" Foreground="#57606A" FontWeight="SemiBold" />
+                                            </StackPanel>
+                                            <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                                                <TextBlock Text="Target " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding MainTarget}" Foreground="#24292F" FontSize="12" FontWeight="SemiBold" Margin="0,0,14,0" />
+                                                <TextBlock Text="Events " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding EventCount}" Foreground="#24292F" FontSize="12" Margin="0,0,14,0" />
+                                                <TextBlock Text="Updated " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding LastUpdated}" Foreground="#24292F" FontSize="12" />
+                                            </WrapPanel>
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding RecommendedAction, StringFormat=Next: {0}}" Foreground="#24292F" FontSize="13" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                         <Border Grid.Row="2" BorderBrush="#D0D7DE" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                             <Grid>
                                 <Grid.RowDefinitions>
@@ -571,19 +671,44 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <DataGrid Grid.Row="0" ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserAddRows="False" BorderThickness="0">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Rule" Binding="{Binding Name}" Width="1.4*" />
-                                <DataGridTextColumn Header="State" Binding="{Binding Enabled}" Width="90" />
-                                <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="120" />
-                                <DataGridTextColumn Header="Risk" Binding="{Binding RiskLevel}" Width="90" />
-                                <DataGridTextColumn Header="Scope" Binding="{Binding Scope}" Width="1.3*" />
-                                <DataGridTextColumn Header="Conditions" Binding="{Binding Conditions}" Width="2*" />
-                                <DataGridTextColumn Header="Duration" Binding="{Binding Duration}" Width="150" />
-                                <DataGridTextColumn Header="Network" Binding="{Binding NetworkProfile}" Width="130" />
-                                <DataGridTextColumn Header="Notifications" Binding="{Binding QuietHours}" Width="150" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                        <ListView Grid.Row="0" ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule, Mode=TwoWay}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,10" Padding="14" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Background="#FFFFFF">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}" Foreground="#24292F" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                                                <TextBlock Text="{Binding Enabled}" Foreground="#0969DA" FontWeight="SemiBold" Margin="0,0,10,0" />
+                                                <TextBlock Text="{Binding Action}" Foreground="#57606A" FontWeight="SemiBold" />
+                                            </StackPanel>
+                                            <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                                                <TextBlock Text="Scope " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding Scope}" Foreground="#24292F" FontSize="12" FontWeight="SemiBold" Margin="0,0,14,0" />
+                                                <TextBlock Text="Risk " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding RiskLevel}" Foreground="#24292F" FontSize="12" Margin="0,0,14,0" />
+                                                <TextBlock Text="Network " Foreground="#57606A" FontSize="12" />
+                                                <TextBlock Text="{Binding NetworkProfile}" Foreground="#24292F" FontSize="12" />
+                                            </WrapPanel>
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Conditions}" Foreground="#57606A" FontSize="13" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                         <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="6" Padding="22" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="560" Visibility="{Binding RulesEmptyVisibility}">
                             <StackPanel>
                                 <TextBlock Text="No rules yet" FontSize="18" FontWeight="SemiBold" Foreground="#24292F" HorizontalAlignment="Center" />
