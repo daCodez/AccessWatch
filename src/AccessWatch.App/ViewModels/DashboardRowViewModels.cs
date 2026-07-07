@@ -26,7 +26,12 @@ public sealed record DashboardSafetyItemViewModel(
     string SourceType = "",
     long? SourceId = null,
     int? PortNumber = null,
-    string LocalAddress = "");
+    string LocalAddress = "",
+    string ActionResult = "",
+    string ActionResultVisibility = "Collapsed",
+    bool ActionButtonsEnabled = true,
+    string CardBackground = "#FFFFFF",
+    string CardBorderBrush = "#D0D7DE");
 
 /// <summary>
 /// Represents a recent dashboard activity row.
@@ -184,3 +189,4 @@ public sealed record DashboardRuleItemViewModel(
 /// Represents a dashboard settings choice.
 /// </summary>
 public sealed record DashboardSettingsOptionViewModel(string Value, string Name, string Summary);
+

@@ -135,13 +135,17 @@
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Margin="0,8">
+                                    <Border Margin="0,8" Padding="12" Background="{Binding CardBackground}" BorderBrush="{Binding CardBorderBrush}" BorderThickness="1" CornerRadius="6">
+                                        <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="110" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="240" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="{Binding Urgency}" Foreground="#0969DA" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Urgency}" Foreground="#0969DA" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding ActionResult}" Visibility="{Binding ActionResultVisibility}" Foreground="#1A7F37" FontWeight="SemiBold" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                        </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="0,0,18,0">
                                             <TextBlock Text="{Binding Headline}" Foreground="#24292F" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Target}" Foreground="#57606A" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" />
@@ -155,10 +159,11 @@
                                             </Expander>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                            <Button Content="{Binding PrimaryAction}" Width="96" Height="30" Margin="0,0,8,0" Click="OnSafetyPrimaryActionClick" />
-                                            <Button Content="{Binding SecondaryAction}" Width="96" Height="30" Click="OnSafetySecondaryActionClick" />
+                                            <Button Content="{Binding PrimaryAction}" IsEnabled="{Binding ActionButtonsEnabled}" Width="96" Height="30" Margin="0,0,8,0" Click="OnSafetyPrimaryActionClick" />
+                                            <Button Content="{Binding SecondaryAction}" IsEnabled="{Binding ActionButtonsEnabled}" Width="96" Height="30" Click="OnSafetySecondaryActionClick" />
                                         </StackPanel>
-                                    </Grid>
+                                        </Grid>
+                                    </Border>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
@@ -738,3 +743,4 @@
         </Grid>
     </Grid>
 </Window>
+

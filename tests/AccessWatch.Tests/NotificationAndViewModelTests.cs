@@ -112,6 +112,11 @@ public sealed class NotificationAndViewModelTests
         Assert.Contains("Header=\"Why am I seeing this?\"", xaml);
         Assert.Contains("Click=\"OnSafetyPrimaryActionClick\"", xaml);
         Assert.Contains("Click=\"OnSafetySecondaryActionClick\"", xaml);
+        Assert.Contains("Background=\"{Binding CardBackground}\"", xaml);
+        Assert.Contains("BorderBrush=\"{Binding CardBorderBrush}\"", xaml);
+        Assert.Contains("Text=\"{Binding ActionResult}\"", xaml);
+        Assert.Contains("Visibility=\"{Binding ActionResultVisibility}\"", xaml);
+        Assert.Contains("IsEnabled=\"{Binding ActionButtonsEnabled}\"", xaml);
         Assert.Contains("Visibility=\"{Binding ToastVisibility}\"", xaml);
         Assert.Contains("Text=\"{Binding ToastMessage}\"", xaml);
         Assert.Contains("Click=\"OnDismissToastClick\"", xaml);
@@ -673,6 +678,39 @@ public sealed class NotificationAndViewModelTests
 
         Assert.Equal("Future action completed for Test target.", message);
     }
+
+    /// <summary>
+    /// Verifies Safety Center handled labels cover every action button text.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_CreateSafetyActionResult_CoversActionLabels()
+    {
+        var method = typeof(DashboardShellViewModel).GetMethod("CreateSafetyActionResult", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.Equal("✓ Blocked", Assert.IsType<string>(method?.Invoke(null, ["Block it"])));
+        Assert.Equal("✓ Marked OK", Assert.IsType<string>(method?.Invoke(null, ["This is OK"])));
+        Assert.Equal("✓ Watching", Assert.IsType<string>(method?.Invoke(null, ["Keep watching"])));
+        Assert.Equal("✓ Trace opened", Assert.IsType<string>(method?.Invoke(null, ["Trace device"])));
+        Assert.Equal("✓ Investigation opened", Assert.IsType<string>(method?.Invoke(null, ["Investigate"])));
+        Assert.Equal("✓ Review opened", Assert.IsType<string>(method?.Invoke(null, ["Help me decide"])));
+        Assert.Equal("✓ Escalated", Assert.IsType<string>(method?.Invoke(null, ["Act now"])));
+        Assert.Equal("✓ Done", Assert.IsType<string>(method?.Invoke(null, ["Future action"])));
+    }
+
+    /// <summary>
+    /// Verifies handled-state updates safely ignore stale Safety Center items.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_MarkSafetyItemHandled_IgnoresMissingItems()
+    {
+        var model = new DashboardShellViewModel(new FakeRepository());
+        var method = typeof(DashboardShellViewModel).GetMethod("MarkSafetyItemHandled", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var item = new DashboardSafetyItemViewModel("Needs review", "Missing", "Missing target", "", "", "Block it", "", "Application", 123);
+
+        method?.Invoke(model, [item, "Block it"]);
+
+        Assert.Empty(model.SafetyItems);
+    }
     /// <summary>
     /// Verifies Safety Center actions show a dismissible plain-language confirmation.
     /// </summary>
@@ -706,12 +744,20 @@ public sealed class NotificationAndViewModelTests
 
         Assert.Equal("Visible", model.ToastVisibility);
         Assert.Equal("Blocked Sound Recorder. Review and apply the protection plan when you are ready.", model.ToastMessage);
+        var handledItem = Assert.Single(model.SafetyItems);
+        Assert.Equal("Handled", handledItem.Urgency);
+        Assert.Equal("✓ Blocked", handledItem.ActionResult);
+        Assert.Equal("Visible", handledItem.ActionResultVisibility);
+        Assert.False(handledItem.ActionButtonsEnabled);
+        Assert.Equal("#EAF7EF", handledItem.CardBackground);
+        Assert.Equal("#2DA44E", handledItem.CardBorderBrush);
         Assert.Contains(nameof(DashboardShellViewModel.ToastMessage), changed);
         Assert.Contains(nameof(DashboardShellViewModel.ToastVisibility), changed);
 
         await model.ApplySafetyItemSecondaryActionAsync(item, CancellationToken.None);
 
         Assert.Equal("Marked Sound Recorder as OK.", model.ToastMessage);
+        Assert.Equal("✓ Marked OK", Assert.Single(model.SafetyItems).ActionResult);
 
         model.DismissToast();
 

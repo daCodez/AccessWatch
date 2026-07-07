@@ -1265,6 +1265,64 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         ToastMessage = handled
             ? CreateSafetyActionToast(item, action)
             : $"Open {item.Target} for more options.";
+
+        if (handled)
+        {
+            MarkSafetyItemHandled(item, action);
+        }
+    }
+
+    private void MarkSafetyItemHandled(DashboardSafetyItemViewModel item, string action)
+    {
+        var index = FindSafetyItemIndex(item);
+        if (index < 0)
+        {
+            return;
+        }
+
+        SafetyItems[index] = SafetyItems[index] with
+        {
+            Urgency = "Handled",
+            ActionResult = CreateSafetyActionResult(action),
+            ActionResultVisibility = "Visible",
+            ActionButtonsEnabled = false,
+            CardBackground = "#EAF7EF",
+            CardBorderBrush = "#2DA44E"
+        };
+    }
+
+    private int FindSafetyItemIndex(DashboardSafetyItemViewModel item)
+    {
+        for (var index = 0; index < SafetyItems.Count; index++)
+        {
+            var candidate = SafetyItems[index];
+            if (candidate.SourceType == item.SourceType
+                && candidate.SourceId == item.SourceId
+                && candidate.PortNumber == item.PortNumber
+                && string.Equals(candidate.LocalAddress, item.LocalAddress, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(candidate.Headline, item.Headline, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(candidate.Target, item.Target, StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static string CreateSafetyActionResult(string action)
+    {
+        return action switch
+        {
+            "Block it" => "✓ Blocked",
+            "This is OK" => "✓ Marked OK",
+            "Keep watching" => "✓ Watching",
+            "Trace device" => "✓ Trace opened",
+            "Investigate" => "✓ Investigation opened",
+            "Help me decide" => "✓ Review opened",
+            "Act now" => "✓ Escalated",
+            _ => "✓ Done"
+        };
     }
 
     private static bool ShouldOpenTargetPage(string action)
