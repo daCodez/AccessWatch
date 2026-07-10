@@ -123,7 +123,7 @@ public sealed class WindowsFirewallEnforcementExecutor : IFirewallEnforcementExe
             StartInfo = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                ArgumentList = { "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command },
+                ArgumentList = { "-NoProfile", "-NonInteractive", "-Command", command },
                 CreateNoWindow = true,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
