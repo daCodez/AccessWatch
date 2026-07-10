@@ -146,6 +146,24 @@ public sealed class SupportBridgeInvestigationBridgeTests
     }
 
     /// <summary>
+    /// Verifies oversized bridge replies are rejected before they can fill the review surface.
+    /// </summary>
+    [Fact]
+    public async Task ReviewIncidentAsync_WithOversizedResponse_ReturnsUnavailable()
+    {
+        var oversizedReview = new string('x', 128 * 1024 + 1);
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(oversizedReview)
+        })));
+
+        var result = await bridge.ReviewIncidentAsync(CreateRequest(), new AccessWatchSettings(), CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("too large", result.Summary);
+    }
+
+    /// <summary>
     /// Verifies network failures are presented safely inside AccessWatch.
     /// </summary>
     [Fact]
