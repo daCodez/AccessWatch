@@ -351,9 +351,31 @@ public sealed class WindowsProcessMetadataReader : IProcessMetadataReader
 [ExcludeFromCodeCoverage(Justification = "Thin Windows file and signature boundary; identity mapping is covered with deterministic reader fakes.")]
 public sealed class WindowsFileIdentityReader : IFileIdentityReader
 {
+    private const int MaxCachedFiles = 512;
     private readonly ConcurrentDictionary<string, FileIdentityCacheEntry> cache = new(StringComparer.OrdinalIgnoreCase);
+
+    internal int CacheEntryCount => cache.Count;
     /// <inheritdoc />
     public FileIdentityMetadata Read(string filePath)
+    {
+        var fingerprint = ReadFingerprint(filePath);
+        if (fingerprint is { } currentFingerprint &&
+            cache.TryGetValue(filePath, out var cached) &&
+            cached.Matches(currentFingerprint))
+        {
+            return cached.Metadata;
+        }
+
+        var metadata = ReadUncached(filePath);
+        if (fingerprint is { } fingerprintToCache)
+        {
+            Cache(filePath, fingerprintToCache, metadata);
+        }
+
+        return metadata;
+    }
+
+    private FileIdentityMetadata ReadUncached(string filePath)
     {
         var versionInfo = Safe(() => FileVersionInfo.GetVersionInfo(filePath));
         var signature = ResolveSignature(filePath);
@@ -364,6 +386,16 @@ public sealed class WindowsFileIdentityReader : IFileIdentityReader
             signature.publisher,
             signature.status,
             hash);
+    }
+
+    private void Cache(string filePath, FileIdentityFingerprint fingerprint, FileIdentityMetadata metadata)
+    {
+        if (cache.Count >= MaxCachedFiles && !cache.ContainsKey(filePath))
+        {
+            cache.Clear();
+        }
+
+        cache[filePath] = new FileIdentityCacheEntry(fingerprint.LastWriteUtc, fingerprint.Length, metadata);
     }
 
     private static FileIdentityFingerprint? ReadFingerprint(string filePath)

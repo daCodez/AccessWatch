@@ -154,6 +154,30 @@ public sealed class AppIdentityResolverTests
         Assert.Equal("raw (identity limited; executable path unavailable)", displayName);
     }
 
+    /// <summary>
+    /// Verifies unchanged executable files are retained in the identity cache between scans.
+    /// </summary>
+    [Fact]
+    public void WindowsFileIdentityReader_Read_CachesUnchangedFileIdentity()
+    {
+        var filePath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(filePath, "AccessWatch cache test");
+            var reader = new WindowsFileIdentityReader();
+
+            var first = reader.Read(filePath);
+            var second = reader.Read(filePath);
+
+            Assert.Equal(first, second);
+            Assert.Equal(1, reader.CacheEntryCount);
+        }
+        finally
+        {
+            File.Delete(filePath);
+        }
+    }
+
     private sealed class FakeProcessReader : IProcessMetadataReader
     {
         private readonly ProcessMetadata? process;
