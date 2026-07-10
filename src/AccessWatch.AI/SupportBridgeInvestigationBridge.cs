@@ -21,7 +21,15 @@ public sealed class SupportBridgeInvestigationBridge : IAiInvestigationBridge
     /// <param name="httpClient">HTTP client used for local gateway calls.</param>
     public SupportBridgeInvestigationBridge(HttpClient? httpClient = null)
     {
-        this.httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        this.httpClient = httpClient ?? CreateLocalBridgeClient();
+    }
+
+    private static HttpClient CreateLocalBridgeClient()
+    {
+        return new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
+        {
+            Timeout = TimeSpan.FromSeconds(20)
+        };
     }
 
     /// <inheritdoc />

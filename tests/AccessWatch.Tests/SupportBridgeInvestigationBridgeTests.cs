@@ -58,6 +58,25 @@ public sealed class SupportBridgeInvestigationBridgeTests
     }
 
     /// <summary>
+    /// Verifies redirects are rejected so a local bridge cannot forward an investigation elsewhere.
+    /// </summary>
+    [Fact]
+    public async Task ReviewIncidentAsync_WithRedirectResponse_ReturnsUnavailableWithoutFollowingRedirect()
+    {
+        var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.TemporaryRedirect)
+        {
+            Headers = { Location = new Uri("https://example.com/investigations") }
+        });
+        var bridge = new SupportBridgeInvestigationBridge(new HttpClient(handler));
+
+        var result = await bridge.ReviewIncidentAsync(CreateRequest(), new AccessWatchSettings(), CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("307", result.Summary);
+        Assert.Equal("http://localhost:8123/accesswatch/investigations", handler.Request?.RequestUri?.ToString());
+    }
+
+    /// <summary>
     /// Verifies invalid bridge URLs are reported as operator-friendly unavailable results.
     /// </summary>
     [Fact]
