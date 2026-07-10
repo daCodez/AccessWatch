@@ -561,7 +561,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             Reason nvarchar(1024) NOT NULL,
             CreatedUtc datetimeoffset NOT NULL
         );
-        """
+        """,         """         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_NetworkEvents_CreatedUtc' AND object_id = OBJECT_ID(N'dbo.NetworkEvents'))         CREATE INDEX IX_NetworkEvents_CreatedUtc ON dbo.NetworkEvents (CreatedUtc DESC, EventId DESC);         """,         """         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Incidents_LastUpdatedUtc' AND object_id = OBJECT_ID(N'dbo.Incidents'))         CREATE INDEX IX_Incidents_LastUpdatedUtc ON dbo.Incidents (LastUpdatedUtc DESC, IncidentId DESC);         """,         """         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Applications_LastSeenUtc' AND object_id = OBJECT_ID(N'dbo.Applications'))         CREATE INDEX IX_Applications_LastSeenUtc ON dbo.Applications (LastSeenUtc DESC, ApplicationId DESC);         """,         """         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Ports_LastSeenUtc' AND object_id = OBJECT_ID(N'dbo.Ports'))         CREATE INDEX IX_Ports_LastSeenUtc ON dbo.Ports (LastSeenUtc DESC, PortId DESC);         """,         """         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TrustDecisions_Active' AND object_id = OBJECT_ID(N'dbo.TrustDecisions'))         CREATE INDEX IX_TrustDecisions_Active ON dbo.TrustDecisions (TargetType, TargetId, CreatedUtc DESC);         """
     ];
 
     private async Task EnsureDatabaseExistsAsync(CancellationToken cancellationToken)
