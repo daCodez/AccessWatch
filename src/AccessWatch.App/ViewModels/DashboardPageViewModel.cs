@@ -1021,8 +1021,10 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
     /// </summary>
     public void ApplySettings()
     {
-        settings.ProtectionMode = Enum.Parse<ProtectionMode>(SelectedProtectionMode);
-        settings.AiMode = Enum.Parse<AiMode>(SelectedAiMode);
+        settings.ProtectionMode = ReadSettingEnum(SelectedProtectionMode, settings.ProtectionMode, "protection mode");
+        settings.AiMode = ReadSettingEnum(SelectedAiMode, settings.AiMode, "AI review mode");
+        selectedProtectionMode = settings.ProtectionMode.ToString();
+        selectedAiMode = settings.AiMode.ToString();
         settings.SupportBridgeEndpoint = string.IsNullOrWhiteSpace(SelectedSupportBridgeEndpoint)
             ? new AccessWatchSettings().SupportBridgeEndpoint
             : SelectedSupportBridgeEndpoint.Trim();
@@ -1035,8 +1037,26 @@ public sealed class DashboardShellViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CurrentAiMode));
         OnPropertyChanged(nameof(CurrentQuietHours));
         OnPropertyChanged(nameof(CurrentNetworkProfile));
+        OnPropertyChanged(nameof(SelectedProtectionMode));
+        OnPropertyChanged(nameof(SelectedAiMode));
         OnPropertyChanged(nameof(SelectedSupportBridgeEndpoint));
         OnPropertyChanged(nameof(CanReviewIncidentWithAi));
+    }
+
+    private TEnum ReadSettingEnum<TEnum>(string? value, TEnum fallback, string settingName)
+        where TEnum : struct, Enum
+    {
+        if (Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
+        {
+            return parsed;
+        }
+
+        logger.LogWarning(
+            "Ignoring invalid {SettingName} setting value {SettingValue}; keeping {FallbackValue}.",
+            settingName,
+            value,
+            fallback);
+        return fallback;
     }
     /// <summary>
     /// Restores Settings page selections to the running configuration.

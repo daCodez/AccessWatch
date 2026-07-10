@@ -202,6 +202,25 @@ public sealed class NetworkDeviceDiscoveryServiceTests
     }
 
     /// <summary>
+    /// Verifies hostname enrichment uses a small fixed worker pool for large device inventories.
+    /// </summary>
+    [Fact]
+    public async Task DiscoverAsync_CapsConcurrentHostnameLookups()
+    {
+        var output = string.Join(
+            Environment.NewLine,
+            Enumerable.Range(1, 48).Select(index => $"  192.168.1.{index}          02-00-00-00-00-{index:X2}     dynamic"));
+        var resolver = new TrackingHostnameResolver();
+        var service = new NetworkDeviceDiscoveryService(new FakeArpTableRunner(output), resolver);
+
+        var devices = await service.DiscoverAsync(CancellationToken.None);
+
+        Assert.Equal(48, devices.Count);
+        Assert.InRange(resolver.MaximumConcurrentLookups, 1, 16);
+        Assert.Equal(48, resolver.LookupCount);
+    }
+
+    /// <summary>
     /// Verifies Windows neighbor table output can surface quiet phone-like devices.
     /// </summary>
     [Fact]
@@ -346,6 +365,45 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         public Task<string?> ResolveHostnameAsync(string ipAddress, CancellationToken cancellationToken)
         {
             return Task.FromResult(hostnames.TryGetValue(ipAddress, out var hostname) ? hostname : null);
+        }
+    }
+
+    private sealed class TrackingHostnameResolver : IDeviceHostnameResolver
+    {
+        private int activeLookups;
+        private int maximumConcurrentLookups;
+        private int lookupCount;
+
+        public int MaximumConcurrentLookups => maximumConcurrentLookups;
+
+        public int LookupCount => lookupCount;
+
+        public async Task<string?> ResolveHostnameAsync(string ipAddress, CancellationToken cancellationToken)
+        {
+            var active = Interlocked.Increment(ref activeLookups);
+            Interlocked.Increment(ref lookupCount);
+            UpdateMaximum(active);
+            try
+            {
+                await Task.Delay(10, cancellationToken);
+                return null;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref activeLookups);
+            }
+        }
+
+        private void UpdateMaximum(int candidate)
+        {
+            while (true)
+            {
+                var current = maximumConcurrentLookups;
+                if (candidate <= current || Interlocked.CompareExchange(ref maximumConcurrentLookups, candidate, current) == current)
+                {
+                    return;
+                }
+            }
         }
     }
 

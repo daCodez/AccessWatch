@@ -356,41 +356,43 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
     private async Task<IReadOnlyList<NetworkDevice>> AddHostnamesAsync(IReadOnlyList<NetworkDevice> devices, CancellationToken cancellationToken)
     {
         var namedDevices = new NetworkDevice[devices.Count];
-        using var throttle = new SemaphoreSlim(MaxConcurrentHostnameLookups);
-        var tasks = new Task[devices.Count];
-        for (var index = 0; index < devices.Count; index++)
+        var nextIndex = -1;
+        var workerCount = Math.Min(MaxConcurrentHostnameLookups, devices.Count);
+        var workers = new Task[workerCount];
+        for (var workerIndex = 0; workerIndex < workerCount; workerIndex++)
         {
-            tasks[index] = AddHostnameAsync(devices[index], index, namedDevices, throttle, cancellationToken);
+            workers[workerIndex] = AddHostnamesWorkerAsync();
         }
 
-        await Task.WhenAll(tasks);
+        await Task.WhenAll(workers);
         return namedDevices;
+
+        async Task AddHostnamesWorkerAsync()
+        {
+            while (true)
+            {
+                var index = Interlocked.Increment(ref nextIndex);
+                if (index >= devices.Count)
+                {
+                    return;
+                }
+
+                await AddHostnameAsync(devices[index], index, namedDevices, cancellationToken);
+            }
+        }
     }
 
-    private async Task AddHostnameAsync(
-        NetworkDevice device,
-        int index,
-        NetworkDevice[] namedDevices,
-        SemaphoreSlim throttle,
-        CancellationToken cancellationToken)
+    private async Task AddHostnameAsync(NetworkDevice device, int index, NetworkDevice[] namedDevices, CancellationToken cancellationToken)
     {
-        await throttle.WaitAsync(cancellationToken);
-        try
+        var hostname = await hostnameResolver.ResolveHostnameAsync(device.IpAddress, cancellationToken);
+        var normalizedHostname = string.IsNullOrWhiteSpace(hostname) ? null : hostname.Trim().TrimEnd('.');
+        var deviceTypeGuess = GuessDeviceType(device.IpAddress, normalizedHostname, device.DeviceTypeGuess);
+        namedDevices[index] = device with
         {
-            var hostname = await hostnameResolver.ResolveHostnameAsync(device.IpAddress, cancellationToken);
-            var normalizedHostname = string.IsNullOrWhiteSpace(hostname) ? null : hostname.Trim().TrimEnd('.');
-            var deviceTypeGuess = GuessDeviceType(device.IpAddress, normalizedHostname, device.DeviceTypeGuess);
-            namedDevices[index] = device with
-            {
-                Hostname = normalizedHostname,
-                DeviceTypeGuess = deviceTypeGuess,
-                Notes = MergeDeviceNotes(device.Notes, deviceTypeGuess)
-            };
-        }
-        finally
-        {
-            throttle.Release();
-        }
+            Hostname = normalizedHostname,
+            DeviceTypeGuess = deviceTypeGuess,
+            Notes = MergeDeviceNotes(device.Notes, deviceTypeGuess)
+        };
     }
 }
 

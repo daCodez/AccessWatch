@@ -82,6 +82,33 @@ public sealed class NotificationAndViewModelTests
     }
 
     /// <summary>
+    /// Verifies invalid Settings values cannot crash the dashboard and are recorded for support review.
+    /// </summary>
+    [Fact]
+    public void DashboardShellViewModel_ApplySettings_IgnoresInvalidEnumValuesAndLogsWarning()
+    {
+        var settings = new AccessWatchSettings
+        {
+            ProtectionMode = ProtectionMode.Balanced,
+            AiMode = AiMode.Off
+        };
+        var logger = new CapturingLogger<DashboardShellViewModel>();
+        var model = new DashboardShellViewModel(new FakeRepository(), settings: settings, logger: logger)
+        {
+            SelectedProtectionMode = "Definitely not a mode",
+            SelectedAiMode = "Not an AI mode"
+        };
+
+        model.ApplySettings();
+
+        Assert.Equal(ProtectionMode.Balanced, settings.ProtectionMode);
+        Assert.Equal(AiMode.Off, settings.AiMode);
+        Assert.Equal("Balanced", model.SelectedProtectionMode);
+        Assert.Equal("Off", model.SelectedAiMode);
+        Assert.Equal(2, logger.Entries.Count(entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Ignoring invalid", StringComparison.Ordinal)));
+    }
+
+    /// <summary>
     /// Verifies the dashboard shell binds sidebar selection to the active page.
     /// </summary>
     [Fact]
