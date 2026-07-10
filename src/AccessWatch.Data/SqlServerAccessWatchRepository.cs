@@ -12,6 +12,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
 {
     private readonly AccessWatchDatabaseOptions options;
     private readonly ILogger<SqlServerAccessWatchRepository> logger;
+    private readonly Lazy<Task> initialization;
 
     /// <summary>
     /// Initializes a new repository instance.
@@ -22,10 +23,16 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
     {
         this.options = options;
         this.logger = logger ?? NullLogger<SqlServerAccessWatchRepository>.Instance;
+        initialization = new Lazy<Task>(() => InitializeCoreAsync(CancellationToken.None), LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
-    public async Task InitializeAsync(CancellationToken cancellationToken)
+    public Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        return initialization.Value.WaitAsync(cancellationToken);
+    }
+
+    private async Task InitializeCoreAsync(CancellationToken cancellationToken)
     {
         await EnsureDatabaseExistsAsync(cancellationToken);
         await using var connection = await OpenConnectionAsync(cancellationToken);
