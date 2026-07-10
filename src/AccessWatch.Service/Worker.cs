@@ -23,12 +23,11 @@ public sealed class Worker : BackgroundService
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await coordinator.InitializeAsync(stoppingToken);
-
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                await coordinator.InitializeAsync(stoppingToken);
                 var createdEvents = await coordinator.RunListeningPortScanAsync(stoppingToken);
                 logger.LogInformation("AccessWatch scan completed. Created {EventCount} new listening port events.", createdEvents);
             }
