@@ -514,18 +514,32 @@ public sealed class WindowsSubnetProbeRunner : ISubnetProbeRunner
     public async Task ProbeAsync(CancellationToken cancellationToken)
     {
         var addresses = EnumerateLocalSubnetAddresses().Distinct().ToArray();
-        using var throttle = new SemaphoreSlim(MaxConcurrentProbes);
-        var probes = new List<Task>(addresses.Length);
-        foreach (var address in addresses)
+        var nextIndex = -1;
+        var workerCount = Math.Min(MaxConcurrentProbes, addresses.Length);
+        var workers = new Task[workerCount];
+        for (var workerIndex = 0; workerIndex < workerCount; workerIndex++)
         {
-            await throttle.WaitAsync(cancellationToken);
-            probes.Add(ProbeAddressAsync(address, throttle, cancellationToken));
+            workers[workerIndex] = ProbeWorkerAsync();
         }
 
-        await Task.WhenAll(probes);
+        await Task.WhenAll(workers);
+
+        async Task ProbeWorkerAsync()
+        {
+            while (true)
+            {
+                var index = Interlocked.Increment(ref nextIndex);
+                if (index >= addresses.Length)
+                {
+                    return;
+                }
+
+                await ProbeAddressAsync(addresses[index], cancellationToken);
+            }
+        }
     }
 
-    private static async Task ProbeAddressAsync(string address, SemaphoreSlim throttle, CancellationToken cancellationToken)
+    private static async Task ProbeAddressAsync(string address, CancellationToken cancellationToken)
     {
         try
         {
@@ -534,10 +548,6 @@ public sealed class WindowsSubnetProbeRunner : ISubnetProbeRunner
         }
         catch when (!cancellationToken.IsCancellationRequested)
         {
-        }
-        finally
-        {
-            throttle.Release();
         }
     }
 
