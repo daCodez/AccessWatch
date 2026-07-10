@@ -505,6 +505,10 @@ public sealed class WindowsSubnetProbeRunner : ISubnetProbeRunner
 {
     private const int ProbeTimeoutMilliseconds = 120;
     private const int MaxConcurrentProbes = 32;
+    private static readonly string[] VirtualAdapterKeywords =
+    [
+        "docker", "hyper-v", "tunnel", "virtual", "vmware", "vpn", "wsl", "wireguard", "zerotier"
+    ];
 
     /// <inheritdoc />
     public async Task ProbeAsync(CancellationToken cancellationToken)
@@ -541,13 +545,25 @@ public sealed class WindowsSubnetProbeRunner : ISubnetProbeRunner
     {
         foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
         {
-            if (networkInterface.OperationalStatus != OperationalStatus.Up ||
-                networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+            if (networkInterface.OperationalStatus != OperationalStatus.Up)
             {
                 continue;
             }
 
-            foreach (var unicast in networkInterface.GetIPProperties().UnicastAddresses)
+            var properties = networkInterface.GetIPProperties();
+            var hasIpv4DefaultGateway = properties.GatewayAddresses.Any(gateway =>
+                gateway.Address.AddressFamily == AddressFamily.InterNetwork &&
+                !IPAddress.Any.Equals(gateway.Address));
+            if (!IsEligibleForActiveProbe(
+                networkInterface.NetworkInterfaceType,
+                hasIpv4DefaultGateway,
+                networkInterface.Name,
+                networkInterface.Description))
+            {
+                continue;
+            }
+
+            foreach (var unicast in properties.UnicastAddresses)
             {
                 if (unicast.Address.AddressFamily != AddressFamily.InterNetwork || unicast.IPv4Mask is null)
                 {
@@ -560,6 +576,22 @@ public sealed class WindowsSubnetProbeRunner : ISubnetProbeRunner
                 }
             }
         }
+    }
+
+    internal static bool IsEligibleForActiveProbe(
+        NetworkInterfaceType networkInterfaceType,
+        bool hasIpv4DefaultGateway,
+        string? name,
+        string? description)
+    {
+        if (networkInterfaceType is not (NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211) ||
+            !hasIpv4DefaultGateway)
+        {
+            return false;
+        }
+
+        var adapterText = string.Concat(name, " ", description);
+        return !VirtualAdapterKeywords.Any(keyword => adapterText.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 
     private static IEnumerable<string> EnumerateSubnet(IPAddress address, IPAddress mask)

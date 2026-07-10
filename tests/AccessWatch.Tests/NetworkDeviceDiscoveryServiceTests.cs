@@ -1,3 +1,4 @@
+using System.Net.NetworkInformation;
 using AccessWatch.Core;
 using AccessWatch.Detection;
 
@@ -340,6 +341,31 @@ public sealed class NetworkDeviceDiscoveryServiceTests
         var device = Assert.Single(await service.DiscoverAsync(CancellationToken.None));
 
         Assert.Equal("192.168.1.31", device.IpAddress);
+    }
+
+    /// <summary>
+    /// Verifies active probes stay on a physical home-network adapter with an IPv4 default gateway.
+    /// </summary>
+    [Theory]
+    [InlineData(NetworkInterfaceType.Wireless80211, true, "Wi-Fi", "Intel Wi-Fi", true)]
+    [InlineData(NetworkInterfaceType.Ethernet, true, "Ethernet", "Realtek PCIe", true)]
+    [InlineData(NetworkInterfaceType.Tunnel, true, "Work VPN", "VPN tunnel", false)]
+    [InlineData(NetworkInterfaceType.Ethernet, true, "vEthernet (WSL)", "Hyper-V Virtual Ethernet Adapter", false)]
+    [InlineData(NetworkInterfaceType.Ethernet, false, "Ethernet", "Realtek PCIe", false)]
+    public void WindowsSubnetProbeRunner_OnlySelectsApprovedHomeNetworkAdapters(
+        NetworkInterfaceType networkInterfaceType,
+        bool hasIpv4DefaultGateway,
+        string name,
+        string description,
+        bool expected)
+    {
+        var eligible = WindowsSubnetProbeRunner.IsEligibleForActiveProbe(
+            networkInterfaceType,
+            hasIpv4DefaultGateway,
+            name,
+            description);
+
+        Assert.Equal(expected, eligible);
     }
 
     /// <summary>
