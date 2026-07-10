@@ -1682,7 +1682,7 @@ public sealed class NotificationAndViewModelTests
             "guest-phone",
             "Block guest-phone",
             "Review first",
-            ["New-NetFirewallRule inbound"],
+            [new FirewallRuleAction("inbound", FirewallRuleDirection.Inbound, FirewallRuleTargetKind.RemoteAddress, "192.0.2.55")],
             true);
         var review = new FirewallEnforcementPlanReviewViewModel();
         review.SetPlan(plan);

@@ -1,6 +1,7 @@
 using AccessWatch.Core;
 using AccessWatch.Data;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
 using ApplicationIdentity = AccessWatch.Core.ApplicationIdentity;
 
 namespace AccessWatch.Tests;
@@ -391,6 +392,174 @@ public sealed class SqlServerAccessWatchRepositoryTests
     }
 
     /// <summary>
+    /// Verifies scan batch persistence stores devices, applications, and ports with trust context.
+    /// </summary>
+    [Fact]
+    public async Task BatchPersistence_RoundTripsScanWrites()
+    {
+        using var database = TempDatabase.Create();
+        var logger = new CapturingLogger<SqlServerAccessWatchRepository>();
+        var repository = database.CreateRepository(logger);
+        await repository.InitializeAsync(CancellationToken.None);
+        var device = new NetworkDevice
+        {
+            IpAddress = "192.168.1.40",
+            MacAddress = "AA:BB:CC:DD:EE:40",
+            TrustStatus = TrustStatus.Unknown,
+            RiskStatus = RiskStatus.Normal,
+            FirstSeenUtc = DateTimeOffset.UnixEpoch,
+            LastSeenUtc = DateTimeOffset.UnixEpoch
+        };
+        var watchedDevice = device with { IpAddress = "192.168.1.42", MacAddress = "AA:BB:CC:DD:EE:42" };
+        var guestDevice = device with { IpAddress = "192.168.1.43", MacAddress = "AA:BB:CC:DD:EE:43" };
+        var trustedDevice = device with { IpAddress = "192.168.1.44", MacAddress = "AA:BB:CC:DD:EE:44" };
+        var deviceId = await repository.UpsertDeviceAsync(device, CancellationToken.None);
+        var watchedDeviceId = await repository.UpsertDeviceAsync(watchedDevice, CancellationToken.None);
+        var guestDeviceId = await repository.UpsertDeviceAsync(guestDevice, CancellationToken.None);
+        var trustedDeviceId = await repository.UpsertDeviceAsync(trustedDevice, CancellationToken.None);
+        await repository.AddTrustDecisionAsync(new TrustDecision
+        {
+            TargetType = "Device",
+            TargetId = deviceId,
+            Decision = TrustStatus.Blocked,
+            Reason = "Test block",
+            CreatedUtc = DateTimeOffset.UtcNow
+        }, CancellationToken.None);
+        await repository.AddTrustDecisionAsync(new TrustDecision
+        {
+            TargetType = "Device",
+            TargetId = watchedDeviceId,
+            Decision = TrustStatus.KnownWatched,
+            Reason = "Test watch",
+            CreatedUtc = DateTimeOffset.UtcNow
+        }, CancellationToken.None);
+        await repository.AddTrustDecisionAsync(new TrustDecision
+        {
+            TargetType = "Device",
+            TargetId = guestDeviceId,
+            Decision = TrustStatus.Guest,
+            Reason = "Test guest",
+            CreatedUtc = DateTimeOffset.UtcNow
+        }, CancellationToken.None);
+        await repository.AddTrustDecisionAsync(new TrustDecision
+        {
+            TargetType = "Device",
+            TargetId = trustedDeviceId,
+            Decision = TrustStatus.Trusted,
+            Reason = "Test trust",
+            CreatedUtc = DateTimeOffset.UtcNow
+        }, CancellationToken.None);
+        var application = new ApplicationIdentity
+        {
+            DisplayName = "Remote Admin",
+            ProcessName = "remote-admin",
+            SignatureStatus = SignatureStatus.Unsigned,
+            FirstSeenUtc = DateTimeOffset.UnixEpoch,
+            LastSeenUtc = DateTimeOffset.UnixEpoch
+        };
+        var applicationId = await repository.UpsertApplicationAsync(application, CancellationToken.None);
+        await repository.AddTrustDecisionAsync(new TrustDecision
+        {
+            TargetType = "Application",
+            TargetId = applicationId,
+            Decision = TrustStatus.KnownWatched,
+            Reason = "Test watch",
+            CreatedUtc = DateTimeOffset.UtcNow
+        }, CancellationToken.None);
+        var invalidTrustApplication = new ApplicationIdentity
+        {
+            DisplayName = "Broken trust text should be ignored",
+            ProcessName = "broken-trust",
+            SignatureStatus = SignatureStatus.Unsigned,
+            FirstSeenUtc = DateTimeOffset.UnixEpoch,
+            LastSeenUtc = DateTimeOffset.UnixEpoch
+        };
+        var invalidTrustApplicationId = await repository.UpsertApplicationAsync(invalidTrustApplication, CancellationToken.None);
+        await repository.AddTrustDecisionAsync(new TrustDecision
+        {
+            TargetType = "Application",
+            TargetId = invalidTrustApplicationId,
+            Decision = TrustStatus.Trusted,
+            Reason = "Will be corrupted",
+            CreatedUtc = DateTimeOffset.UtcNow
+        }, CancellationToken.None);
+        await database.ExecuteAsync($"UPDATE dbo.TrustDecisions SET Decision = 'DefinitelyNotTrust' WHERE TargetType = 'Application' AND TargetId = {invalidTrustApplicationId};");
+        var deviceResults = await repository.UpsertDevicesAsync([device, watchedDevice, guestDevice, trustedDevice], CancellationToken.None);
+        var applicationResults = await repository.UpsertApplicationsAsync([application], CancellationToken.None);
+        var invalidTrustResults = await repository.UpsertApplicationsAsync([invalidTrustApplication], CancellationToken.None);
+        var firstPortResults = await repository.UpsertPortsAsync([
+            new PortPersistenceRequest(new ListeningPort
+            {
+                PortNumber = 9443,
+                Protocol = "TCP",
+                LocalAddress = "0.0.0.0",
+                Reachability = PortReachability.NetworkReachable,
+                RiskStatus = RiskStatus.HighRisk,
+                FirstSeenUtc = DateTimeOffset.UnixEpoch,
+                LastSeenUtc = DateTimeOffset.UnixEpoch
+            }, applicationId)
+        ], CancellationToken.None);
+        var replacementApplicationId = await repository.UpsertApplicationAsync(application with { ProcessName = "remote-admin-2", FilePath = "C:\\Tools\\remote-admin-2.exe" }, CancellationToken.None);
+        var secondPortResults = await repository.UpsertPortsAsync([
+            new PortPersistenceRequest(new ListeningPort
+            {
+                PortNumber = 9443,
+                Protocol = "TCP",
+                LocalAddress = "0.0.0.0",
+                Reachability = PortReachability.NetworkReachable,
+                RiskStatus = RiskStatus.Critical,
+                LastSeenUtc = DateTimeOffset.UnixEpoch.AddMinutes(1)
+            }, replacementApplicationId)
+        ], CancellationToken.None);
+
+        Assert.Equal(TrustStatus.Blocked, Assert.Single(deviceResults, result => result.Device.IpAddress == device.IpAddress).ActiveTrustStatus);
+        Assert.Equal(TrustStatus.KnownWatched, Assert.Single(deviceResults, result => result.Device.IpAddress == watchedDevice.IpAddress).ActiveTrustStatus);
+        Assert.Equal(TrustStatus.Guest, Assert.Single(deviceResults, result => result.Device.IpAddress == guestDevice.IpAddress).ActiveTrustStatus);
+        Assert.Equal(TrustStatus.Trusted, Assert.Single(deviceResults, result => result.Device.IpAddress == trustedDevice.IpAddress).ActiveTrustStatus);
+        Assert.Equal(TrustStatus.KnownWatched, Assert.Single(applicationResults).ActiveTrustStatus);
+        Assert.Null(Assert.Single(invalidTrustResults).ActiveTrustStatus);
+        Assert.Contains(logger.Messages, message => message.Contains("DefinitelyNotTrust", StringComparison.Ordinal));
+        Assert.True(Assert.Single(firstPortResults).IsNewPort);
+        var secondPort = Assert.Single(secondPortResults);
+        Assert.False(secondPort.IsNewPort);
+        Assert.Equal(applicationId, secondPort.PreviousApplicationId);
+        Assert.Equal(replacementApplicationId, secondPort.ApplicationId);
+        var savedDevices = await repository.ListRecentDevicesAsync(10, CancellationToken.None);
+        Assert.Equal(RiskStatus.Critical, Assert.Single(savedDevices, savedDevice => savedDevice.IpAddress == device.IpAddress).RiskStatus);
+        Assert.Equal(RiskStatus.Watched, Assert.Single(savedDevices, savedDevice => savedDevice.IpAddress == watchedDevice.IpAddress).RiskStatus);
+        Assert.Equal(RiskStatus.Watched, Assert.Single(savedDevices, savedDevice => savedDevice.IpAddress == guestDevice.IpAddress).RiskStatus);
+        Assert.Equal(RiskStatus.Normal, Assert.Single(savedDevices, savedDevice => savedDevice.IpAddress == trustedDevice.IpAddress).RiskStatus);
+    }
+
+    /// <summary>
+    /// Verifies unexpected enum text in storage falls back safely and is logged.
+    /// </summary>
+    [Fact]
+    public async Task RecentReadModels_FallbackAndLogInvalidEnumValues()
+    {
+        using var database = TempDatabase.Create();
+        var logger = new CapturingLogger<SqlServerAccessWatchRepository>();
+        var repository = database.CreateRepository(logger);
+        await repository.InitializeAsync(CancellationToken.None);
+        await repository.UpsertDeviceAsync(new NetworkDevice
+        {
+            IpAddress = "192.168.1.41",
+            MacAddress = "AA:BB:CC:DD:EE:41",
+            TrustStatus = TrustStatus.Trusted,
+            RiskStatus = RiskStatus.Watched,
+            FirstSeenUtc = DateTimeOffset.UnixEpoch,
+            LastSeenUtc = DateTimeOffset.UnixEpoch
+        }, CancellationToken.None);
+        await database.ExecuteAsync("UPDATE dbo.Devices SET TrustStatus = 'DefinitelyNotTrust', RiskStatus = 'DefinitelyNotRisk';");
+
+        var device = Assert.Single(await repository.ListRecentDevicesAsync(10, CancellationToken.None));
+
+        Assert.Equal(TrustStatus.Unknown, device.TrustStatus);
+        Assert.Equal(RiskStatus.Normal, device.RiskStatus);
+        Assert.Contains(logger.Messages, message => message.Contains("DefinitelyNotTrust", StringComparison.Ordinal));
+        Assert.Contains(logger.Messages, message => message.Contains("DefinitelyNotRisk", StringComparison.Ordinal));
+    }
+    /// <summary>
     /// Verifies active trust decisions are returned while expired decisions are ignored.
     /// </summary>
     [Fact]
@@ -424,6 +593,20 @@ public sealed class SqlServerAccessWatchRepositoryTests
         Assert.Null(await repository.GetActiveTrustDecisionAsync("Application", 99, CancellationToken.None));
     }
 
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(formatter(state, exception));
+        }
+    }
+
     private sealed class TempDatabase : IDisposable
     {
         private const string MasterConnectionString = "Server=(localdb)\\MSSQLLocalDB;Database=master;Trusted_Connection=True;TrustServerCertificate=True;";
@@ -448,9 +631,9 @@ public sealed class SqlServerAccessWatchRepositoryTests
             return new TempDatabase(ServerOnlyConnectionString, null);
         }
 
-        public SqlServerAccessWatchRepository CreateRepository()
+        public SqlServerAccessWatchRepository CreateRepository(ILogger<SqlServerAccessWatchRepository>? logger = null)
         {
-            return new SqlServerAccessWatchRepository(new AccessWatchDatabaseOptions { SqlServerConnectionString = connectionString });
+            return new SqlServerAccessWatchRepository(new AccessWatchDatabaseOptions { SqlServerConnectionString = connectionString }, logger);
         }
 
         public async Task<int> CountAsync(string sql)
@@ -460,6 +643,15 @@ public sealed class SqlServerAccessWatchRepositoryTests
             await using var command = connection.CreateCommand();
             command.CommandText = sql;
             return Convert.ToInt32(await command.ExecuteScalarAsync());
+        }
+
+        public async Task ExecuteAsync(string sql)
+        {
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            await command.ExecuteNonQueryAsync();
         }
 
         public async Task<string?> ScalarStringAsync(string sql, long? id)
@@ -504,8 +696,3 @@ public sealed class SqlServerAccessWatchRepositoryTests
         }
     }
 }
-
-
-
-
-

@@ -70,59 +70,64 @@ public sealed class ServiceScanCoordinator
     public async Task<int> RunListeningPortScanAsync(CancellationToken cancellationToken)
     {
         var devices = await deviceDiscoveryService.DiscoverAsync(cancellationToken);
-        foreach (var device in devices)
-        {
-            var deviceId = await repository.UpsertDeviceAsync(device, cancellationToken);
-            var trustStatus = await repository.GetActiveTrustDecisionAsync("Device", deviceId, cancellationToken);
-            if (trustStatus is not null)
-            {
-                await repository.UpsertDeviceAsync(device with
-                {
-                    DeviceId = deviceId,
-                    TrustStatus = trustStatus.Value,
-                    RiskStatus = RiskStatusForDeviceTrust(trustStatus.Value)
-                }, cancellationToken);
-            }
-        }
+        _ = await repository.UpsertDevicesAsync(devices, cancellationToken);
 
         logger.LogInformation(
             "AccessWatch device discovery completed. Observed {DeviceCount} network devices.",
             devices.Count);
 
         var ports = await portScanner.ScanAsync(cancellationToken);
-        var createdEvents = 0;
+        var applicationPorts = ports
+            .Select((port, index) => new { Port = port, Index = index })
+            .Where(item => item.Port.Application is not null)
+            .ToArray();
+        var applicationResults = await repository.UpsertApplicationsAsync(
+            applicationPorts.Select(item => item.Port.Application!).ToArray(),
+            cancellationToken);
+        var applicationResultByPortIndex = applicationPorts
+            .Zip(applicationResults, static (port, result) => new { port.Index, Result = result })
+            .ToDictionary(item => item.Index, item => item.Result);
+        var scoredPorts = new List<(ListeningPort Port, long? ApplicationId, PortRiskAssessment Assessment)>(ports.Count);
 
-        foreach (var scannedPort in ports)
+        for (var index = 0; index < ports.Count; index++)
         {
+            var scannedPort = ports[index];
             long? applicationId = null;
             var portForScoring = scannedPort;
-            if (scannedPort.Application is not null)
+            if (applicationResultByPortIndex.TryGetValue(index, out var applicationResult))
             {
-                applicationId = await repository.UpsertApplicationAsync(scannedPort.Application, cancellationToken);
-                var trustStatus = await repository.GetActiveTrustDecisionAsync("Application", applicationId.Value, cancellationToken);
-                if (trustStatus is not null)
+                applicationId = applicationResult.ApplicationId;
+                if (applicationResult.ActiveTrustStatus is not null && scannedPort.Application is not null)
                 {
                     portForScoring = scannedPort with
                     {
-                        Application = scannedPort.Application with { ApplicationId = applicationId.Value, TrustStatus = trustStatus.Value },
-                        TrustStatus = trustStatus.Value
+                        Application = scannedPort.Application with { ApplicationId = applicationId.Value, TrustStatus = applicationResult.ActiveTrustStatus.Value },
+                        TrustStatus = applicationResult.ActiveTrustStatus.Value
                     };
                 }
             }
 
             var assessment = riskScoringService.ScoreNewListeningPort(portForScoring, settings);
-            var port = portForScoring with { RiskStatus = assessment.RiskStatus };
-            var previousApplicationId = await repository.GetListeningPortApplicationIdAsync(port, cancellationToken);
-            var isNewPort = await repository.UpsertPortAsync(port, applicationId, cancellationToken);
-            var applicationChanged = !isNewPort && previousApplicationId != applicationId;
-            if (!isNewPort && !applicationChanged)
+            scoredPorts.Add((portForScoring with { RiskStatus = assessment.RiskStatus }, applicationId, assessment));
+        }
+
+        var portResults = await repository.UpsertPortsAsync(
+            scoredPorts.Select(item => new PortPersistenceRequest(item.Port, item.ApplicationId)).ToArray(),
+            cancellationToken);
+        var createdEvents = 0;
+        for (var index = 0; index < portResults.Count; index++)
+        {
+            var result = portResults[index];
+            var assessment = scoredPorts[index].Assessment;
+            var applicationChanged = !result.IsNewPort && result.PreviousApplicationId != result.ApplicationId;
+            if (!result.IsNewPort && !applicationChanged)
             {
                 continue;
             }
 
             var notification = notificationFactory.Create(assessment);
-            var eventType = isNewPort ? "NewListeningPort" : "ListeningPortApplicationChanged";
-            var networkEvent = CreateListeningPortEvent(port, applicationId, assessment, eventType, notification.Action != NotificationAction.SilentLog);
+            var eventType = result.IsNewPort ? "NewListeningPort" : "ListeningPortApplicationChanged";
+            var networkEvent = CreateListeningPortEvent(result.Port, result.ApplicationId, assessment, eventType, notification.Action != NotificationAction.SilentLog);
             await repository.AddNetworkEventAsync(networkEvent, cancellationToken);
             var incident = IncidentFactory.CreateReviewIncident(networkEvent, DateTimeOffset.UtcNow);
             if (incident is not null)
@@ -264,15 +269,6 @@ public sealed class ServiceScanCoordinator
         };
     }
 
-    private static RiskStatus RiskStatusForDeviceTrust(TrustStatus trustStatus)
-    {
-        return trustStatus switch
-        {
-            TrustStatus.KnownWatched or TrustStatus.Guest => RiskStatus.Watched,
-            TrustStatus.Blocked => RiskStatus.Critical,
-            _ => RiskStatus.Normal
-        };
-    }
 
     private static NetworkEvent CreateListeningPortEvent(
         ListeningPort port,

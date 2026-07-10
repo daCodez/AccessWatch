@@ -70,6 +70,39 @@ public interface IAccessWatchRepository
     Task<long> UpsertDeviceAsync(NetworkDevice device, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Saves or updates a batch of local-network device observations.
+    /// </summary>
+    /// <param name="devices">The devices to save.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>Stored device results in input order.</returns>
+    async Task<IReadOnlyList<DevicePersistenceResult>> UpsertDevicesAsync(IReadOnlyList<NetworkDevice> devices, CancellationToken cancellationToken)
+    {
+        var results = new List<DevicePersistenceResult>(devices.Count);
+        foreach (var device in devices)
+        {
+            var deviceId = await UpsertDeviceAsync(device, cancellationToken).ConfigureAwait(false);
+            var trustStatus = await GetActiveTrustDecisionAsync("Device", deviceId, cancellationToken).ConfigureAwait(false);
+            if (trustStatus is not null)
+            {
+                var trustedDevice = device with { DeviceId = deviceId, TrustStatus = trustStatus.Value, RiskStatus = RiskStatusForDeviceTrust(trustStatus.Value) };
+                await UpsertDeviceAsync(trustedDevice, cancellationToken).ConfigureAwait(false);
+            }
+
+            results.Add(new DevicePersistenceResult(device, deviceId, trustStatus));
+        }
+
+        return results;
+    }
+    private static RiskStatus RiskStatusForDeviceTrust(TrustStatus trustStatus)
+    {
+        return trustStatus switch
+        {
+            TrustStatus.KnownWatched or TrustStatus.Guest => RiskStatus.Watched,
+            TrustStatus.Blocked => RiskStatus.Critical,
+            _ => RiskStatus.Normal
+        };
+    }
+    /// <summary>
     /// Lists recent local-network devices for future UI surfaces.
     /// </summary>
     /// <param name="limit">Maximum number of rows to return.</param>
@@ -95,6 +128,24 @@ public interface IAccessWatchRepository
 
 
     /// <summary>
+    /// Saves or updates a batch of application observations.
+    /// </summary>
+    /// <param name="applications">The applications to save.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>Stored application results in input order.</returns>
+    async Task<IReadOnlyList<ApplicationPersistenceResult>> UpsertApplicationsAsync(IReadOnlyList<ApplicationIdentity> applications, CancellationToken cancellationToken)
+    {
+        var results = new List<ApplicationPersistenceResult>(applications.Count);
+        foreach (var application in applications)
+        {
+            var applicationId = await UpsertApplicationAsync(application, cancellationToken).ConfigureAwait(false);
+            var trustStatus = await GetActiveTrustDecisionAsync("Application", applicationId, cancellationToken).ConfigureAwait(false);
+            results.Add(new ApplicationPersistenceResult(application, applicationId, trustStatus));
+        }
+
+        return results;
+    }
+    /// <summary>
     /// Gets the application currently associated with a known listening port.
     /// </summary>
     /// <param name="port">The listening port identity to look up.</param>
@@ -110,6 +161,24 @@ public interface IAccessWatchRepository
     /// <returns>True when the port was not previously known.</returns>
     Task<bool> UpsertPortAsync(ListeningPort port, long? applicationId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Saves or updates a batch of listening ports.
+    /// </summary>
+    /// <param name="ports">The scored listening ports to save.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>Stored port results in input order.</returns>
+    async Task<IReadOnlyList<PortPersistenceResult>> UpsertPortsAsync(IReadOnlyList<PortPersistenceRequest> ports, CancellationToken cancellationToken)
+    {
+        var results = new List<PortPersistenceResult>(ports.Count);
+        foreach (var request in ports)
+        {
+            var previousApplicationId = await GetListeningPortApplicationIdAsync(request.Port, cancellationToken).ConfigureAwait(false);
+            var isNewPort = await UpsertPortAsync(request.Port, request.ApplicationId, cancellationToken).ConfigureAwait(false);
+            results.Add(new PortPersistenceResult(request.Port, request.ApplicationId, previousApplicationId, isNewPort));
+        }
+
+        return results;
+    }
     /// <summary>
     /// Saves a network event.
     /// </summary>

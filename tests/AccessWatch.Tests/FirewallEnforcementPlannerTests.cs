@@ -168,7 +168,7 @@ public sealed class FirewallEnforcementPlannerTests
                 commandWasRun = true;
                 return Task.FromResult(new FirewallCommandResult(0, string.Empty, string.Empty));
             });
-        var plan = new FirewallEnforcementPlan("Device", "guest-phone", "Block", "Review", ["New-NetFirewallRule"], true);
+        var plan = new FirewallEnforcementPlan("Device", "guest-phone", "Block", "Review", [Rule("review")], true);
 
         var result = await executor.ApplyAsync(plan, CancellationToken.None);
 
@@ -194,7 +194,7 @@ public sealed class FirewallEnforcementPlannerTests
             "guest-phone",
             "Block",
             "Review",
-            ["New-NetFirewallRule inbound", "New-NetFirewallRule outbound"],
+            [Rule("inbound"), Rule("outbound", FirewallRuleDirection.Outbound)],
             true);
 
         var result = await executor.ApplyAsync(plan, CancellationToken.None);
@@ -223,7 +223,7 @@ public sealed class FirewallEnforcementPlannerTests
             "lab-sensor",
             "Review",
             "Review",
-            ["New-NetFirewallRule review"],
+            [Rule("review")],
             false);
 
         var result = await executor.ApplyAsync(plan, CancellationToken.None);
@@ -246,7 +246,7 @@ public sealed class FirewallEnforcementPlannerTests
             "Unknown app",
             "Block",
             "Review",
-            ["New-NetFirewallRule inbound"],
+            [Rule("inbound")],
             true);
 
         var result = await executor.ApplyAsync(plan, CancellationToken.None);
@@ -269,7 +269,7 @@ public sealed class FirewallEnforcementPlannerTests
             "Visual Studio",
             "Block",
             "Review",
-            ["New-NetFirewallRule inbound", "New-NetFirewallRule outbound"],
+            [Rule("inbound"), Rule("outbound", FirewallRuleDirection.Outbound)],
             true);
 
         var result = await executor.ApplyAsync(plan, CancellationToken.None);
@@ -278,6 +278,27 @@ public sealed class FirewallEnforcementPlannerTests
         Assert.Equal(2, result.AppliedCommands.Count);
         Assert.Contains("Visual Studio", result.Summary);
     }
+    /// <summary>
+    /// Verifies command previews reject unsupported structured firewall actions.
+    /// </summary>
+    [Fact]
+    public void PowerShellCommands_RejectUnsupportedStructuredAction()
+    {
+        var plan = new FirewallEnforcementPlan(
+            "Device",
+            "bad-action",
+            "Review",
+            "Review",
+            [new FirewallRuleAction("bad", FirewallRuleDirection.Inbound, (FirewallRuleTargetKind)999, "192.0.2.55")],
+            true);
+
+        Assert.Throws<InvalidOperationException>(() => _ = plan.PowerShellCommands);
+    }
+    private static FirewallRuleAction Rule(string displayName, FirewallRuleDirection direction = FirewallRuleDirection.Inbound)
+    {
+        return new FirewallRuleAction(displayName, direction, FirewallRuleTargetKind.RemoteAddress, "192.0.2.55");
+    }
+
     /// <summary>
     /// Verifies enforcement services can be registered through dependency injection.
     /// </summary>

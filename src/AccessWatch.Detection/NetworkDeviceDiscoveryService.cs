@@ -14,6 +14,7 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
 {
     private const string ArpTableNote = "Seen in ARP table; active subnet probing can refresh this entry when quiet devices respond.";
     private const string NeighborTableNote = "Seen in Windows neighbor table; useful for phones, Phone Link devices, and quiet Wi-Fi devices.";
+    private const int MaxConcurrentHostnameLookups = 16;
     private readonly IArpTableRunner arpTableRunner;
     private readonly IDeviceHostnameResolver hostnameResolver;
     private readonly INeighborTableRunner? neighborTableRunner;
@@ -352,24 +353,44 @@ public sealed class NetworkDeviceDiscoveryService : INetworkDeviceDiscoveryServi
 
         return string.Concat(notes);
     }
-
     private async Task<IReadOnlyList<NetworkDevice>> AddHostnamesAsync(IReadOnlyList<NetworkDevice> devices, CancellationToken cancellationToken)
     {
-        var namedDevices = new List<NetworkDevice>(devices.Count);
-        foreach (var device in devices)
+        var namedDevices = new NetworkDevice[devices.Count];
+        using var throttle = new SemaphoreSlim(MaxConcurrentHostnameLookups);
+        var tasks = new Task[devices.Count];
+        for (var index = 0; index < devices.Count; index++)
+        {
+            tasks[index] = AddHostnameAsync(devices[index], index, namedDevices, throttle, cancellationToken);
+        }
+
+        await Task.WhenAll(tasks);
+        return namedDevices;
+    }
+
+    private async Task AddHostnameAsync(
+        NetworkDevice device,
+        int index,
+        NetworkDevice[] namedDevices,
+        SemaphoreSlim throttle,
+        CancellationToken cancellationToken)
+    {
+        await throttle.WaitAsync(cancellationToken);
+        try
         {
             var hostname = await hostnameResolver.ResolveHostnameAsync(device.IpAddress, cancellationToken);
             var normalizedHostname = string.IsNullOrWhiteSpace(hostname) ? null : hostname.Trim().TrimEnd('.');
             var deviceTypeGuess = GuessDeviceType(device.IpAddress, normalizedHostname, device.DeviceTypeGuess);
-            namedDevices.Add(device with
+            namedDevices[index] = device with
             {
                 Hostname = normalizedHostname,
                 DeviceTypeGuess = deviceTypeGuess,
                 Notes = MergeDeviceNotes(device.Notes, deviceTypeGuess)
-            });
+            };
         }
-
-        return namedDevices;
+        finally
+        {
+            throttle.Release();
+        }
     }
 }
 

@@ -24,17 +24,14 @@ public sealed class WindowsFirewallEnforcementPlanner : IFirewallEnforcementPlan
         }
 
         var ruleBaseName = $"AccessWatch Block Device {targetName}";
-        var address = Quote(device.IpAddress);
-        var inboundName = Quote(string.Concat(ruleBaseName, " inbound"));
-        var outboundName = Quote(string.Concat(ruleBaseName, " outbound"));
         return new FirewallEnforcementPlan(
             "Device",
             targetName,
             $"Block all traffic to and from {targetName} ({device.IpAddress}).",
             "This creates inbound and outbound Windows Firewall rules for the selected remote IP address. Review before applying, especially if the address may change by DHCP.",
             [
-                $"New-NetFirewallRule -DisplayName {inboundName} -Direction Inbound -Action Block -RemoteAddress {address} -Profile Any",
-                $"New-NetFirewallRule -DisplayName {outboundName} -Direction Outbound -Action Block -RemoteAddress {address} -Profile Any"
+                new FirewallRuleAction(string.Concat(ruleBaseName, " inbound"), FirewallRuleDirection.Inbound, FirewallRuleTargetKind.RemoteAddress, device.IpAddress),
+                new FirewallRuleAction(string.Concat(ruleBaseName, " outbound"), FirewallRuleDirection.Outbound, FirewallRuleTargetKind.RemoteAddress, device.IpAddress)
             ],
             true);
     }
@@ -55,25 +52,18 @@ public sealed class WindowsFirewallEnforcementPlanner : IFirewallEnforcementPlan
         }
 
         var ruleBaseName = $"AccessWatch Block App {targetName}";
-        var program = Quote(application.FilePath);
-        var inboundName = Quote(string.Concat(ruleBaseName, " inbound"));
-        var outboundName = Quote(string.Concat(ruleBaseName, " outbound"));
         return new FirewallEnforcementPlan(
             "Application",
             targetName,
             $"Block network traffic for {targetName}.",
             "This creates inbound and outbound Windows Firewall rules for the selected executable path. Review before applying so a trusted app is not blocked accidentally.",
             [
-                $"New-NetFirewallRule -DisplayName {inboundName} -Direction Inbound -Action Block -Program {program} -Profile Any",
-                $"New-NetFirewallRule -DisplayName {outboundName} -Direction Outbound -Action Block -Program {program} -Profile Any"
+                new FirewallRuleAction(string.Concat(ruleBaseName, " inbound"), FirewallRuleDirection.Inbound, FirewallRuleTargetKind.Program, application.FilePath),
+                new FirewallRuleAction(string.Concat(ruleBaseName, " outbound"), FirewallRuleDirection.Outbound, FirewallRuleTargetKind.Program, application.FilePath)
             ],
             true);
     }
 
-    private static string Quote(string value)
-    {
-        return string.Concat("'", value.Replace("'", "''", StringComparison.Ordinal), "'");
-    }
 
     private static string FirstUseful(string? first, string? second, string fallback)
     {

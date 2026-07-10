@@ -1,5 +1,7 @@
 using AccessWatch.Core;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AccessWatch.Data;
 
@@ -9,14 +11,17 @@ namespace AccessWatch.Data;
 public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
 {
     private readonly AccessWatchDatabaseOptions options;
+    private readonly ILogger<SqlServerAccessWatchRepository> logger;
 
     /// <summary>
     /// Initializes a new repository instance.
     /// </summary>
     /// <param name="options">Database options.</param>
-    public SqlServerAccessWatchRepository(AccessWatchDatabaseOptions options)
+    /// <param name="logger">Logger for persistence warnings.</param>
+    public SqlServerAccessWatchRepository(AccessWatchDatabaseOptions options, ILogger<SqlServerAccessWatchRepository>? logger = null)
     {
         this.options = options;
+        this.logger = logger ?? NullLogger<SqlServerAccessWatchRepository>.Instance;
     }
 
     /// <inheritdoc />
@@ -37,52 +42,33 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
     public async Task<long> UpsertDeviceAsync(NetworkDevice device, CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
-        var existingId = await FindDeviceIdAsync(connection, device.IpAddress, cancellationToken);
-        var now = DateTimeOffset.UtcNow;
-        long deviceId;
-
-        if (existingId is not null)
-        {
-            await using var update = connection.CreateCommand();
-            update.CommandText = """
-                UPDATE dbo.Devices
-                SET MacAddress = @macAddress,
-                    Hostname = @hostname,
-                    UserAlias = CASE WHEN @userAliasWasProvided = 1 THEN @userAlias ELSE UserAlias END,
-                    Vendor = @vendor,
-                    DeviceTypeGuess = @deviceTypeGuess,
-                    TrustStatus = @trustStatus,
-                    RiskStatus = @riskStatus,
-                    LastSeenUtc = @lastSeenUtc,
-                    LastConfirmedUtc = @lastConfirmedUtc,
-                    Notes = @notes
-                WHERE DeviceId = @deviceId;
-                """;
-            AddDeviceParameters(update, device, now);
-            update.Parameters.AddWithValue("@deviceId", existingId.Value);
-            await update.ExecuteNonQueryAsync(cancellationToken);
-            deviceId = existingId.Value;
-        }
-        else
-        {
-            await using var insert = connection.CreateCommand();
-            insert.CommandText = """
-                INSERT INTO dbo.Devices
-                (IpAddress, MacAddress, Hostname, UserAlias, Vendor, DeviceTypeGuess, TrustStatus, RiskStatus,
-                 FirstSeenUtc, LastSeenUtc, LastConfirmedUtc, Notes)
-                VALUES
-                (@ipAddress, @macAddress, @hostname, @userAlias, @vendor, @deviceTypeGuess, @trustStatus, @riskStatus,
-                 @firstSeenUtc, @lastSeenUtc, @lastConfirmedUtc, @notes);
-                SELECT CONVERT(bigint, SCOPE_IDENTITY());
-                """;
-            AddDeviceParameters(insert, device, now);
-            insert.Parameters.AddWithValue("@firstSeenUtc", ToDatabaseTime(device.FirstSeenUtc, now));
-            deviceId = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken));
-        }
-
-        return deviceId;
+        return await UpsertDeviceAsync(connection, device, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<DevicePersistenceResult>> UpsertDevicesAsync(IReadOnlyList<NetworkDevice> devices, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var results = new List<DevicePersistenceResult>(devices.Count);
+        foreach (var device in devices)
+        {
+            var deviceId = await UpsertDeviceAsync(connection, device, cancellationToken);
+            var trustStatus = await GetActiveTrustDecisionAsync(connection, "Device", deviceId, cancellationToken);
+            if (trustStatus is not null)
+            {
+                await UpsertDeviceAsync(connection, device with
+                {
+                    DeviceId = deviceId,
+                    TrustStatus = trustStatus.Value,
+                    RiskStatus = RiskStatusForDeviceTrust(trustStatus.Value)
+                }, cancellationToken);
+            }
+
+            results.Add(new DevicePersistenceResult(device, deviceId, trustStatus));
+        }
+
+        return results;
+    }
     /// <inheritdoc />
     public async Task<IReadOnlyList<NetworkDevice>> ListRecentDevicesAsync(int limit, CancellationToken cancellationToken)
     {
@@ -120,54 +106,22 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
     public async Task<long> UpsertApplicationAsync(ApplicationIdentity application, CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
-        var existingId = await FindApplicationIdAsync(connection, application, cancellationToken);
-        var now = DateTimeOffset.UtcNow;
-
-        if (existingId is not null)
-        {
-            await using var update = connection.CreateCommand();
-            update.CommandText = """
-                UPDATE dbo.Applications
-                SET DisplayName = @displayName,
-                    ProcessName = @processName,
-                    FilePath = @filePath,
-                    Publisher = @publisher,
-                    ProductName = @productName,
-                    FileDescription = @fileDescription,
-                    SignatureStatus = @signatureStatus,
-                    HashSha256 = @hashSha256,
-                    InstallFolder = @installFolder,
-                    ParentProcessName = @parentProcessName,
-                    LastSeenUtc = @lastSeenUtc
-                WHERE ApplicationId = @applicationId;
-                """;
-            AddApplicationParameters(update, application, now);
-            update.Parameters.AddWithValue("@applicationId", existingId.Value);
-            await update.ExecuteNonQueryAsync(cancellationToken);
-        }
-        else
-        {
-            await using var insert = connection.CreateCommand();
-            insert.CommandText = """
-                INSERT INTO dbo.Applications
-                (DisplayName, ProcessName, FilePath, Publisher, ProductName, FileDescription, SignatureStatus,
-                 HashSha256, InstallFolder, ParentProcessName, FirstSeenUtc, LastSeenUtc, TrustStatus, Notes)
-                VALUES
-                (@displayName, @processName, @filePath, @publisher, @productName, @fileDescription, @signatureStatus,
-                 @hashSha256, @installFolder, @parentProcessName, @firstSeenUtc, @lastSeenUtc, @trustStatus, @notes);
-                SELECT CONVERT(bigint, SCOPE_IDENTITY());
-                """;
-            AddApplicationParameters(insert, application, now);
-            insert.Parameters.AddWithValue("@firstSeenUtc", ToDatabaseTime(application.FirstSeenUtc, now));
-            insert.Parameters.AddWithValue("@trustStatus", application.TrustStatus.ToString());
-            insert.Parameters.AddWithValue("@notes", DbValue(application.Notes));
-            existingId = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken));
-        }
-
-        return existingId.Value;
+        return await UpsertApplicationAsync(connection, application, cancellationToken);
     }
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ApplicationPersistenceResult>> UpsertApplicationsAsync(IReadOnlyList<ApplicationIdentity> applications, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var results = new List<ApplicationPersistenceResult>(applications.Count);
+        foreach (var application in applications)
+        {
+            var applicationId = await UpsertApplicationAsync(connection, application, cancellationToken);
+            var trustStatus = await GetActiveTrustDecisionAsync(connection, "Application", applicationId, cancellationToken);
+            results.Add(new ApplicationPersistenceResult(application, applicationId, trustStatus));
+        }
 
-
+        return results;
+    }
     /// <inheritdoc />
     public async Task<long?> GetListeningPortApplicationIdAsync(ListeningPort port, CancellationToken cancellationToken)
     {
@@ -188,46 +142,23 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
     public async Task<bool> UpsertPortAsync(ListeningPort port, long? applicationId, CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
-        var existingId = await FindPortIdAsync(connection, port, cancellationToken);
-        var now = DateTimeOffset.UtcNow;
-        var isNewPort = existingId is null;
-
-        if (!isNewPort)
-        {
-            await using var update = connection.CreateCommand();
-            update.CommandText = """
-                UPDATE dbo.Ports
-                SET Reachability = @reachability,
-                    OwningProcessId = @owningProcessId,
-                    ApplicationId = @applicationId,
-                    LastSeenUtc = @lastSeenUtc,
-                    TrustStatus = @trustStatus,
-                    RiskStatus = @riskStatus
-                WHERE PortId = @portId;
-            """;
-            AddPortParameters(update, port, applicationId, now);
-            update.Parameters.AddWithValue("@portId", existingId.GetValueOrDefault());
-            await update.ExecuteNonQueryAsync(cancellationToken);
-        }
-        else
-        {
-            await using var insert = connection.CreateCommand();
-            insert.CommandText = """
-                INSERT INTO dbo.Ports
-                (PortNumber, Protocol, LocalAddress, Reachability, OwningProcessId, ApplicationId,
-                 FirstSeenUtc, LastSeenUtc, TrustStatus, RiskStatus)
-                VALUES
-                (@portNumber, @protocol, @localAddress, @reachability, @owningProcessId, @applicationId,
-                 @firstSeenUtc, @lastSeenUtc, @trustStatus, @riskStatus);
-                """;
-            AddPortParameters(insert, port, applicationId, now);
-            insert.Parameters.AddWithValue("@firstSeenUtc", ToDatabaseTime(port.FirstSeenUtc, now));
-            await insert.ExecuteNonQueryAsync(cancellationToken);
-        }
-
-        return isNewPort;
+        return await UpsertPortAsync(connection, port, applicationId, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PortPersistenceResult>> UpsertPortsAsync(IReadOnlyList<PortPersistenceRequest> ports, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var results = new List<PortPersistenceResult>(ports.Count);
+        foreach (var request in ports)
+        {
+            var previousApplicationId = await GetListeningPortApplicationIdAsync(connection, request.Port, cancellationToken);
+            var isNewPort = await UpsertPortAsync(connection, request.Port, request.ApplicationId, cancellationToken);
+            results.Add(new PortPersistenceResult(request.Port, request.ApplicationId, previousApplicationId, isNewPort));
+        }
+
+        return results;
+    }
     /// <inheritdoc />
     public async Task AddNetworkEventAsync(NetworkEvent networkEvent, CancellationToken cancellationToken)
     {
@@ -295,9 +226,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         command.Parameters.AddWithValue("@targetId", targetId);
         command.Parameters.AddWithValue("@nowUtc", DateTimeOffset.UtcNow);
         var value = await command.ExecuteScalarAsync(cancellationToken);
-        return value is string decision && Enum.TryParse<TrustStatus>(decision, out var trustStatus)
-            ? trustStatus
-            : null;
+        return ReadTrustDecision(value as string, targetType, targetId);
     }
 
     /// <inheritdoc />
@@ -651,6 +580,211 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    private async Task<long> UpsertDeviceAsync(SqlConnection connection, NetworkDevice device, CancellationToken cancellationToken)
+    {
+        var existingId = await FindDeviceIdAsync(connection, device.IpAddress, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        if (existingId is null)
+            return await InsertDeviceAsync(connection, device, now, cancellationToken);
+
+        return await UpdateDeviceAsync(connection, device, existingId.Value, now, cancellationToken);
+    }
+
+    private static async Task<long> InsertDeviceAsync(SqlConnection connection, NetworkDevice device, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var insert = connection.CreateCommand();
+        insert.CommandText = """
+            INSERT INTO dbo.Devices
+            (IpAddress, MacAddress, Hostname, UserAlias, Vendor, DeviceTypeGuess, TrustStatus, RiskStatus,
+             FirstSeenUtc, LastSeenUtc, LastConfirmedUtc, Notes)
+            VALUES
+            (@ipAddress, @macAddress, @hostname, @userAlias, @vendor, @deviceTypeGuess, @trustStatus, @riskStatus,
+             @firstSeenUtc, @lastSeenUtc, @lastConfirmedUtc, @notes);
+            SELECT CONVERT(bigint, SCOPE_IDENTITY());
+            """;
+        AddDeviceParameters(insert, device, now);
+        insert.Parameters.AddWithValue("@firstSeenUtc", ToDatabaseTime(device.FirstSeenUtc, now));
+        return Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken));
+    }
+
+    private static async Task<long> UpdateDeviceAsync(SqlConnection connection, NetworkDevice device, long deviceId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var update = connection.CreateCommand();
+        update.CommandText = """
+            UPDATE dbo.Devices
+            SET MacAddress = @macAddress,
+                Hostname = @hostname,
+                UserAlias = CASE WHEN @userAliasWasProvided = 1 THEN @userAlias ELSE UserAlias END,
+                Vendor = @vendor,
+                DeviceTypeGuess = @deviceTypeGuess,
+                TrustStatus = @trustStatus,
+                RiskStatus = @riskStatus,
+                LastSeenUtc = @lastSeenUtc,
+                LastConfirmedUtc = @lastConfirmedUtc,
+                Notes = @notes
+            WHERE DeviceId = @deviceId;
+            """;
+        AddDeviceParameters(update, device, now);
+        update.Parameters.AddWithValue("@deviceId", deviceId);
+        await update.ExecuteNonQueryAsync(cancellationToken);
+        return deviceId;
+    }
+
+    private async Task<long> UpsertApplicationAsync(SqlConnection connection, ApplicationIdentity application, CancellationToken cancellationToken)
+    {
+        var existingId = await FindApplicationIdAsync(connection, application, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        if (existingId is null)
+            return await InsertApplicationAsync(connection, application, now, cancellationToken);
+
+        return await UpdateApplicationAsync(connection, application, existingId.Value, now, cancellationToken);
+    }
+
+    private static async Task<long> InsertApplicationAsync(SqlConnection connection, ApplicationIdentity application, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var insert = connection.CreateCommand();
+        insert.CommandText = """
+            INSERT INTO dbo.Applications
+            (DisplayName, ProcessName, FilePath, Publisher, ProductName, FileDescription, SignatureStatus,
+             HashSha256, InstallFolder, ParentProcessName, FirstSeenUtc, LastSeenUtc, TrustStatus, Notes)
+            VALUES
+            (@displayName, @processName, @filePath, @publisher, @productName, @fileDescription, @signatureStatus,
+             @hashSha256, @installFolder, @parentProcessName, @firstSeenUtc, @lastSeenUtc, @trustStatus, @notes);
+            SELECT CONVERT(bigint, SCOPE_IDENTITY());
+            """;
+        AddApplicationParameters(insert, application, now);
+        insert.Parameters.AddWithValue("@firstSeenUtc", ToDatabaseTime(application.FirstSeenUtc, now));
+        insert.Parameters.AddWithValue("@trustStatus", application.TrustStatus.ToString());
+        insert.Parameters.AddWithValue("@notes", DbValue(application.Notes));
+        return Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken));
+    }
+
+    private static async Task<long> UpdateApplicationAsync(SqlConnection connection, ApplicationIdentity application, long applicationId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var update = connection.CreateCommand();
+        update.CommandText = """
+            UPDATE dbo.Applications
+            SET DisplayName = @displayName,
+                ProcessName = @processName,
+                FilePath = @filePath,
+                Publisher = @publisher,
+                ProductName = @productName,
+                FileDescription = @fileDescription,
+                SignatureStatus = @signatureStatus,
+                HashSha256 = @hashSha256,
+                InstallFolder = @installFolder,
+                ParentProcessName = @parentProcessName,
+                LastSeenUtc = @lastSeenUtc
+            WHERE ApplicationId = @applicationId;
+            """;
+        AddApplicationParameters(update, application, now);
+        update.Parameters.AddWithValue("@applicationId", applicationId);
+        await update.ExecuteNonQueryAsync(cancellationToken);
+        return applicationId;
+    }
+
+    private async Task<bool> UpsertPortAsync(SqlConnection connection, ListeningPort port, long? applicationId, CancellationToken cancellationToken)
+    {
+        var existingId = await FindPortIdAsync(connection, port, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var isNewPort = existingId is null;
+        if (!isNewPort)
+        {
+            await using var update = connection.CreateCommand();
+            update.CommandText = """
+                UPDATE dbo.Ports
+                SET Reachability = @reachability,
+                    OwningProcessId = @owningProcessId,
+                    ApplicationId = @applicationId,
+                    LastSeenUtc = @lastSeenUtc,
+                    TrustStatus = @trustStatus,
+                    RiskStatus = @riskStatus
+                WHERE PortId = @portId;
+            """;
+            AddPortParameters(update, port, applicationId, now);
+            update.Parameters.AddWithValue("@portId", existingId.GetValueOrDefault());
+            await update.ExecuteNonQueryAsync(cancellationToken);
+        }
+        else
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO dbo.Ports
+                (PortNumber, Protocol, LocalAddress, Reachability, OwningProcessId, ApplicationId,
+                 FirstSeenUtc, LastSeenUtc, TrustStatus, RiskStatus)
+                VALUES
+                (@portNumber, @protocol, @localAddress, @reachability, @owningProcessId, @applicationId,
+                 @firstSeenUtc, @lastSeenUtc, @trustStatus, @riskStatus);
+                """;
+            AddPortParameters(insert, port, applicationId, now);
+            insert.Parameters.AddWithValue("@firstSeenUtc", ToDatabaseTime(port.FirstSeenUtc, now));
+            await insert.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        return isNewPort;
+    }
+
+    private static async Task<long?> GetListeningPortApplicationIdAsync(SqlConnection connection, ListeningPort port, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT TOP (1) ApplicationId
+            FROM dbo.Ports
+            WHERE PortNumber = @portNumber AND Protocol = @protocol AND LocalAddress = @localAddress
+            ORDER BY PortId;
+            """;
+        command.Parameters.AddWithValue("@portNumber", port.PortNumber);
+        command.Parameters.AddWithValue("@protocol", port.Protocol);
+        command.Parameters.AddWithValue("@localAddress", port.LocalAddress);
+        return ToNullableInt64(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    private async Task<TrustStatus?> GetActiveTrustDecisionAsync(SqlConnection connection, string targetType, long targetId, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT TOP (1) Decision
+            FROM dbo.TrustDecisions
+            WHERE TargetType = @targetType
+              AND TargetId = @targetId
+              AND (ExpiresUtc IS NULL OR ExpiresUtc > @nowUtc)
+            ORDER BY CreatedUtc DESC, TrustDecisionId DESC;
+            """;
+        command.Parameters.AddWithValue("@targetType", targetType);
+        command.Parameters.AddWithValue("@targetId", targetId);
+        command.Parameters.AddWithValue("@nowUtc", DateTimeOffset.UtcNow);
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        return ReadTrustDecision(value as string, targetType, targetId);
+    }
+
+    private TrustStatus? ReadTrustDecision(string? decision, string targetType, long targetId)
+    {
+        if (decision is null)
+        {
+            return null;
+        }
+
+        if (Enum.TryParse<TrustStatus>(decision, ignoreCase: true, out var trustStatus))
+        {
+            return trustStatus;
+        }
+
+        logger.LogWarning(
+            "Invalid TrustStatus decision '{Decision}' read for {TargetType} {TargetId}; ignoring active trust decision.",
+            decision,
+            targetType,
+            targetId);
+        return null;
+    }
+    private static RiskStatus RiskStatusForDeviceTrust(TrustStatus trustStatus)
+    {
+        return trustStatus switch
+        {
+            TrustStatus.KnownWatched or TrustStatus.Guest => RiskStatus.Watched,
+            TrustStatus.Blocked => RiskStatus.Critical,
+            _ => RiskStatus.Normal
+        };
+    }
     private async Task<SqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = new SqlConnection(options.ToConnectionString());
@@ -799,7 +933,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
     }
 
 
-    private static Incident ReadIncident(SqlDataReader reader)
+    private Incident ReadIncident(SqlDataReader reader)
     {
         return new Incident
         {
@@ -808,8 +942,8 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             Summary = reader.GetString(2),
             MainDeviceId = ReadNullableInt64(reader, 3),
             MainApplicationId = ReadNullableInt64(reader, 4),
-            RiskLevel = Enum.Parse<RiskLevel>(reader.GetString(5)),
-            Status = Enum.Parse<IncidentStatus>(reader.GetString(6)),
+            RiskLevel = ReadEnum(reader, 5, RiskLevel.Low),
+            Status = ReadEnum(reader, 6, IncidentStatus.Open),
             EventCount = reader.GetInt32(7),
             StartedUtc = reader.GetFieldValue<DateTimeOffset>(8),
             LastUpdatedUtc = reader.GetFieldValue<DateTimeOffset>(9),
@@ -818,7 +952,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         };
     }
 
-    private static AccessWatchRule ReadRule(SqlDataReader reader)
+    private AccessWatchRule ReadRule(SqlDataReader reader)
     {
         return new AccessWatchRule
         {
@@ -826,15 +960,15 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             Name = reader.GetString(1),
             Description = reader.GetString(2),
             ConditionJson = reader.GetString(3),
-            RiskLevel = Enum.Parse<RiskLevel>(reader.GetString(4)),
-            Action = Enum.Parse<NotificationAction>(reader.GetString(5)),
+            RiskLevel = ReadEnum(reader, 4, RiskLevel.Low),
+            Action = ReadEnum(reader, 5, NotificationAction.SilentLog),
             Enabled = reader.GetBoolean(6),
             CreatedUtc = reader.GetFieldValue<DateTimeOffset>(7),
             UpdatedUtc = reader.GetFieldValue<DateTimeOffset>(8)
         };
     }
 
-    private static NetworkDevice ReadDevice(SqlDataReader reader)
+    private NetworkDevice ReadDevice(SqlDataReader reader)
     {
         return new NetworkDevice
         {
@@ -845,8 +979,8 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             UserAlias = ReadNullableString(reader, 4),
             Vendor = ReadNullableString(reader, 5),
             DeviceTypeGuess = ReadNullableString(reader, 6),
-            TrustStatus = Enum.Parse<TrustStatus>(reader.GetString(7)),
-            RiskStatus = Enum.Parse<RiskStatus>(reader.GetString(8)),
+            TrustStatus = ReadEnum(reader, 7, TrustStatus.Unknown),
+            RiskStatus = ReadEnum(reader, 8, RiskStatus.Normal),
             FirstSeenUtc = reader.GetFieldValue<DateTimeOffset>(9),
             LastSeenUtc = reader.GetFieldValue<DateTimeOffset>(10),
             LastConfirmedUtc = ReadNullableDateTimeOffset(reader, 11),
@@ -854,7 +988,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         };
     }
 
-    private static ApplicationIdentity ReadApplication(SqlDataReader reader)
+    private ApplicationIdentity ReadApplication(SqlDataReader reader)
     {
         return new ApplicationIdentity
         {
@@ -865,18 +999,18 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             Publisher = ReadNullableString(reader, 4),
             ProductName = ReadNullableString(reader, 5),
             FileDescription = ReadNullableString(reader, 6),
-            SignatureStatus = Enum.Parse<SignatureStatus>(reader.GetString(7)),
+            SignatureStatus = ReadEnum(reader, 7, SignatureStatus.Unknown),
             HashSha256 = ReadNullableString(reader, 8),
             InstallFolder = ReadNullableString(reader, 9),
             ParentProcessName = ReadNullableString(reader, 10),
             FirstSeenUtc = reader.GetFieldValue<DateTimeOffset>(11),
             LastSeenUtc = reader.GetFieldValue<DateTimeOffset>(12),
-            TrustStatus = Enum.Parse<TrustStatus>(reader.GetString(13)),
+            TrustStatus = ReadEnum(reader, 13, TrustStatus.Unknown),
             Notes = ReadNullableString(reader, 14)
         };
     }
 
-    private static ListeningPort ReadPort(SqlDataReader reader)
+    private ListeningPort ReadPort(SqlDataReader reader)
     {
         return new ListeningPort
         {
@@ -884,16 +1018,16 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             PortNumber = reader.GetInt32(1),
             Protocol = reader.GetString(2),
             LocalAddress = reader.GetString(3),
-            Reachability = Enum.Parse<PortReachability>(reader.GetString(4)),
+            Reachability = ReadEnum(reader, 4, PortReachability.Unknown),
             OwningProcessId = ReadNullableInt32(reader, 5),
             FirstSeenUtc = reader.GetFieldValue<DateTimeOffset>(7),
             LastSeenUtc = reader.GetFieldValue<DateTimeOffset>(8),
-            TrustStatus = Enum.Parse<TrustStatus>(reader.GetString(9)),
-            RiskStatus = Enum.Parse<RiskStatus>(reader.GetString(10))
+            TrustStatus = ReadEnum(reader, 9, TrustStatus.Unknown),
+            RiskStatus = ReadEnum(reader, 10, RiskStatus.Normal)
         };
     }
 
-    private static NetworkEvent ReadNetworkEvent(SqlDataReader reader)
+    private NetworkEvent ReadNetworkEvent(SqlDataReader reader)
     {
         return new NetworkEvent
         {
@@ -906,7 +1040,7 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
             Protocol = reader.GetString(6),
             Direction = reader.GetString(7),
             ApplicationId = ReadNullableInt64(reader, 8),
-            RiskLevel = Enum.Parse<RiskLevel>(reader.GetString(9)),
+            RiskLevel = ReadEnum(reader, 9, RiskLevel.Low),
             Summary = reader.GetString(10),
             DetailsJson = reader.GetString(11),
             WasUserNotified = reader.GetBoolean(12),
@@ -914,6 +1048,23 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         };
     }
 
+    private TEnum ReadEnum<TEnum>(SqlDataReader reader, int ordinal, TEnum fallback)
+        where TEnum : struct, Enum
+    {
+        var value = reader.GetString(ordinal);
+        if (Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed))
+        {
+            return parsed;
+        }
+
+        logger.LogWarning(
+            "Invalid {EnumType} value '{Value}' read from database ordinal {Ordinal}; using {Fallback}.",
+            typeof(TEnum).Name,
+            value,
+            ordinal,
+            fallback);
+        return fallback;
+    }
     private static string? ReadNullableString(SqlDataReader reader, int ordinal)
     {
         return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
@@ -939,4 +1090,3 @@ public sealed class SqlServerAccessWatchRepository : IAccessWatchRepository
         return $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]";
     }
 }
-

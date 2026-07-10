@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
@@ -145,6 +146,18 @@ public sealed class AppIdentityResolver : IAppIdentityResolver
             SignatureStatus.Unknown => "signature unknown",
             _ => "signature unknown"
         };
+    }
+
+    [ExcludeFromCodeCoverage]
+    private readonly record struct FileIdentityFingerprint(DateTime LastWriteUtc, long Length);
+
+    [ExcludeFromCodeCoverage]
+    private sealed record FileIdentityCacheEntry(DateTime LastWriteUtc, long Length, FileIdentityMetadata Metadata)
+    {
+        public bool Matches(FileIdentityFingerprint fingerprint)
+        {
+            return LastWriteUtc == fingerprint.LastWriteUtc && Length == fingerprint.Length;
+        }
     }
 
     private static string? EmptyToNull(string? value)
@@ -338,6 +351,7 @@ public sealed class WindowsProcessMetadataReader : IProcessMetadataReader
 [ExcludeFromCodeCoverage(Justification = "Thin Windows file and signature boundary; identity mapping is covered with deterministic reader fakes.")]
 public sealed class WindowsFileIdentityReader : IFileIdentityReader
 {
+    private readonly ConcurrentDictionary<string, FileIdentityCacheEntry> cache = new(StringComparer.OrdinalIgnoreCase);
     /// <inheritdoc />
     public FileIdentityMetadata Read(string filePath)
     {
@@ -352,6 +366,14 @@ public sealed class WindowsFileIdentityReader : IFileIdentityReader
             hash);
     }
 
+    private static FileIdentityFingerprint? ReadFingerprint(string filePath)
+    {
+        return Safe(() =>
+        {
+            var info = new FileInfo(filePath);
+            return info.Exists ? new FileIdentityFingerprint(info.LastWriteTimeUtc, info.Length) : (FileIdentityFingerprint?)null;
+        });
+    }
     private static (SignatureStatus status, string? publisher) ResolveSignature(string? filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -386,6 +408,18 @@ public sealed class WindowsFileIdentityReader : IFileIdentityReader
         return Convert.ToHexString(hash);
     }
 
+    [ExcludeFromCodeCoverage]
+    private readonly record struct FileIdentityFingerprint(DateTime LastWriteUtc, long Length);
+
+    [ExcludeFromCodeCoverage]
+    private sealed record FileIdentityCacheEntry(DateTime LastWriteUtc, long Length, FileIdentityMetadata Metadata)
+    {
+        public bool Matches(FileIdentityFingerprint fingerprint)
+        {
+            return LastWriteUtc == fingerprint.LastWriteUtc && Length == fingerprint.Length;
+        }
+    }
+
     private static string? EmptyToNull(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -403,4 +437,3 @@ public sealed class WindowsFileIdentityReader : IFileIdentityReader
         }
     }
 }
-

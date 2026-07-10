@@ -252,6 +252,37 @@ public sealed record TrustDecision
 }
 
 /// <summary>
+/// Represents the stored result for one device observation during a scan.
+/// </summary>
+/// <param name="Device">The device observation that was persisted.</param>
+/// <param name="DeviceId">The database device identifier.</param>
+/// <param name="ActiveTrustStatus">The active trust decision applied to this device, when one exists.</param>
+public sealed record DevicePersistenceResult(NetworkDevice Device, long DeviceId, TrustStatus? ActiveTrustStatus);
+
+/// <summary>
+/// Represents the stored result for one application observation during a scan.
+/// </summary>
+/// <param name="Application">The application observation that was persisted.</param>
+/// <param name="ApplicationId">The database application identifier.</param>
+/// <param name="ActiveTrustStatus">The active trust decision applied to this application, when one exists.</param>
+public sealed record ApplicationPersistenceResult(ApplicationIdentity Application, long ApplicationId, TrustStatus? ActiveTrustStatus);
+
+/// <summary>
+/// Represents a listening port write requested by a scan.
+/// </summary>
+/// <param name="Port">The scored listening port observation.</param>
+/// <param name="ApplicationId">The owning application identifier, when known.</param>
+public sealed record PortPersistenceRequest(ListeningPort Port, long? ApplicationId);
+
+/// <summary>
+/// Represents the stored result for one listening port observation during a scan.
+/// </summary>
+/// <param name="Port">The listening port observation that was persisted.</param>
+/// <param name="ApplicationId">The owning application identifier, when known.</param>
+/// <param name="PreviousApplicationId">The previously stored application identifier, when known.</param>
+/// <param name="IsNewPort">Whether this port identity was newly inserted.</param>
+public sealed record PortPersistenceResult(ListeningPort Port, long? ApplicationId, long? PreviousApplicationId, bool IsNewPort);
+/// <summary>
 /// Represents AccessWatch behavior settings.
 /// </summary>
 public sealed record AccessWatchSettings

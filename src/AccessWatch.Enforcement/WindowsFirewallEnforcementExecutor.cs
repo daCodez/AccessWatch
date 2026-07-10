@@ -60,7 +60,7 @@ public sealed class WindowsFirewallEnforcementExecutor : IFirewallEnforcementExe
     /// <inheritdoc />
     public async Task<FirewallEnforcementResult> ApplyAsync(FirewallEnforcementPlan plan, CancellationToken cancellationToken)
     {
-        if (plan.PowerShellCommands.Count == 0)
+        if (plan.FirewallActions.Count == 0)
         {
             return new FirewallEnforcementResult(
                 false,
@@ -78,10 +78,11 @@ public sealed class WindowsFirewallEnforcementExecutor : IFirewallEnforcementExe
                 []);
         }
 
-        var appliedCommands = new List<string>(plan.PowerShellCommands.Count);
-        foreach (var command in plan.PowerShellCommands)
+        var appliedCommands = new List<string>(plan.FirewallActions.Count);
+        foreach (var action in plan.FirewallActions)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var command = FirewallCommandFormatter.Format(action);
             var result = await runCommandAsync(command, cancellationToken).ConfigureAwait(false);
             if (result.ExitCode != 0)
             {
